@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreya — Brand Identity v2 + Product Suite</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:           #0A0A0F;
+    --paper:         #F4F1EB;
+    --paper-warm:    #EDE9E0;
+    --coral:         #FF4F3B;
+    --violet:        #5B2EFF;
+    --mint:          #00E5A0;
+    --gold:          #FFD166;
+    --sky:           #B8ECFF;
+    --rose:          #FF6B8A;
+    --dark:          #0F0A1E;
+    --muted:         #72706A;
+    --white:         #FFFFFF;
+
+    /* Product colors */
+    --socials:       #FF4F3B;
+    --docs:          #5B2EFF;
+    --studio:        #FF6B8A;
+    --store:         #00E5A0;
+    --inbox:         #FFD166;
+    --core:          linear-gradient(135deg, #FF4F3B, #5B2EFF);
+  }
+
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--ink);
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* ─── NOISE OVERLAY ─── */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    z-index:999;
+    opacity:.025;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size:256px;
+  }
+
+  /* ─── COVER ─── */
+  .cover {
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    position:relative;
+    overflow:hidden;
+    padding:80px 32px 100px;
+    text-align:center;
+    /* smooth fade into dark content below */
+    background: linear-gradient(180deg, var(--dark) 0%, var(--ink) 100%);
+  }
+
+  /* fade bottom edge into next section */
+  .cover::after {
+    content:'';
+    position:absolute;
+    bottom:0; left:0; right:0;
+    height:120px;
+    background: linear-gradient(to bottom, transparent, var(--ink));
+    pointer-events:none;
+    z-index:2;
+  }
+
+  .cover-orbs {
+    position:absolute; inset:0; pointer-events:none; z-index:0;
+  }
+  .orb {
+    position:absolute;
+    border-radius:50%;
+    filter:blur(80px);
+    opacity:.32;
+    animation: drift 12s ease-in-out infinite alternate;
+  }
+  .orb1 { width:550px;height:550px;background:var(--violet);top:-180px;left:-120px;animation-delay:0s; }
+  .orb2 { width:450px;height:450px;background:var(--coral);bottom:-120px;right:-80px;animation-delay:-4s; }
+  .orb3 { width:280px;height:280px;background:var(--mint);top:40%;left:60%;animation-delay:-8s;opacity:.15; }
+
+  @keyframes drift {
+    from { transform: translate(0,0) scale(1); }
+    to   { transform: translate(20px, -15px) scale(1.04); }
+  }
+
+  .cover-badge {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.35em;
+    text-transform:uppercase;
+    color:var(--mint);
+    margin-bottom:32px;
+    padding:8px 20px;
+    border:1px solid rgba(0,229,160,.25);
+    border-radius:100px;
+    display:inline-block;
+    position:relative;
+    z-index:1;
+  }
+
+  .cover-wordmark {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    /* Controlled size so it never overflows on mobile */
+    font-size:clamp(56px, 13vw, 148px);
+    letter-spacing:-.04em;
+    line-height:1;
+    position:relative;
+    display:inline-block;
+    /* ensure it never clips */
+    max-width:100%;
+    white-space:nowrap;
+    z-index:1;
+  }
+
+  .cover-wordmark .k { color:var(--white); }
+  .cover-wordmark .r { color:var(--white); }
+  .cover-wordmark .e { color:var(--white); }
+  .cover-wordmark .y { color:var(--white); }
+  /* A is now FILLED coral — clearly readable, still distinctive */
+  .cover-wordmark .a {
+    color: var(--coral);
+  }
+  .cover-wordmark .period {
+    color:var(--coral);
+    display:inline-block;
+    animation:blink 2.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,100%{opacity:1} 50%{opacity:.3}
+  }
+
+  .cover-descriptor {
+    font-family:'Syne',sans-serif;
+    font-weight:400;
+    font-size:clamp(13px,2vw,17px);
+    color:rgba(255,255,255,.45);
+    letter-spacing:.25em;
+    text-transform:uppercase;
+    margin-top:16px;
+    position:relative;
+    z-index:1;
+  }
+
+  .cover-tagline {
+    font-size:clamp(17px,2.5vw,24px);
+    font-weight:300;
+    color:rgba(255,255,255,.7);
+    margin-top:24px;
+    font-style:italic;
+    max-width:560px;
+    position:relative;
+    z-index:1;
+  }
+
+  .cover-tagline strong {
+    color:var(--white);
+    font-style:normal;
+    font-weight:500;
+  }
+
+  .cover-version {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    color:rgba(255,255,255,.2);
+    text-transform:uppercase;
+    margin-top:52px;
+    position:relative;
+    z-index:1;
+  }
+
+  /* ─── SECTION STRUCTURE ─── */
+  .s {
+    padding:100px 40px;
+    max-width:1200px;
+    margin:0 auto;
+  }
+
+  .s-label {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.35em;
+    text-transform:uppercase;
+    color:var(--coral);
+    margin-bottom:14px;
+  }
+
+  .s-title {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:clamp(36px,5vw,60px);
+    letter-spacing:-.035em;
+    line-height:1.05;
+    margin-bottom:56px;
+  }
+
+  .hairline {
+    height:1px;
+    background:linear-gradient(90deg,var(--coral),var(--violet),transparent);
+    margin:0;
+  }
+
+  /* ─── BRAND EVOLUTION SECTION ─── */
+  .evolution-wrap { background:var(--dark); }
+
+  .ev-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:2px;
+    margin-bottom:2px;
+  }
+  @media(max-width:700px){ .ev-grid{grid-template-columns:1fr;} }
+
+  .ev-card {
+    padding:48px 44px;
+    position:relative;
+    overflow:hidden;
+  }
+  .ev-card.old { background:rgba(255,255,255,.04); }
+  .ev-card.new { background:rgba(91,46,255,.12); border-left:3px solid var(--violet); }
+
+  .ev-tag {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    margin-bottom:20px;
+    opacity:.5;
+  }
+  .ev-card.old .ev-tag { color:var(--muted); }
+  .ev-card.new .ev-tag { color:var(--violet); opacity:1; }
+
+  .ev-tagline {
+    font-family:'Syne',sans-serif;
+    font-weight:700;
+    font-size:clamp(20px,2.5vw,28px);
+    line-height:1.2;
+    letter-spacing:-.02em;
+    margin-bottom:16px;
+  }
+
+  .ev-card.old .ev-tagline { color:rgba(255,255,255,.5); text-decoration:line-through; text-decoration-color:rgba(255,79,59,.5); }
+  .ev-card.new .ev-tagline { color:var(--white); }
+
+  .ev-note {
+    font-size:14px;
+    font-weight:300;
+    line-height:1.7;
+    color:rgba(255,255,255,.45);
+  }
+  .ev-card.new .ev-note { color:rgba(255,255,255,.65); }
+
+  /* ─── UPDATED IDENTITY CHANGES ─── */
+  .changes-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:16px;
+  }
+
+  .change-card {
+    padding:36px 32px;
+    background:rgba(255,255,255,.04);
+    border-radius:2px;
+    border-top:2px solid transparent;
+    transition:border-color .3s, background .3s;
+  }
+  .change-card:nth-child(1){border-color:var(--coral);}
+  .change-card:nth-child(2){border-color:var(--violet);}
+  .change-card:nth-child(3){border-color:var(--mint);}
+  .change-card:nth-child(4){border-color:var(--gold);}
+  .change-card:nth-child(5){border-color:var(--rose);}
+  .change-card:nth-child(6){border-color:var(--sky);}
+
+  .change-icon { font-size:28px; margin-bottom:16px; display:block; }
+
+  .change-card h3 {
+    font-family:'Syne',sans-serif;
+    font-weight:700;
+    font-size:16px;
+    margin-bottom:10px;
+    letter-spacing:-.01em;
+  }
+
+  .change-was {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    color:rgba(255,255,255,.3);
+    text-decoration:line-through;
+    margin-bottom:4px;
+  }
+
+  .change-now {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    color:var(--mint);
+    margin-bottom:12px;
+  }
+
+  .change-card p {
+    font-size:13px;
+    color:rgba(255,255,255,.5);
+    line-height:1.7;
+    font-weight:300;
+  }
+
+  /* ─── PRODUCT SUITE ─── */
+  .suite-wrap { background:var(--ink); }
+
+  /* Platform intro */
+  .platform-hero {
+    text-align:center;
+    padding:80px 40px 40px;
+    max-width:800px;
+    margin:0 auto;
+  }
+
+  .platform-hero .ph-label {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.35em;
+    text-transform:uppercase;
+    color:var(--mint);
+    margin-bottom:20px;
+  }
+
+  .platform-hero h2 {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:clamp(36px,6vw,64px);
+    letter-spacing:-.04em;
+    line-height:1.05;
+    margin-bottom:24px;
+  }
+
+  .platform-hero p {
+    font-size:18px;
+    font-weight:300;
+    color:rgba(255,255,255,.55);
+    line-height:1.7;
+  }
+
+  /* Timeline/roadmap */
+  .roadmap {
+    max-width:1200px;
+    margin:0 auto;
+    padding:0 40px 80px;
+  }
+
+  .roadmap-phases {
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:2px;
+    margin-bottom:60px;
+  }
+  @media(max-width:800px){.roadmap-phases{grid-template-columns:1fr;}}
+
+  .phase-card {
+    padding:40px 36px;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .phase-card.p1 { background:rgba(255,79,59,.1); border-top:3px solid var(--coral); }
+  .phase-card.p2 { background:rgba(91,46,255,.1); border-top:3px solid var(--violet); }
+  .phase-card.p3 { background:rgba(0,229,160,.08); border-top:3px solid var(--mint); }
+
+  .phase-label {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    opacity:.6;
+    margin-bottom:12px;
+  }
+
+  .phase-card.p1 .phase-label { color:var(--coral); }
+  .phase-card.p2 .phase-label { color:var(--violet); }
+  .phase-card.p3 .phase-label { color:var(--mint); }
+
+  .phase-title {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:22px;
+    letter-spacing:-.02em;
+    margin-bottom:12px;
+  }
+
+  .phase-time {
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    color:rgba(255,255,255,.35);
+    margin-bottom:20px;
+  }
+
+  .phase-products {
+    list-style:none;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .phase-products li {
+    font-size:13px;
+    font-weight:300;
+    color:rgba(255,255,255,.6);
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+
+  .phase-products li::before {
+    content:'';
+    width:6px;height:6px;
+    border-radius:50%;
+    flex-shrink:0;
+    background:currentColor;
+  }
+
+  .phase-card.p1 .phase-products li::before { background:var(--coral); }
+  .phase-card.p2 .phase-products li::before { background:var(--violet); }
+  .phase-card.p3 .phase-products li::before { background:var(--mint); }
+
+  /* Product cards */
+  .products-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+    gap:2px;
+    max-width:1200px;
+    margin:0 auto;
+  }
+
+  .product-card {
+    position:relative;
+    padding:56px 48px;
+    overflow:hidden;
+    min-height:380px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    cursor:pointer;
+    transition:transform .3s ease;
+  }
+
+  .product-card:hover { transform:translateY(-4px); z-index:2; }
+
+  .product-card::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    opacity:0;
+    transition:opacity .3s;
+  }
+
+  .product-card:hover::before { opacity:.06; }
+
+  .pc-socials { background:#0F0A1E; border-left:4px solid var(--coral); }
+  .pc-docs    { background:#0A0A18; border-left:4px solid var(--violet); }
+  .pc-studio  { background:#130A12; border-left:4px solid var(--rose); }
+  .pc-store   { background:#081510; border-left:4px solid var(--mint); }
+  .pc-inbox   { background:#141006; border-left:4px solid var(--gold); }
+  .pc-core    { background:linear-gradient(135deg,rgba(255,79,59,.15),rgba(91,46,255,.15)); border:1px solid rgba(255,255,255,.08); }
+
+  .pc-tag {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    margin-bottom:28px;
+  }
+
+  .pc-socials .pc-tag { color:var(--coral); }
+  .pc-docs    .pc-tag { color:var(--violet); }
+  .pc-studio  .pc-tag { color:var(--rose); }
+  .pc-store   .pc-tag { color:var(--mint); }
+  .pc-inbox   .pc-tag { color:var(--gold); }
+  .pc-core    .pc-tag { color:rgba(255,255,255,.5); }
+
+  .pc-icon {
+    font-size:36px;
+    margin-bottom:20px;
+    display:block;
+    line-height:1;
+  }
+
+  .pc-name {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:32px;
+    letter-spacing:-.04em;
+    margin-bottom:6px;
+    line-height:1;
+  }
+
+  .pc-name .brand { color:rgba(255,255,255,.35); font-weight:400; }
+
+  .pc-socials .pc-name .product { color:var(--coral); }
+  .pc-docs    .pc-name .product { color:var(--violet); }
+  .pc-studio  .pc-name .product { color:var(--rose); }
+  .pc-store   .pc-name .product { color:var(--mint); }
+  .pc-inbox   .pc-name .product { color:var(--gold); }
+  .pc-core    .pc-name          { background:linear-gradient(135deg,var(--coral),var(--violet)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+
+  .pc-desc {
+    font-size:15px;
+    font-weight:300;
+    color:rgba(255,255,255,.5);
+    line-height:1.65;
+    margin-top:16px;
+    flex:1;
+  }
+
+  .pc-prompt {
+    margin-top:28px;
+    padding:14px 18px;
+    background:rgba(0,0,0,.3);
+    border-radius:2px;
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    color:rgba(255,255,255,.4);
+    line-height:1.5;
+    border-left:2px solid rgba(255,255,255,.1);
+  }
+
+  .pc-prompt .prompt-cmd { display:block; margin-bottom:2px; }
+
+  .pc-socials .pc-prompt .prompt-cmd { color:var(--coral); }
+  .pc-docs    .pc-prompt .prompt-cmd { color:var(--violet); }
+  .pc-studio  .pc-prompt .prompt-cmd { color:var(--rose); }
+  .pc-store   .pc-prompt .prompt-cmd { color:var(--mint); }
+  .pc-inbox   .pc-prompt .prompt-cmd { color:var(--gold); }
+  .pc-core    .pc-prompt .prompt-cmd { color:rgba(255,255,255,.6); }
+
+  .pc-status {
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    margin-top:24px;
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.3);
+  }
+
+  .pc-status .dot {
+    width:6px;height:6px;
+    border-radius:50%;
+  }
+
+  .status-live .dot   { background:var(--mint); box-shadow:0 0 8px var(--mint); }
+  .status-soon .dot   { background:var(--gold); }
+  .status-future .dot { background:rgba(255,255,255,.2); }
+
+  /* ─── COLORS V2 ─── */
+  .colors-wrap { background:var(--dark); padding:100px 40px; }
+  .colors-inner { max-width:1200px; margin:0 auto; }
+
+  .color-system {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:12px;
+    margin-bottom:48px;
+  }
+
+  .cs-card { border-radius:3px; overflow:hidden; }
+
+  .cs-swatch {
+    height:100px;
+    display:flex;
+    align-items:flex-end;
+    padding:12px;
+  }
+
+  .cs-swatch-label {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+    opacity:.6;
+    color:#fff;
+  }
+
+  .cs-info { background:#111; padding:14px 16px; }
+  .cs-name { font-family:'Syne',sans-serif; font-weight:700; font-size:12px; color:#fff; margin-bottom:3px; }
+  .cs-use  { font-size:10px; color:rgba(255,255,255,.35); margin-bottom:6px; }
+  .cs-hex  { font-family:'Space Mono',monospace; font-size:10px; color:rgba(255,255,255,.5); }
+
+  /* product color swatches */
+  .cs-platform  { background:linear-gradient(135deg,var(--coral),var(--violet)); }
+  .cs-socials   { background:var(--coral); }
+  .cs-docs-c    { background:var(--violet); }
+  .cs-studio-c  { background:var(--rose); }
+  .cs-store-c   { background:var(--mint); }
+  .cs-inbox-c   { background:var(--gold); }
+  .cs-neutral   { background:var(--dark); }
+
+  /* typography section */
+  .type-wrap { background:var(--paper); color:var(--ink); padding:100px 40px; }
+  .type-inner { max-width:1200px; margin:0 auto; }
+  .type-wrap .s-label { color:var(--coral); }
+  .type-wrap .s-title { color:var(--ink); }
+
+  .type-showcase {
+    padding:60px;
+    background:var(--ink);
+    color:var(--white);
+    margin-bottom:32px;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .type-showcase::after {
+    content:'KREYA';
+    position:absolute;
+    right:-40px; top:-20px;
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:200px;
+    color:rgba(255,255,255,.02);
+    letter-spacing:-.05em;
+    pointer-events:none;
+  }
+
+  .ts-label {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.3);
+    margin-bottom:16px;
+  }
+
+  .ts-headline {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:clamp(40px,7vw,88px);
+    letter-spacing:-.04em;
+    line-height:1;
+    margin-bottom:28px;
+  }
+
+  .ts-headline .line2 { color:var(--coral); }
+
+  .ts-body {
+    font-size:17px;
+    font-weight:300;
+    color:rgba(255,255,255,.6);
+    line-height:1.75;
+    max-width:580px;
+    margin-bottom:20px;
+  }
+
+  .ts-mono {
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+    color:var(--violet);
+    letter-spacing:.05em;
+  }
+
+  /* ─── TONE OF VOICE ─── */
+  .tov-wrap { background:var(--ink); padding:100px 40px; }
+  .tov-inner { max-width:1200px; margin:0 auto; }
+
+  .tov-principles {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:2px;
+    margin-bottom:2px;
+  }
+
+  .tov-card {
+    padding:44px 36px;
+    background:rgba(255,255,255,.03);
+    position:relative;
+  }
+
+  .tov-card::before {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0;
+    height:3px;
+  }
+
+  .tov-card:nth-child(1)::before{background:var(--coral);}
+  .tov-card:nth-child(2)::before{background:var(--violet);}
+  .tov-card:nth-child(3)::before{background:var(--mint);}
+  .tov-card:nth-child(4)::before{background:var(--gold);}
+  .tov-card:nth-child(5)::before{background:var(--rose);}
+
+  .tov-card .tov-num {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.2em;
+    color:rgba(255,255,255,.2);
+    margin-bottom:16px;
+  }
+
+  .tov-card h3 {
+    font-family:'Syne',sans-serif;
+    font-weight:700;
+    font-size:17px;
+    margin-bottom:12px;
+    letter-spacing:-.01em;
+  }
+
+  .tov-card p {
+    font-size:13px;
+    color:rgba(255,255,255,.45);
+    line-height:1.7;
+    font-weight:300;
+  }
+
+  /* Say / Never */
+  .say-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:2px;
+  }
+  @media(max-width:640px){.say-grid{grid-template-columns:1fr;}}
+
+  .say-panel { padding:48px 44px; }
+  .say-panel.do { background:rgba(0,229,160,.05); }
+  .say-panel.dont { background:rgba(255,79,59,.05); }
+
+  .say-header {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    margin-bottom:28px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+
+  .say-panel.do   .say-header { color:var(--mint); }
+  .say-panel.dont .say-header { color:var(--coral); }
+
+  .say-item {
+    padding:14px 0;
+    border-bottom:1px solid rgba(255,255,255,.05);
+    font-size:14px;
+    font-weight:300;
+    font-style:italic;
+    color:rgba(255,255,255,.65);
+    line-height:1.5;
+  }
+
+  .say-item:last-child { border-bottom:none; }
+
+  /* ─── TAGLINES ─── */
+  .tags-wrap { background:var(--dark); padding:100px 40px; }
+  .tags-inner { max-width:1200px; margin:0 auto; }
+
+  .tagline-stack { list-style:none; }
+
+  .tl-item {
+    padding:28px 0;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    display:grid;
+    grid-template-columns:48px 1fr auto;
+    align-items:start;
+    gap:24px;
+  }
+
+  .tl-num {
+    font-family:'Space Mono',monospace;
+    font-size:10px;
+    color:rgba(255,255,255,.2);
+    padding-top:6px;
+  }
+
+  .tl-text {
+    font-family:'Syne',sans-serif;
+    font-weight:700;
+    font-size:clamp(20px,3vw,32px);
+    letter-spacing:-.025em;
+    line-height:1.2;
+    color:#fff;
+  }
+
+  .tl-note {
+    font-size:11px;
+    color:rgba(255,255,255,.3);
+    font-weight:300;
+    margin-top:6px;
+    font-family:'DM Sans',sans-serif;
+  }
+
+  .tl-badge {
+    font-family:'Space Mono',monospace;
+    font-size:8px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    padding:6px 12px;
+    border-radius:100px;
+    white-space:nowrap;
+    margin-top:6px;
+  }
+
+  .badge-primary { background:rgba(255,79,59,.15); color:var(--coral); border:1px solid rgba(255,79,59,.25); }
+  .badge-platform{ background:rgba(91,46,255,.15); color:#a084ff; border:1px solid rgba(91,46,255,.25); }
+  .badge-bold    { background:rgba(0,229,160,.1); color:var(--mint); border:1px solid rgba(0,229,160,.2); }
+  .badge-feature { background:rgba(255,209,102,.1); color:var(--gold); border:1px solid rgba(255,209,102,.2); }
+  .badge-campaign{ background:rgba(255,107,138,.1); color:var(--rose); border:1px solid rgba(255,107,138,.2); }
+
+  /* Hero statement */
+  .hero-statement {
+    margin-top:60px;
+    padding:72px 60px;
+    background:linear-gradient(135deg,var(--coral) 0%,var(--violet) 100%);
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .hero-statement::before {
+    content:'';
+    position:absolute; inset:0;
+    background:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 200px;
+    opacity:.06;
+  }
+
+  .hero-statement p {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:clamp(28px,5vw,52px);
+    color:#fff;
+    letter-spacing:-.035em;
+    line-height:1.15;
+    position:relative;
+  }
+
+  .hero-statement .hs-sub {
+    font-family:'DM Sans',sans-serif;
+    font-size:16px;
+    font-weight:300;
+    color:rgba(255,255,255,.7);
+    margin-top:20px;
+    font-style:italic;
+    position:relative;
+  }
+
+  /* ─── LOGO VARIANTS ─── */
+  .logo-wrap { background:var(--paper); padding:100px 40px; color:var(--ink); }
+  .logo-inner { max-width:1200px; margin:0 auto; }
+  .logo-wrap .s-label { color:var(--coral); }
+  .logo-wrap .s-title { color:var(--ink); }
+
+  .logo-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:12px;
+  }
+
+  .lv-card {
+    min-height:180px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding:40px 32px;
+    position:relative;
+    border-radius:3px;
+  }
+
+  .lv-card.on-dark  { background:var(--ink); }
+  .lv-card.on-light { background:#fff; box-shadow:0 0 0 1px rgba(0,0,0,.07); }
+  .lv-card.on-coral { background:var(--coral); }
+  .lv-card.on-vio   { background:var(--violet); }
+  .lv-card.on-grad  { background:linear-gradient(135deg,var(--coral),var(--violet)); }
+
+  .lv-wordmark {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:44px;
+    letter-spacing:-.045em;
+    line-height:1;
+  }
+
+  .lv-wordmark.white { color:#fff; }
+  .lv-wordmark.dark  { color:var(--ink); }
+  .lv-wordmark.outlined {
+    color:transparent;
+    -webkit-text-stroke:2px var(--white);
+  }
+
+  .lv-sub {
+    font-family:'Space Mono',monospace;
+    font-size:8px;
+    letter-spacing:.4em;
+    text-transform:uppercase;
+    opacity:.45;
+  }
+
+  .lv-sub.white { color:#fff; }
+  .lv-sub.dark  { color:var(--ink); }
+
+  .lv-label {
+    position:absolute;
+    bottom:10px;
+    font-family:'Space Mono',monospace;
+    font-size:8px;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+  }
+  .lv-label.white { color:rgba(255,255,255,.3); }
+  .lv-label.dark  { color:rgba(0,0,0,.3); }
+
+  .icon-wrap {
+    width:64px; height:64px;
+    background:linear-gradient(135deg,var(--coral),var(--violet));
+    border-radius:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .icon-wrap span {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:30px;
+    color:#fff;
+    letter-spacing:-.04em;
+  }
+
+  .icon-wrap.large { width:80px; height:80px; border-radius:20px; }
+  .icon-wrap.large span { font-size:38px; }
+
+  /* product mini icons */
+  .product-icons-row {
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-top:32px;
+    align-items:center;
+  }
+
+  .pi-icon {
+    width:48px; height:48px;
+    border-radius:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+    flex-shrink:0;
+  }
+
+  /* ─── LOGO DESIGN BRIEF ─── */
+  .brief-box {
+    margin-top:32px;
+    padding:40px;
+    background:var(--ink);
+    color:var(--white);
+    border-left:4px solid var(--violet);
+  }
+
+  .brief-box .bb-label {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    color:var(--violet);
+    margin-bottom:16px;
+  }
+
+  .brief-box p {
+    font-size:14px;
+    line-height:1.8;
+    color:rgba(255,255,255,.6);
+    font-weight:300;
+  }
+
+  .brief-box p strong { color:var(--white); font-weight:500; }
+
+  /* ─── PERSONAS ─── */
+  .persona-wrap { background:var(--ink); padding:100px 40px; }
+  .persona-inner { max-width:1200px; margin:0 auto; }
+
+  .persona-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:2px;
+  }
+
+  .persona-card {
+    padding:44px 32px;
+    background:rgba(255,255,255,.03);
+    border-bottom:3px solid transparent;
+  }
+
+  .persona-card:nth-child(1){border-color:var(--coral);}
+  .persona-card:nth-child(2){border-color:var(--violet);}
+  .persona-card:nth-child(3){border-color:var(--mint);}
+  .persona-card:nth-child(4){border-color:var(--gold);}
+
+  .persona-emoji { font-size:36px; margin-bottom:18px; display:block; }
+
+  .persona-card h3 {
+    font-family:'Syne',sans-serif;
+    font-weight:700;
+    font-size:18px;
+    margin-bottom:10px;
+    letter-spacing:-.01em;
+  }
+
+  .persona-card p {
+    font-size:13px;
+    color:rgba(255,255,255,.45);
+    line-height:1.65;
+    font-weight:300;
+  }
+
+  /* ─── FOOTER ─── */
+  .brand-footer {
+    background:var(--dark);
+    padding:60px 40px;
+    text-align:center;
+    border-top:1px solid rgba(255,255,255,.05);
+  }
+
+  .bf-logo {
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:36px;
+    letter-spacing:-.04em;
+    color:#fff;
+    margin-bottom:8px;
+  }
+
+  .bf-logo span { color:var(--coral); }
+
+  .bf-sub {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.3em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.2);
+    margin-bottom:32px;
+  }
+
+  .bf-products {
+    display:flex;
+    justify-content:center;
+    gap:24px;
+    flex-wrap:wrap;
+    margin-bottom:32px;
+  }
+
+  .bf-product {
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.2);
+  }
+
+  .bf-product.live { color:var(--coral); }
+
+  .bf-copy {
+    font-size:11px;
+    color:rgba(255,255,255,.15);
+    font-family:'Space Mono',monospace;
+    letter-spacing:.1em;
+  }
+
+  /* Responsive */
+  @media(max-width:768px){
+    .s { padding:60px 24px; }
+    .type-showcase { padding:40px 28px; }
+    .hero-statement { padding:48px 28px; }
+    .say-panel { padding:36px 28px; }
+    .tl-item { grid-template-columns:32px 1fr; }
+    .tl-badge { display:none; }
+    .logo-wrap, .tov-wrap, .tags-wrap, .persona-wrap { padding:60px 24px; }
+    .colors-wrap, .type-wrap { padding:60px 24px; }
+    .brand-footer { padding:48px 24px; }
+    .ev-card { padding:36px 28px; }
+  }
+
+  /* Animate on load */
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(24px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  .cover-content > * {
+    animation: fadeUp .8s ease both;
+  }
+
+  .cover-content > *:nth-child(1) { animation-delay:.1s; }
+  .cover-content > *:nth-child(2) { animation-delay:.25s; }
+  .cover-content > *:nth-child(3) { animation-delay:.4s; }
+  .cover-content > *:nth-child(4) { animation-delay:.55s; }
+  .cover-content > *:nth-child(5) { animation-delay:.7s; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ COVER ═══════════════════════ -->
+<div class="cover">
+  <div class="cover-orbs">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+  <div class="cover-content" style="position:relative;">
+    <div class="cover-badge">Brand Identity System v2.0 · Evolved</div>
+    <div class="cover-wordmark">
+      <span class="k">K</span><span class="r">R</span><span class="e">E</span><span class="y">Y</span><span class="a">A</span><span class="period">.</span>
+    </div>
+    <div class="cover-descriptor">Your Creative AI</div>
+    <div class="cover-tagline">Tell Kreya what you need. <strong>Consider it done.</strong></div>
+    <div class="cover-version">Kreya Technologies Inc. · Confidential · 2025</div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ BRAND EVOLUTION ═══════════════════════ -->
+<div class="evolution-wrap">
+  <div class="s">
+    <div class="s-label">00 — Why We Evolved</div>
+    <div class="s-title">From tool to colleague</div>
+  </div>
+  <div class="ev-grid" style="max-width:100%;">
+    <div class="ev-card old">
+      <div class="ev-tag">v1.0 — Launch positioning</div>
+      <div class="ev-tagline">"Your AI creative team, on WhatsApp."</div>
+      <p class="ev-note">Perfect for launch. Clear, specific, converts well. But it boxes Kreya into social media — and Kreya is becoming much more than that. This tagline serves Kreya.Socials, not the platform.</p>
+    </div>
+    <div class="ev-card new">
+      <div class="ev-tag">v2.0 — Platform positioning</div>
+      <div class="ev-tagline">"Tell Kreya what you need. Consider it done."</div>
+      <p class="ev-note">This works for any product. Social posts, legal docs, product listings, video scripts, email campaigns — it doesn't matter. Kreya is the creative colleague who handles everything. Platform-scale positioning from day one.</p>
+    </div>
+  </div>
+  <div class="s" style="padding-top:60px;">
+    <div class="s-label">What changed & why</div>
+    <div class="changes-grid">
+      <div class="change-card">
+        <span class="change-icon">🏷️</span>
+        <h3>Master Tagline</h3>
+        <div class="change-was">"Your AI creative team, on WhatsApp."</div>
+        <div class="change-now">→ "Tell Kreya what you need. Consider it done."</div>
+        <p>Broader, product-agnostic, more powerful. Works across every vertical Kreya will enter.</p>
+      </div>
+      <div class="change-card">
+        <span class="change-icon">📌</span>
+        <h3>Sub-tagline (logo)</h3>
+        <div class="change-was">"AI Content OS"</div>
+        <div class="change-now">→ "Your Creative AI"</div>
+        <p>Drops the category word. Kreya isn't a content tool — it's your creative AI, full stop.</p>
+      </div>
+      <div class="change-card">
+        <span class="change-icon">🎨</span>
+        <h3>Color Usage</h3>
+        <div class="change-was">Coral as sole primary</div>
+        <div class="change-now">→ Coral+Violet gradient as platform mark</div>
+        <p>Each product owns a single color. The parent Kreya brand owns the gradient — the combination of all products.</p>
+      </div>
+      <div class="change-card">
+        <span class="change-icon">🔤</span>
+        <h3>Logo "A" Treatment</h3>
+        <div class="change-was">Outlined stroke-only A</div>
+        <div class="change-now">→ Coral-filled A, four white letters</div>
+        <p>The coral A is readable at every size — small icons, massive billboard, mobile screen. Four white + one coral creates a distinctive, ownable wordmark that doesn't depend on rendering tricks.</p>
+      </div>
+      <div class="change-card">
+        <span class="change-icon">🗣️</span>
+        <h3>Tone of Voice — 5th pillar</h3>
+        <div class="change-was">4 pillars</div>
+        <div class="change-now">→ Added "Colleague, not assistant"</div>
+        <p>Kreya doesn't fetch and follow. Kreya thinks, suggests, and pushes back — like a talented creative colleague would.</p>
+      </div>
+      <div class="change-card">
+        <span class="change-icon">🏗️</span>
+        <h3>Brand Architecture</h3>
+        <div class="change-was">Single product brand</div>
+        <div class="change-now">→ Platform + product suite model</div>
+        <p>Kreya is the house. Kreya.Socials, Kreya.Docs, Kreya.Studio are the rooms. Each inherits the parent brand, owns its own color.</p>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ PRODUCT SUITE ═══════════════════════ -->
+<div class="suite-wrap">
+  <div class="platform-hero">
+    <div class="ph-label">01 — The Product Suite</div>
+    <h2>One platform.<br>Every creative need.</h2>
+    <p>Kreya starts with social. It grows into everything. Each product is a new skill your AI creative colleague has learned — always accessed the same way: just tell Kreya what you need.</p>
+  </div>
+
+  <!-- Roadmap phases -->
+  <div class="roadmap">
+    <div class="roadmap-phases">
+      <div class="phase-card p1">
+        <div class="phase-label">Phase 1 · Now</div>
+        <div class="phase-title">Launch Sharp</div>
+        <div class="phase-time">Months 1–6</div>
+        <ul class="phase-products">
+          <li>Kreya.Socials — flagship product</li>
+          <li>WhatsApp command interface</li>
+          <li>Multi-platform scheduling</li>
+          <li>AI content generation</li>
+          <li>Brand kit + asset library</li>
+        </ul>
+      </div>
+      <div class="phase-card p2">
+        <div class="phase-label">Phase 2 · Growth</div>
+        <div class="phase-title">Expand Adjacent</div>
+        <div class="phase-time">Months 6–18</div>
+        <ul class="phase-products">
+          <li>Kreya.Docs — prompt to documents</li>
+          <li>Kreya.Inbox — email campaigns</li>
+          <li>Team collaboration features</li>
+          <li>White-label for agencies</li>
+          <li>Analytics + reporting</li>
+        </ul>
+      </div>
+      <div class="phase-card p3">
+        <div class="phase-label">Phase 3 · Platform</div>
+        <div class="phase-title">Become the OS</div>
+        <div class="phase-time">Months 18–36</div>
+        <ul class="phase-products">
+          <li>Kreya.Studio — video + voice</li>
+          <li>Kreya.Store — e-commerce AI</li>
+          <li>Kreya API for developers</li>
+          <li>Kreya marketplace</li>
+          <li>Enterprise + custom AI agents</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product cards -->
+  <div class="products-grid">
+
+    <div class="product-card pc-socials">
+      <div>
+        <div class="pc-tag">Kreya.Socials · Launch Product</div>
+        <span class="pc-icon">📱</span>
+        <div class="pc-name"><span class="brand">Kreya.</span><span class="product">Socials</span></div>
+        <p class="pc-desc">Your entire social media operation — from ideation to publishing — managed through a WhatsApp message. TikTok, Instagram, X, Facebook, LinkedIn, YouTube Shorts. One prompt. Six platforms. Done.</p>
+      </div>
+      <div>
+        <div class="pc-prompt">
+          <span class="prompt-cmd">// user says on WhatsApp:</span>
+          "Post a motivational reel for my fitness brand on Instagram and TikTok tomorrow 9am"
+        </div>
+        <div class="pc-status status-live"><span class="dot"></span>Live at launch</div>
+      </div>
+    </div>
+
+    <div class="product-card pc-docs">
+      <div>
+        <div class="pc-tag">Kreya.Docs · Phase 2</div>
+        <span class="pc-icon">📄</span>
+        <div class="pc-name"><span class="brand">Kreya.</span><span class="product">Docs</span></div>
+        <p class="pc-desc">Proposals, contracts, reports, pitch decks, meeting summaries — any business document, drafted and formatted from a voice note or text prompt. Exported as PDF, Word, or Google Doc instantly.</p>
+      </div>
+      <div>
+        <div class="pc-prompt">
+          <span class="prompt-cmd">// user says on WhatsApp:</span>
+          "Write a client proposal for a 3-month social media package, €2500/month"
+        </div>
+        <div class="pc-status status-soon"><span class="dot"></span>Coming Phase 2</div>
+      </div>
+    </div>
+
+    <div class="product-card pc-studio">
+      <div>
+        <div class="pc-tag">Kreya.Studio · Phase 3</div>
+        <span class="pc-icon">🎬</span>
+        <div class="pc-name"><span class="brand">Kreya.</span><span class="product">Studio</span></div>
+        <p class="pc-desc">Full video and audio creative suite. Script generation, AI voiceovers, auto-subtitles, video clip trimming, background music, and reel formatting — all from a prompt. No editing software needed.</p>
+      </div>
+      <div>
+        <div class="pc-prompt">
+          <span class="prompt-cmd">// user says on WhatsApp:</span>
+          "Make a 60-second explainer video for my coaching service, upbeat tone"
+        </div>
+        <div class="pc-status status-future"><span class="dot"></span>Coming Phase 3</div>
+      </div>
+    </div>
+
+    <div class="product-card pc-store">
+      <div>
+        <div class="pc-tag">Kreya.Store · Phase 3</div>
+        <span class="pc-icon">🛍️</span>
+        <div class="pc-name"><span class="brand">Kreya.</span><span class="product">Store</span></div>
+        <p class="pc-desc">Product listings, ad copy, promotional campaigns, abandoned cart emails, and seasonal offers — all generated and deployed from a single prompt. For Shopify, WooCommerce, Etsy, and beyond.</p>
+      </div>
+      <div>
+        <div class="pc-prompt">
+          <span class="prompt-cmd">// user says on WhatsApp:</span>
+          "Write product descriptions for my 12 new summer dresses and run a Black Friday campaign"
+        </div>
+        <div class="pc-status status-future"><span class="dot"></span>Coming Phase 3</div>
+      </div>
+    </div>
+
+    <div class="product-card pc-inbox">
+      <div>
+        <div class="pc-tag">Kreya.Inbox · Phase 2</div>
+        <span class="pc-icon">✉️</span>
+        <div class="pc-name"><span class="brand">Kreya.</span><span class="product">Inbox</span></div>
+        <p class="pc-desc">Email newsletters, drip campaigns, cold outreach sequences, and transactional emails — written, designed, and sent from a prompt. Integrates with Mailchimp, Klaviyo, Brevo, and more.</p>
+      </div>
+      <div>
+        <div class="pc-prompt">
+          <span class="prompt-cmd">// user says on WhatsApp:</span>
+          "Send a welcome email sequence to my new subscribers, 3 emails over 7 days"
+        </div>
+        <div class="pc-status status-soon"><span class="dot"></span>Coming Phase 2</div>
+      </div>
+    </div>
+
+    <div class="product-card pc-core">
+      <div>
+        <div class="pc-tag">Kreya Core · Always</div>
+        <span class="pc-icon">⚡</span>
+        <div class="pc-name">Kreya</div>
+        <p class="pc-desc">The AI brain that powers everything. An intelligent creative colleague that learns your brand, voice, and preferences over time. Accessible via WhatsApp, web portal, or API. The more you use Kreya, the better it knows you.</p>
+      </div>
+      <div>
+        <div class="pc-prompt">
+          <span class="prompt-cmd">// the promise:</span>
+          "Tell Kreya what you need. Consider it done."
+        </div>
+        <div class="pc-status status-live"><span class="dot"></span>The foundation</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ COLORS V2 ═══════════════════════ -->
+<div class="colors-wrap">
+  <div class="colors-inner">
+    <div class="s-label">02 — Color System v2</div>
+    <div class="s-title" style="color:#fff;">Platform palette + product colors</div>
+    <div class="color-system">
+      <div class="cs-card">
+        <div class="cs-swatch cs-platform"><div class="cs-swatch-label">Platform</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Kreya Gradient</div>
+          <div class="cs-use">Master brand · Platform mark</div>
+          <div class="cs-hex">Coral → Violet</div>
+        </div>
+      </div>
+      <div class="cs-card">
+        <div class="cs-swatch cs-socials"><div class="cs-swatch-label">Socials</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Energy Coral</div>
+          <div class="cs-use">Kreya.Socials · Launch · CTA</div>
+          <div class="cs-hex">#FF4F3B</div>
+        </div>
+      </div>
+      <div class="cs-card">
+        <div class="cs-swatch cs-docs-c"><div class="cs-swatch-label">Docs</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Deep Violet</div>
+          <div class="cs-use">Kreya.Docs · Authority · Depth</div>
+          <div class="cs-hex">#5B2EFF</div>
+        </div>
+      </div>
+      <div class="cs-card">
+        <div class="cs-swatch cs-studio-c"><div class="cs-swatch-label">Studio</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Signal Rose</div>
+          <div class="cs-use">Kreya.Studio · Creative · Bold</div>
+          <div class="cs-hex">#FF6B8A</div>
+        </div>
+      </div>
+      <div class="cs-card">
+        <div class="cs-swatch cs-store-c"><div class="cs-swatch-label">Store</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Growth Mint</div>
+          <div class="cs-use">Kreya.Store · Commerce · Fresh</div>
+          <div class="cs-hex">#00E5A0</div>
+        </div>
+      </div>
+      <div class="cs-card">
+        <div class="cs-swatch cs-inbox-c"><div class="cs-swatch-label">Inbox</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Warm Gold</div>
+          <div class="cs-use">Kreya.Inbox · Warmth · Trust</div>
+          <div class="cs-hex">#FFD166</div>
+        </div>
+      </div>
+      <div class="cs-card">
+        <div class="cs-swatch cs-neutral"><div class="cs-swatch-label">Base</div></div>
+        <div class="cs-info">
+          <div class="cs-name">Midnight</div>
+          <div class="cs-use">Backgrounds · Dark mode · Base</div>
+          <div class="cs-hex">#0F0A1E</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ TYPOGRAPHY ═══════════════════════ -->
+<div class="type-wrap">
+  <div class="type-inner">
+    <div class="s-label">03 — Typography (unchanged, confirmed)</div>
+    <div class="s-title">Type system</div>
+    <div class="type-showcase">
+      <div class="ts-label">Display · Syne ExtraBold 800</div>
+      <div class="ts-headline">Tell Kreya<br><span class="line2">what you need.</span></div>
+      <p class="ts-body">Your AI creative colleague — for social content, business documents, email campaigns, video scripts, and everything in between. One platform, every creative need.</p>
+      <div class="ts-mono">// kreya.ai · your creative AI · v2.0</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:0;">
+      <div style="padding:36px;background:var(--ink);color:#fff;">
+        <div style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--mint);margin-bottom:14px;">Display · Headlines</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:30px;letter-spacing:-.035em;line-height:1.1;margin-bottom:12px;">Syne ExtraBold</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);font-weight:300;">Aa Bb Cc · 1 2 3<br>Headlines, logo, UI labels, impact statements</div>
+      </div>
+      <div style="padding:36px;background:var(--ink);color:#fff;">
+        <div style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--violet);margin-bottom:14px;">Body · Descriptions</div>
+        <div style="font-family:'DM Sans',sans-serif;font-weight:300;font-size:26px;line-height:1.2;margin-bottom:12px;">DM Sans Light</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);font-weight:300;">Aa Bb Cc · 1 2 3<br>Body copy, UI text, onboarding, descriptions</div>
+      </div>
+      <div style="padding:36px;background:var(--ink);color:#fff;">
+        <div style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;">Utility · Technical</div>
+        <div style="font-family:'Space Mono',monospace;font-weight:700;font-size:22px;line-height:1.2;margin-bottom:12px;">Space Mono</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.4);font-weight:300;">Aa Bb Cc · 1 2 3<br>Labels, code, metadata, prompts, version tags</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ TONE OF VOICE ═══════════════════════ -->
+<div class="tov-wrap">
+  <div class="tov-inner">
+    <div class="s-label">04 — Tone of Voice v2</div>
+    <div class="s-title">How Kreya speaks</div>
+    <div class="tov-principles">
+      <div class="tov-card">
+        <div class="tov-num">01</div>
+        <h3>Confident, not arrogant</h3>
+        <p>Kreya knows its capabilities and states them plainly. No hollow hype. Speak like a trusted expert friend — direct, clear, and genuinely useful.</p>
+      </div>
+      <div class="tov-card">
+        <div class="tov-num">02</div>
+        <h3>Warm, not fluffy</h3>
+        <p>Care about creators genuinely. But real warmth means being honest and useful — not over-celebrating every interaction with emojis and hollow praise.</p>
+      </div>
+      <div class="tov-card">
+        <div class="tov-num">03</div>
+        <h3>Simple, not dumbed-down</h3>
+        <p>Users aren't stupid — they're busy. Explain clearly, avoid jargon, and never make people feel like they need a degree to use the product.</p>
+      </div>
+      <div class="tov-card">
+        <div class="tov-num">04</div>
+        <h3>Playful, not childish</h3>
+        <p>Room for wit and personality — a clever line, a knowing tone. Always in service of the message, never at the expense of clarity or trust.</p>
+      </div>
+      <div class="tov-card">
+        <div class="tov-num">05 · NEW</div>
+        <h3>Colleague, not assistant</h3>
+        <p>Kreya doesn't just fetch and follow instructions. It thinks, proactively suggests, occasionally pushes back — like a talented creative colleague who has your best interests at heart, not a subservient chatbot.</p>
+      </div>
+    </div>
+    <div class="say-grid">
+      <div class="say-panel do">
+        <div class="say-header">✓ Kreya says</div>
+        <div class="say-item">"Done — your reel is scheduled. Want me to repurpose it for LinkedIn too?"</div>
+        <div class="say-item">"Just send a voice note. I'll handle the rest."</div>
+        <div class="say-item">"That caption might be too long for TikTok — I shortened it. Here's the original if you prefer."</div>
+        <div class="say-item">"Your post is ready. One thing — you haven't posted in 4 days. Want me to fill the gaps?"</div>
+        <div class="say-item">"I repurposed that into 6 formats automatically. Review them?"</div>
+        <div class="say-item">"You're the creator. I'm the engine."</div>
+      </div>
+      <div class="say-panel dont">
+        <div class="say-header">✗ Kreya never says</div>
+        <div class="say-item">"Leverage our AI-powered synergistic content pipeline."</div>
+        <div class="say-item">"Congratulations!! Amazing work today! 🎉🎉🎉"</div>
+        <div class="say-item">"Please navigate to the content scheduling module."</div>
+        <div class="say-item">"As an AI language model, I cannot guarantee results."</div>
+        <div class="say-item">"Your request has been queued for processing."</div>
+        <div class="say-item">"I'm just an AI and I want to be transparent about my limitations."</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ TAGLINES ═══════════════════════ -->
+<div class="tags-wrap">
+  <div class="tags-inner">
+    <div class="s-label">05 — Core Messaging v2</div>
+    <div class="s-title">Taglines & positioning</div>
+    <ul class="tagline-stack">
+      <li class="tl-item">
+        <span class="tl-num">01</span>
+        <div>
+          <div class="tl-text">"Tell Kreya what you need. Consider it done."</div>
+          <div class="tl-note">Master platform tagline — works across every product, every vertical, every future expansion.</div>
+        </div>
+        <span class="tl-badge badge-platform">Master tagline</span>
+      </li>
+      <li class="tl-item">
+        <span class="tl-num">02</span>
+        <div>
+          <div class="tl-text">"Your AI creative team, on WhatsApp."</div>
+          <div class="tl-note">Kreya.Socials specific — use for launch marketing, ads, onboarding. Keep for the product, retire from the master brand.</div>
+        </div>
+        <span class="tl-badge badge-primary">Socials only</span>
+      </li>
+      <li class="tl-item">
+        <span class="tl-num">03</span>
+        <div>
+          <div class="tl-text">"Fire your agency. Keep your results."</div>
+          <div class="tl-note">Bold campaign line — confrontational, memorable. Use for paid ads and social campaigns targeting frustrated agency clients.</div>
+        </div>
+        <span class="tl-badge badge-bold">Campaign</span>
+      </li>
+      <li class="tl-item">
+        <span class="tl-num">04</span>
+        <div>
+          <div class="tl-text">"One message. Every platform. Done."</div>
+          <div class="tl-note">Feature tagline — perfect for onboarding screens and product demos showing multi-platform posting.</div>
+        </div>
+        <span class="tl-badge badge-feature">Feature</span>
+      </li>
+      <li class="tl-item">
+        <span class="tl-num">05</span>
+        <div>
+          <div class="tl-text">"The creative colleague you always needed."</div>
+          <div class="tl-note">Platform positioning — use when introducing Kreya as a whole. Signals colleague (not tool), creative (not generic AI), and personal (yours).</div>
+        </div>
+        <span class="tl-badge badge-platform">Platform</span>
+      </li>
+      <li class="tl-item">
+        <span class="tl-num">06</span>
+        <div>
+          <div class="tl-text">"You create. Kreya executes. Always."</div>
+          <div class="tl-note">Empowerment line — reinforces that the creator is still in control. Good for onboarding and trust-building moments.</div>
+        </div>
+        <span class="tl-badge badge-campaign">Empowerment</span>
+      </li>
+    </ul>
+    <div class="hero-statement">
+      <p>The creative OS built for people<br>who outgrow agencies.</p>
+      <div class="hs-sub">Kreya — Your Creative AI. Available on WhatsApp.</div>
+    </div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ LOGO ═══════════════════════ -->
+<div class="logo-wrap">
+  <div class="logo-inner">
+    <div class="s-label">06 — Logo System v2</div>
+    <div class="s-title">Visual identity</div>
+    <div class="logo-grid">
+      <div class="lv-card on-dark">
+        <div class="lv-wordmark white">KREY<span style="color:var(--coral);">A</span></div>
+        <div class="lv-sub white">Your Creative AI</div>
+        <div class="lv-label white">Primary — Dark</div>
+      </div>
+      <div class="lv-card on-light">
+        <div class="lv-wordmark dark">KREY<span style="color:var(--coral);">A</span></div>
+        <div class="lv-sub dark">Your Creative AI</div>
+        <div class="lv-label dark">Primary — Light</div>
+      </div>
+      <div class="lv-card on-coral">
+        <div class="lv-wordmark white">KREYA</div>
+        <div class="lv-sub white">Your Creative AI</div>
+        <div class="lv-label white">Socials Brand Color</div>
+      </div>
+      <div class="lv-card on-grad">
+        <div class="lv-wordmark white">KREYA</div>
+        <div class="lv-sub white">Your Creative AI</div>
+        <div class="lv-label white">Platform Gradient</div>
+      </div>
+      <div class="lv-card on-dark" style="min-height:200px;">
+        <div class="icon-wrap large"><span>K</span></div>
+        <div class="lv-label white">App Icon</div>
+      </div>
+      <div class="lv-card on-light" style="min-height:200px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div class="icon-wrap"><span>K</span></div>
+          <div class="lv-wordmark dark" style="font-size:36px;">KREYA</div>
+        </div>
+        <div class="lv-label dark">Lockup</div>
+      </div>
+    </div>
+
+    <!-- Product icons row -->
+    <div style="margin-top:40px;padding:40px;background:var(--ink);">
+      <div style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:24px;">Product family icons</div>
+      <div class="product-icons-row">
+        <div class="pi-icon" style="background:var(--coral);">📱</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,.4);">Kreya.<span style="color:var(--coral);">Socials</span></div>
+        <div style="width:1px;height:32px;background:rgba(255,255,255,.1);margin:0 8px;"></div>
+        <div class="pi-icon" style="background:var(--violet);">📄</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,.4);">Kreya.<span style="color:#a084ff;">Docs</span></div>
+        <div style="width:1px;height:32px;background:rgba(255,255,255,.1);margin:0 8px;"></div>
+        <div class="pi-icon" style="background:var(--rose);">🎬</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,.4);">Kreya.<span style="color:var(--rose);">Studio</span></div>
+        <div style="width:1px;height:32px;background:rgba(255,255,255,.1);margin:0 8px;"></div>
+        <div class="pi-icon" style="background:var(--mint);">🛍️</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,.4);">Kreya.<span style="color:var(--mint);">Store</span></div>
+        <div style="width:1px;height:32px;background:rgba(255,255,255,.1);margin:0 8px;"></div>
+        <div class="pi-icon" style="background:var(--gold);">✉️</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:rgba(255,255,255,.4);">Kreya.<span style="color:var(--gold);">Inbox</span></div>
+      </div>
+    </div>
+
+    <div class="brief-box">
+      <div class="bb-label">Updated Logo Brief for Designer</div>
+      <p>The wordmark uses <strong>Syne ExtraBold</strong> at −0.04em tracking. The key brand signal: the final <strong>"A" is rendered in Kreya Coral</strong> — creating a subtle but memorable colour break in the wordmark. Four white letters, one coral letter. It reads cleanly at any size while giving the logo a distinctive, ownable quality. The <strong>icon mark</strong> is a rounded square (18–20px radius) with a coral-to-violet diagonal gradient containing a bold white "K". The K's diagonal stroke can optionally carry a subtle upward arrow motif symbolising growth. The <strong>product sub-brand naming</strong> follows the pattern: "Kreya" in light/medium weight + ".[Product]" in the product's accent colour. Never put the period in the icon — it lives only in the wordmark and full logotype.</p>
+    </div>
+  </div>
+</div>
+<div class="hairline"></div>
+
+<!-- ═══════════════════════ PERSONAS ═══════════════════════ -->
+<div class="persona-wrap">
+  <div class="persona-inner">
+    <div class="s-label">07 — Target Personas (expanded)</div>
+    <div class="s-title">Who Kreya is built for</div>
+    <div class="persona-grid">
+      <div class="persona-card">
+        <span class="persona-emoji">📱</span>
+        <h3>The Solo Creator</h3>
+        <p>Building a personal brand on TikTok & Instagram. Has great ideas, hates figuring out scheduling, captions, and consistency. Kreya.Socials is their starting point — and they'll grow into Kreya.Studio.</p>
+      </div>
+      <div class="persona-card">
+        <span class="persona-emoji">🛍️</span>
+        <h3>The Small Business Owner</h3>
+        <p>Runs a boutique, restaurant, or online store. Needs to show up on social daily, write product descriptions, and send newsletters — but has zero time. Uses Kreya.Socials, Kreya.Store, and Kreya.Inbox.</p>
+      </div>
+      <div class="persona-card">
+        <span class="persona-emoji">🎙️</span>
+        <h3>The Expert / Coach</h3>
+        <p>Consultant, trainer, or educator building authority online. Has expertise but needs help packaging it — proposals, social content, email sequences, video scripts. A power user across the full Kreya suite.</p>
+      </div>
+      <div class="persona-card">
+        <span class="persona-emoji">🚀</span>
+        <h3>The Early Startup</h3>
+        <p>1–5 person team that can't afford a full agency stack. Needs pro-level content output, business documents, and email campaigns without the overhead. Kreya replaces 4–5 separate tools they'd otherwise pay for.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<div class="brand-footer">
+  <div class="bf-logo">KREYA<span>.</span></div>
+  <div class="bf-sub">Your Creative AI · Brand Identity v2.0</div>
+  <div class="bf-products">
+    <span class="bf-product live">Kreya.Socials</span>
+    <span class="bf-product">Kreya.Docs</span>
+    <span class="bf-product">Kreya.Studio</span>
+    <span class="bf-product">Kreya.Store</span>
+    <span class="bf-product">Kreya.Inbox</span>
+  </div>
+  <div class="bf-copy">Kreya Technologies Inc. · Confidential · 2025</div>
+</div>
+
+</body>
+</html>

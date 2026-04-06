@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreya — Full-Stack Dev Prompt</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0A0A0F; --surface:#0F0D1A; --surface2:#141020;
+    --coral:#FF4F3B; --violet:#5B2EFF; --mint:#00E5A0;
+    --gold:#FFD166; --rose:#FF6B8A;
+    --white:#FFFFFF; --muted:rgba(255,255,255,.45);
+    --dim:rgba(255,255,255,.08);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--white);font-family:'DM Sans',sans-serif;line-height:1.6;}
+
+  .cover{
+    min-height:60vh;display:flex;flex-direction:column;justify-content:center;
+    padding:80px 60px;background:var(--surface);
+    border-bottom:1px solid var(--dim);
+    position:relative;overflow:hidden;
+  }
+  .cover::before{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse 50% 60% at 0% 50%,rgba(91,46,255,.25),transparent 60%),
+               radial-gradient(ellipse 40% 50% at 100% 50%,rgba(255,79,59,.2),transparent 60%);
+  }
+  .cover-inner{position:relative;max-width:900px;}
+  .cv-badge{
+    font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.35em;
+    text-transform:uppercase;color:var(--mint);margin-bottom:24px;
+    padding:6px 16px;border:1px solid rgba(0,229,160,.2);border-radius:100px;
+    display:inline-block;
+  }
+  .cv-title{
+    font-family:'Syne',sans-serif;font-weight:800;
+    font-size:clamp(36px,5vw,60px);letter-spacing:-.035em;line-height:1.05;
+    margin-bottom:16px;
+  }
+  .cv-title span{color:var(--coral);}
+  .cv-sub{font-size:18px;font-weight:300;color:var(--muted);max-width:680px;}
+
+  /* ── LAYOUT ── */
+  .wrap{max-width:1000px;margin:0 auto;padding:0 60px;}
+  @media(max-width:768px){.wrap{padding:0 24px;}}
+
+  section{padding:72px 0;border-bottom:1px solid var(--dim);}
+  section:last-child{border-bottom:none;}
+
+  .sec-label{
+    font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.35em;
+    text-transform:uppercase;color:var(--coral);margin-bottom:12px;
+  }
+  h2{
+    font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(24px,3vw,36px);
+    letter-spacing:-.03em;margin-bottom:32px;line-height:1.1;
+  }
+  h3{
+    font-family:'Syne',sans-serif;font-weight:700;font-size:18px;
+    letter-spacing:-.01em;margin-bottom:12px;color:var(--white);
+  }
+  p{font-size:15px;font-weight:300;color:var(--muted);line-height:1.75;margin-bottom:16px;}
+  p:last-child{margin-bottom:0;}
+
+  /* ── CODE BLOCKS ── */
+  .code-block{
+    background:#050508;border:1px solid rgba(255,255,255,.07);
+    border-radius:4px;padding:28px 32px;margin:24px 0;
+    font-family:'Space Mono',monospace;font-size:12px;line-height:1.8;
+    color:rgba(255,255,255,.75);overflow-x:auto;
+    position:relative;
+  }
+  .code-block .cb-label{
+    position:absolute;top:10px;right:14px;
+    font-size:8px;letter-spacing:.2em;text-transform:uppercase;
+    color:rgba(255,255,255,.2);
+  }
+  .code-block .c-key{color:var(--violet);}
+  .code-block .c-val{color:var(--mint);}
+  .code-block .c-str{color:var(--gold);}
+  .code-block .c-cmt{color:rgba(255,255,255,.25);font-style:italic;}
+  .code-block .c-err{color:var(--coral);}
+  .code-block .c-head{color:var(--rose);}
+
+  /* ── PROMPT BLOCK ── */
+  .prompt-block{
+    background:var(--surface2);
+    border-left:4px solid var(--violet);
+    padding:32px 36px;margin:24px 0;
+    font-size:14px;font-weight:300;color:rgba(255,255,255,.8);
+    line-height:1.85;white-space:pre-wrap;
+    font-family:'DM Sans',sans-serif;
+  }
+
+  /* ── GRID CARDS ── */
+  .card-grid{display:grid;gap:2px;margin:24px 0;}
+  .card-grid.cols2{grid-template-columns:1fr 1fr;}
+  .card-grid.cols3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:700px){
+    .card-grid.cols2,.card-grid.cols3{grid-template-columns:1fr;}
+  }
+
+  .card{padding:28px 28px;background:var(--surface2);}
+  .card-head{
+    font-family:'Space Mono',monospace;font-size:9px;
+    letter-spacing:.25em;text-transform:uppercase;
+    margin-bottom:14px;
+  }
+  .card h3{font-size:15px;margin-bottom:8px;}
+  .card p{font-size:13px;}
+
+  .card.coral{border-left:3px solid var(--coral);}
+  .card.violet{border-left:3px solid var(--violet);}
+  .card.mint{border-left:3px solid var(--mint);}
+  .card.gold{border-left:3px solid var(--gold);}
+  .card.rose{border-left:3px solid var(--rose);}
+
+  .card.coral .card-head{color:var(--coral);}
+  .card.violet .card-head{color:var(--violet);}
+  .card.mint .card-head{color:var(--mint);}
+  .card.gold .card-head{color:var(--gold);}
+  .card.rose .card-head{color:var(--rose);}
+
+  /* ── TABLE ── */
+  table{width:100%;border-collapse:collapse;margin:24px 0;font-size:13px;}
+  th{
+    font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.2em;
+    text-transform:uppercase;padding:12px 16px;
+    background:rgba(255,255,255,.04);color:rgba(255,255,255,.5);
+    text-align:left;border-bottom:1px solid var(--dim);
+  }
+  td{
+    padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.04);
+    color:rgba(255,255,255,.65);font-weight:300;vertical-align:top;
+  }
+  tr:last-child td{border-bottom:none;}
+  td:first-child{font-family:'Space Mono',monospace;font-size:11px;color:var(--mint);}
+  td strong{color:var(--white);font-weight:500;}
+
+  /* ── LIST ── */
+  ul.styled{list-style:none;margin:16px 0;}
+  ul.styled li{
+    padding:8px 0 8px 20px;position:relative;
+    font-size:14px;color:var(--muted);font-weight:300;
+    border-bottom:1px solid rgba(255,255,255,.04);
+  }
+  ul.styled li:last-child{border-bottom:none;}
+  ul.styled li::before{
+    content:'→';position:absolute;left:0;
+    color:var(--coral);font-size:12px;
+  }
+
+  /* ── PHASE STRIP ── */
+  .phase-strip{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:2px;margin:24px 0;
+  }
+  @media(max-width:700px){.phase-strip{grid-template-columns:1fr 1fr;}}
+
+  .ps-card{padding:28px 24px;background:var(--surface2);}
+  .ps-card:nth-child(1){border-top:3px solid var(--coral);}
+  .ps-card:nth-child(2){border-top:3px solid var(--violet);}
+  .ps-card:nth-child(3){border-top:3px solid var(--mint);}
+  .ps-card:nth-child(4){border-top:3px solid var(--gold);}
+
+  .ps-week{
+    font-family:'Space Mono',monospace;font-size:9px;
+    letter-spacing:.2em;text-transform:uppercase;
+    color:rgba(255,255,255,.3);margin-bottom:10px;
+  }
+  .ps-title{
+    font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+    margin-bottom:10px;letter-spacing:-.01em;
+  }
+  .ps-items{font-size:12px;color:var(--muted);font-weight:300;line-height:1.7;}
+
+  /* ── HIGHLIGHT ── */
+  .highlight-box{
+    padding:36px 40px;margin:28px 0;
+    background:linear-gradient(135deg,rgba(255,79,59,.1),rgba(91,46,255,.1));
+    border:1px solid rgba(255,255,255,.07);
+  }
+  .highlight-box p{color:rgba(255,255,255,.8);font-size:16px;}
+
+  /* ── FOOTER ── */
+  .doc-footer{
+    background:var(--surface);padding:48px 60px;
+    border-top:1px solid var(--dim);text-align:center;
+  }
+  .doc-footer .df-logo{
+    font-family:'Syne',sans-serif;font-weight:800;font-size:28px;
+    letter-spacing:-.04em;color:var(--white);margin-bottom:8px;
+  }
+  .doc-footer .df-logo span{color:var(--coral);}
+  .doc-footer p{font-size:11px;font-family:'Space Mono',monospace;
+    letter-spacing:.15em;color:rgba(255,255,255,.2);text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-inner">
+    <div class="cv-badge">Full-Stack Build Prompt · Kreya v2.0</div>
+    <div class="cv-title">The Master <span>Claude Prompt</span><br>for Building Kreya</div>
+    <div class="cv-sub">Hand this document to Claude (or any senior developer) to begin building the Kreya platform end-to-end. Includes architecture, security, integrations, MVP roadmap, and product expansion strategy.</div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<!-- ══════════════════════════════════════════
+     SECTION 0 — HOW TO USE THIS DOCUMENT
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">00 — How to use this</div>
+  <h2>Instructions for the builder</h2>
+  <p>This document is the single source of truth for building Kreya. It contains the full Claude prompt (copy it verbatim), context on brand and product decisions, technical constraints, and the 8-week MVP roadmap.</p>
+  <div class="card-grid cols3">
+    <div class="card coral">
+      <div class="card-head">Step 1</div>
+      <h3>Copy the Master Prompt</h3>
+      <p>Section 01 contains the full prompt. Paste it into a fresh Claude conversation with Projects enabled to maintain context.</p>
+    </div>
+    <div class="card violet">
+      <div class="card-head">Step 2</div>
+      <h3>Share this document</h3>
+      <p>Upload this HTML as context so Claude has the full brand, product suite, and technical vision in its context window.</p>
+    </div>
+    <div class="card mint">
+      <div class="card-head">Step 3</div>
+      <h3>Iterate by section</h3>
+      <p>Work through each section in order. Start with infrastructure + auth, then WhatsApp engine, then UI, then integrations.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 1 — THE MASTER PROMPT
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">01 — The Master Prompt</div>
+  <h2>Copy this into Claude</h2>
+
+  <div class="prompt-block">You are acting as the lead full-stack architect, product engineer, and security specialist for <strong>Kreya</strong> — a platform-scale SaaS product I am building from scratch.
+
+<strong>COMPANY VISION:</strong>
+Kreya is "Your Creative AI" — a platform that starts as a WhatsApp-first AI content OS for social media (Kreya.Socials), and expands into a full creative colleague platform: Kreya.Docs, Kreya.Studio, Kreya.Store, Kreya.Inbox. Think of it as the operating system for independent creators and small businesses — replacing digital agencies, Hootsuite, HubSpot, and a dozen other tools with a single AI-powered, WhatsApp-native interface.
+
+<strong>MASTER TAGLINE:</strong> "Tell Kreya what you need. Consider it done."
+<strong>LAUNCH PRODUCT:</strong> Kreya.Socials — WhatsApp prompt → AI content → multi-platform publishing
+
+<strong>YOUR ROLE:</strong>
+You are my CTO and senior engineer. You will:
+- Make all architectural decisions and explain them
+- Write production-quality code, not pseudocode
+- Flag every security concern proactively
+- Challenge my assumptions if something won't scale
+- Give me the exact terminal commands, API registration steps, and environment variables I need
+- Ask clarifying questions when genuinely needed, then proceed
+- Always tell me what to build NEXT at the end of each response
+
+<strong>════════════════════════════════════════
+PHASE 1 MVP — KREYA.SOCIALS (Weeks 1–8)
+════════════════════════════════════════</strong>
+
+<strong>1. SECURITY LAYER (build first, non-negotiable)</strong>
+
+All of the following must be implemented before any user-facing feature:
+
+- End-to-end encryption for all stored user data and social tokens
+- OAuth 2.0 + PKCE for all third-party connections
+- MFA (TOTP + SMS fallback) for all user accounts
+- Zero-knowledge credential storage (user social tokens encrypted with keys derived from user password — Kreya cannot read them)
+- Row-level security (RLS) on all database tables via Supabase policies
+- Rate limiting: per-user, per-endpoint, per-IP (use Upstash Redis)
+- WAF + DDoS protection via Cloudflare (free tier to start)
+- OWASP Top 10 hardened API (SQL injection, XSS, CSRF, IDOR protections)
+- JWT with short expiry (15min access tokens, 7-day refresh tokens, rotation on use)
+- Secrets management: all API keys in environment variables, never in code; use Doppler or Infisical for secret rotation
+- Audit log: every write action logged with user ID, timestamp, IP, action type
+- GDPR-compliant data handling: right to erasure, data export, cookie consent
+
+<strong>2. TECH STACK</strong>
+
+Use this stack exactly — justify any deviations before implementing:
+
+Frontend:     Next.js 14 (App Router) + TypeScript + Tailwind CSS
+Backend API:  Next.js API routes + tRPC for type safety
+Database:     Supabase (PostgreSQL) with Row Level Security
+Auth:         Supabase Auth + custom MFA layer
+Queue:        Upstash QStash (serverless job queue for scheduled posts)
+Cache:        Upstash Redis (rate limiting + session cache)
+File storage: Supabase Storage (images, videos, brand assets)
+AI router:    Custom middleware selecting between Claude/GPT-4o/Gemini
+Hosting:      Vercel (frontend + API) + Supabase (database)
+WhatsApp:     Meta WhatsApp Business Cloud API
+Email:        Resend (transactional)
+Payments:     Stripe (subscriptions)
+Monitoring:   Sentry (errors) + Vercel Analytics
+Secrets:      Doppler
+
+<strong>3. DATABASE SCHEMA</strong>
+
+Design and implement the complete schema for:
+- users (id, email, name, plan, mfa_enabled, created_at, deleted_at)
+- organizations (id, owner_id, name, brand_kit jsonb, timezone)
+- social_accounts (id, org_id, platform, encrypted_token, token_iv, scopes, expires_at)
+- content_items (id, org_id, type, body, media_urls[], ai_model_used, prompt_source, status)
+- scheduled_posts (id, content_id, platform, scheduled_at, published_at, platform_post_id, status)
+- ai_jobs (id, org_id, job_type, input_prompt, model_used, output, tokens_used, cost_usd, created_at)
+- whatsapp_sessions (id, user_id, phone, state jsonb, last_message_at)
+- audit_logs (id, user_id, org_id, action, resource_type, resource_id, ip, user_agent, created_at)
+- brand_assets (id, org_id, type, url, tags[], created_at)
+- subscriptions (id, org_id, stripe_sub_id, plan, status, current_period_end)
+
+Include all foreign keys, indexes, and RLS policies.
+
+<strong>4. AI ORCHESTRATION ENGINE</strong>
+
+Build an AI router that:
+- Accepts a job_type (caption, image, video_script, hashtags, repurpose, strategy)
+- Selects the optimal model based on job type and user plan
+- Falls back gracefully if an API limit is hit or a provider is down
+- Tracks token usage and cost per request
+- Returns structured outputs in a consistent format
+
+Model routing:
+- Long-form writing, strategy    → Claude Sonnet (Anthropic)
+- Multimodal, image understanding → Gemini Pro Vision (Google)
+- Fast generation, function calls → GPT-4o-mini (OpenAI)
+- Image generation               → DALL-E 3 or Stable Diffusion via Replicate
+- Voice synthesis                → ElevenLabs
+- Transcription                  → Whisper (OpenAI)
+
+<strong>5. WHATSAPP COMMAND INTERFACE</strong>
+
+Build a WhatsApp Business Cloud API webhook handler that:
+- Receives text messages, voice notes, and images
+- Transcribes voice notes via Whisper
+- Parses user intent using Claude (structured JSON output)
+- Extracts: action, platform targets, schedule datetime, tone, content type, brand context
+- Executes the job via the AI orchestration engine
+- Sends a preview back to the user for approval
+- Handles: "yes", "edit [feedback]", "cancel", "schedule for [time]" confirmation flows
+- Maintains conversation state in Redis (ttl: 1 hour)
+- Handles multi-turn conversations naturally
+
+Intent schema:
+{
+  action: "create_post" | "schedule_post" | "repurpose" | "generate_image" | "get_analytics",
+  platforms: ["instagram", "tiktok", "twitter", "facebook", "linkedin", "youtube"],
+  content_type: "caption" | "reel_script" | "carousel" | "story" | "thread",
+  schedule: { datetime: ISO8601 | null, recurring: boolean, cron: string | null },
+  tone: "professional" | "casual" | "humorous" | "motivational" | "educational",
+  brand_context: boolean,
+  raw_prompt: string
+}
+
+<strong>6. SOCIAL PLATFORM INTEGRATIONS</strong>
+
+Implement OAuth connections and posting APIs for:
+- Instagram (Meta Graph API v18) — feed posts, reels, stories, carousels
+- Facebook (Meta Graph API) — pages, posts, reels
+- TikTok (TikTok for Developers v2) — video posts, photo posts
+- X/Twitter (API v2) — tweets, threads, media uploads
+- LinkedIn (LinkedIn API v2) — personal + company page posts
+- YouTube (YouTube Data API v3) — shorts uploads
+
+For each integration implement:
+- OAuth 2.0 connection flow (web + WhatsApp deep-link fallback)
+- Token refresh logic (automatic, background)
+- Platform-specific content validation (char limits, media specs)
+- Post status webhooks / polling
+- Rate limit awareness with backoff
+
+<strong>7. CONTENT SCHEDULING ENGINE</strong>
+
+Build a reliable job queue system using Upstash QStash:
+- Schedule posts up to 90 days in advance
+- Support recurring schedules (cron syntax)
+- Retry failed posts up to 3 times with exponential backoff
+- Send WhatsApp notification on success/failure
+- Cancel/reschedule from WhatsApp command
+- Respect platform-specific posting windows
+
+<strong>8. WEB PORTAL (minimal but polished)</strong>
+
+Build a Next.js web portal with:
+- Auth pages (login, signup, MFA setup)
+- Dashboard: upcoming scheduled posts, recent activity, quick stats
+- Content calendar: month/week view, drag-to-reschedule
+- Social account manager: connect/disconnect, token health status
+- Asset library: brand kit, uploaded media, AI-generated images
+- Settings: profile, notifications, billing (Stripe Customer Portal)
+- Mobile-responsive (many users will access on phone)
+
+<strong>9. MONETIZATION</strong>
+
+Implement Stripe subscriptions:
+- Free: 3 social accounts, 10 AI posts/month, 1 user
+- Pro ($19/mo): unlimited accounts, 200 AI posts/month, 3 users, analytics
+- Agency ($79/mo): multi-brand (10 orgs), unlimited posts, team seats, white label, priority AI
+
+Enforce limits in middleware. Show upgrade prompts when limits are hit.
+
+<strong>════════════════════════════════════════
+FIRST RESPONSE — DELIVER:
+════════════════════════════════════════</strong>
+
+1. Confirm you understand the full scope and flag any concerns
+2. Produce the complete Supabase schema SQL with RLS policies
+3. Set up the Next.js project structure (folder tree)
+4. List every API account I need to create, with direct links and the exact OAuth scopes required
+5. Provide the .env.example file with all required environment variables
+6. Begin implementing the auth system with MFA
+
+Ask me ONE clarifying question if needed, then begin immediately.</div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 2 — API REGISTRATIONS CHECKLIST
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">02 — Pre-Build Checklist</div>
+  <h2>API accounts to register before starting</h2>
+  <p>Register these accounts in order before your first Claude session. Have all credentials ready in a password manager.</p>
+
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Purpose</th><th>Registration URL</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Supabase</td><td><strong>Database + Auth + Storage</strong></td><td>supabase.com</td><td>Create org + project. Note anon key + service role key.</td></tr>
+      <tr><td>Vercel</td><td><strong>Hosting + Edge functions</strong></td><td>vercel.com</td><td>Connect GitHub repo on signup.</td></tr>
+      <tr><td>Meta for Developers</td><td><strong>Instagram + Facebook + WhatsApp API</strong></td><td>developers.facebook.com</td><td>Create Business App. Verify business. Enable WhatsApp Business Cloud API.</td></tr>
+      <tr><td>TikTok for Developers</td><td><strong>TikTok posting API</strong></td><td>developers.tiktok.com</td><td>Apply for Content Posting API access — takes 1–3 days to approve.</td></tr>
+      <tr><td>X Developer Portal</td><td><strong>Twitter/X API v2</strong></td><td>developer.twitter.com</td><td>Apply for Basic tier ($100/mo) or Free (very limited). OAuth 2.0 with PKCE.</td></tr>
+      <tr><td>LinkedIn Developers</td><td><strong>LinkedIn posting API</strong></td><td>developer.linkedin.com</td><td>Create app, request r_liteprofile + w_member_social scopes.</td></tr>
+      <tr><td>Google Cloud Console</td><td><strong>YouTube Data API + Gemini</strong></td><td>console.cloud.google.com</td><td>Enable YouTube Data API v3 + Vertex AI (Gemini). Create service account.</td></tr>
+      <tr><td>Anthropic Console</td><td><strong>Claude API</strong></td><td>console.anthropic.com</td><td>Get API key. Use claude-sonnet-4-20250514 model.</td></tr>
+      <tr><td>OpenAI Platform</td><td><strong>GPT-4o + Whisper + DALL-E</strong></td><td>platform.openai.com</td><td>Add billing. Note org ID + API key.</td></tr>
+      <tr><td>Replicate</td><td><strong>Stable Diffusion image gen</strong></td><td>replicate.com</td><td>Free tier available. Used as fallback to DALL-E.</td></tr>
+      <tr><td>ElevenLabs</td><td><strong>AI voice synthesis</strong></td><td>elevenlabs.io</td><td>For Kreya.Studio Phase 3. Free tier: 10k chars/mo.</td></tr>
+      <tr><td>Stripe</td><td><strong>Payments + subscriptions</strong></td><td>stripe.com</td><td>Create products for Free/Pro/Agency. Note publishable + secret keys.</td></tr>
+      <tr><td>Upstash</td><td><strong>Redis cache + QStash queue</strong></td><td>upstash.com</td><td>Create Redis DB + QStash queue. Note REST URLs + tokens.</td></tr>
+      <tr><td>Resend</td><td><strong>Transactional email</strong></td><td>resend.com</td><td>Verify sending domain. Get API key.</td></tr>
+      <tr><td>Doppler</td><td><strong>Secrets management</strong></td><td>doppler.com</td><td>Create project. Sync with Vercel for automatic env injection.</td></tr>
+      <tr><td>Cloudflare</td><td><strong>WAF + DDoS + DNS</strong></td><td>cloudflare.com</td><td>Point kreya.ai DNS here. Enable WAF rules on Free plan.</td></tr>
+      <tr><td>Sentry</td><td><strong>Error monitoring</strong></td><td>sentry.io</td><td>Create Next.js project. Note DSN.</td></tr>
+      <tr><td>GitHub</td><td><strong>Version control + CI/CD</strong></td><td>github.com</td><td>Create private repo. Connect to Vercel for auto-deploy.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 3 — ENV VARIABLES
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">03 — Environment Variables</div>
+  <h2>.env.example — full reference</h2>
+
+  <div class="code-block">
+    <span class="cb-label">.env.example</span>
+<span class="c-cmt"># ── SUPABASE ──────────────────────────────────────</span>
+<span class="c-key">NEXT_PUBLIC_SUPABASE_URL</span>=<span class="c-str">https://xxxx.supabase.co</span>
+<span class="c-key">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=<span class="c-str">eyJ...</span>
+<span class="c-key">SUPABASE_SERVICE_ROLE_KEY</span>=<span class="c-str">eyJ...</span>  <span class="c-cmt"># NEVER expose client-side</span>
+
+<span class="c-cmt"># ── AUTH ──────────────────────────────────────────</span>
+<span class="c-key">NEXTAUTH_SECRET</span>=<span class="c-str">generate-with-openssl-rand-base64-32</span>
+<span class="c-key">NEXTAUTH_URL</span>=<span class="c-str">https://kreya.ai</span>
+<span class="c-key">ENCRYPTION_KEY</span>=<span class="c-str">32-byte-hex-for-token-encryption</span>  <span class="c-cmt"># zero-knowledge</span>
+
+<span class="c-cmt"># ── AI PROVIDERS ──────────────────────────────────</span>
+<span class="c-key">ANTHROPIC_API_KEY</span>=<span class="c-str">sk-ant-...</span>
+<span class="c-key">OPENAI_API_KEY</span>=<span class="c-str">sk-...</span>
+<span class="c-key">OPENAI_ORG_ID</span>=<span class="c-str">org-...</span>
+<span class="c-key">GOOGLE_GEMINI_API_KEY</span>=<span class="c-str">AIza...</span>
+<span class="c-key">REPLICATE_API_TOKEN</span>=<span class="c-str">r8_...</span>
+<span class="c-key">ELEVENLABS_API_KEY</span>=<span class="c-str">el_...</span>
+
+<span class="c-cmt"># ── SOCIAL PLATFORMS ──────────────────────────────</span>
+<span class="c-key">META_APP_ID</span>=<span class="c-str">...</span>
+<span class="c-key">META_APP_SECRET</span>=<span class="c-str">...</span>
+<span class="c-key">TIKTOK_CLIENT_KEY</span>=<span class="c-str">...</span>
+<span class="c-key">TIKTOK_CLIENT_SECRET</span>=<span class="c-str">...</span>
+<span class="c-key">TWITTER_CLIENT_ID</span>=<span class="c-str">...</span>
+<span class="c-key">TWITTER_CLIENT_SECRET</span>=<span class="c-str">...</span>
+<span class="c-key">LINKEDIN_CLIENT_ID</span>=<span class="c-str">...</span>
+<span class="c-key">LINKEDIN_CLIENT_SECRET</span>=<span class="c-str">...</span>
+<span class="c-key">GOOGLE_OAUTH_CLIENT_ID</span>=<span class="c-str">...</span>  <span class="c-cmt"># for YouTube</span>
+<span class="c-key">GOOGLE_OAUTH_CLIENT_SECRET</span>=<span class="c-str">...</span>
+
+<span class="c-cmt"># ── WHATSAPP ──────────────────────────────────────</span>
+<span class="c-key">WHATSAPP_ACCESS_TOKEN</span>=<span class="c-str">EAAxx...</span>
+<span class="c-key">WHATSAPP_PHONE_NUMBER_ID</span>=<span class="c-str">...</span>
+<span class="c-key">WHATSAPP_BUSINESS_ACCOUNT_ID</span>=<span class="c-str">...</span>
+<span class="c-key">WHATSAPP_WEBHOOK_VERIFY_TOKEN</span>=<span class="c-str">random-secret-string</span>
+
+<span class="c-cmt"># ── UPSTASH ───────────────────────────────────────</span>
+<span class="c-key">UPSTASH_REDIS_REST_URL</span>=<span class="c-str">https://xxx.upstash.io</span>
+<span class="c-key">UPSTASH_REDIS_REST_TOKEN</span>=<span class="c-str">...</span>
+<span class="c-key">QSTASH_URL</span>=<span class="c-str">https://qstash.upstash.io</span>
+<span class="c-key">QSTASH_TOKEN</span>=<span class="c-str">...</span>
+<span class="c-key">QSTASH_CURRENT_SIGNING_KEY</span>=<span class="c-str">...</span>
+<span class="c-key">QSTASH_NEXT_SIGNING_KEY</span>=<span class="c-str">...</span>
+
+<span class="c-cmt"># ── STRIPE ────────────────────────────────────────</span>
+<span class="c-key">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</span>=<span class="c-str">pk_live_...</span>
+<span class="c-key">STRIPE_SECRET_KEY</span>=<span class="c-str">sk_live_...</span>
+<span class="c-key">STRIPE_WEBHOOK_SECRET</span>=<span class="c-str">whsec_...</span>
+<span class="c-key">STRIPE_PRO_PRICE_ID</span>=<span class="c-str">price_...</span>
+<span class="c-key">STRIPE_AGENCY_PRICE_ID</span>=<span class="c-str">price_...</span>
+
+<span class="c-cmt"># ── EMAIL ─────────────────────────────────────────</span>
+<span class="c-key">RESEND_API_KEY</span>=<span class="c-str">re_...</span>
+<span class="c-key">EMAIL_FROM</span>=<span class="c-str">hello@kreya.ai</span>
+
+<span class="c-cmt"># ── MONITORING ────────────────────────────────────</span>
+<span class="c-key">NEXT_PUBLIC_SENTRY_DSN</span>=<span class="c-str">https://xxx@sentry.io/xxx</span>
+<span class="c-key">SENTRY_AUTH_TOKEN</span>=<span class="c-str">...</span>
+
+<span class="c-cmt"># ── APP CONFIG ────────────────────────────────────</span>
+<span class="c-key">NEXT_PUBLIC_APP_URL</span>=<span class="c-str">https://kreya.ai</span>
+<span class="c-key">NODE_ENV</span>=<span class="c-str">production</span>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 4 — 8-WEEK MVP ROADMAP
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">04 — MVP Roadmap</div>
+  <h2>8-week build plan · Kreya.Socials</h2>
+
+  <div class="phase-strip">
+    <div class="ps-card">
+      <div class="ps-week">Weeks 1–2</div>
+      <div class="ps-title">Foundation</div>
+      <div class="ps-items">
+        Next.js + Supabase setup<br>
+        Full DB schema + RLS<br>
+        Auth + MFA system<br>
+        Secrets management<br>
+        CI/CD pipeline<br>
+        Cloudflare DNS + WAF
+      </div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-week">Weeks 3–4</div>
+      <div class="ps-title">Core Engine</div>
+      <div class="ps-items">
+        AI orchestration router<br>
+        WhatsApp webhook handler<br>
+        Intent parsing (Claude)<br>
+        Voice note → Whisper<br>
+        Approval flow (WA)<br>
+        Redis session state
+      </div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-week">Weeks 5–6</div>
+      <div class="ps-title">Integrations</div>
+      <div class="ps-items">
+        Instagram + Facebook OAuth<br>
+        TikTok OAuth + posting<br>
+        X/Twitter API<br>
+        LinkedIn posting<br>
+        QStash scheduler<br>
+        Retry + failure alerts
+      </div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-week">Weeks 7–8</div>
+      <div class="ps-title">Ship</div>
+      <div class="ps-items">
+        Web portal (dashboard)<br>
+        Content calendar UI<br>
+        Asset library<br>
+        Stripe billing<br>
+        Onboarding flow<br>
+        Security audit + launch
+      </div>
+    </div>
+  </div>
+
+  <div class="highlight-box">
+    <p><strong>Launch criteria:</strong> A non-technical person can sign up, connect 2 social accounts, send a WhatsApp voice note, approve a generated post, and have it publish automatically — in under 5 minutes, with zero support needed.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 5 — PRODUCT EXPANSION PROMPTS
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">05 — Future Product Prompts</div>
+  <h2>Prompts for Phase 2 + 3 expansion</h2>
+  <p>When Kreya.Socials is live and growing, use these prompts to kick off each new product module.</p>
+
+  <div class="card-grid cols2" style="margin-top:24px;">
+    <div class="card violet">
+      <div class="card-head">Kreya.Docs prompt</div>
+      <h3>Phase 2 · Months 6–9</h3>
+      <p>"We're adding Kreya.Docs to the platform. Users should be able to say on WhatsApp: 'Write me a client proposal for a 3-month social media retainer at €2500/month' and receive a formatted PDF. Build the document generation pipeline: WhatsApp intent → Claude long-form → HTML template → PDF via Puppeteer → Supabase Storage → WhatsApp delivery link."</p>
+    </div>
+    <div class="card gold">
+      <div class="card-head">Kreya.Inbox prompt</div>
+      <h3>Phase 2 · Months 9–12</h3>
+      <p>"We're adding Kreya.Inbox. Users say: 'Send a 3-email welcome sequence to my new subscribers' and Kreya writes, designs, and queues the campaign via Resend/Klaviyo. Build the email campaign pipeline with template generation, list segmentation, send scheduling, and delivery analytics — all triggered from WhatsApp."</p>
+    </div>
+    <div class="card rose">
+      <div class="card-head">Kreya.Studio prompt</div>
+      <h3>Phase 3 · Months 12–18</h3>
+      <p>"We're adding Kreya.Studio. Users say: 'Create a 60-second explainer video for my fitness coaching service' and Kreya generates a script, synthesizes a voiceover via ElevenLabs, assembles video with auto-subtitles via FFmpeg, and delivers MP4. Build the full video generation pipeline."</p>
+    </div>
+    <div class="card mint">
+      <div class="card-head">Kreya.Store prompt</div>
+      <h3>Phase 3 · Months 15–20</h3>
+      <p>"We're adding Kreya.Store. Users connect their Shopify/WooCommerce store and say: 'Write product descriptions for my 12 new summer dresses and run a Black Friday email campaign.' Build the e-commerce integration with product catalog sync, AI copywriting, and campaign deployment."</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     SECTION 6 — ARCHITECTURE DIAGRAM
+══════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">06 — System Architecture</div>
+  <h2>High-level architecture</h2>
+
+  <div class="code-block">
+    <span class="cb-label">Architecture Overview</span>
+<span class="c-head">┌─────────────────────────────────────────────────────────────┐</span>
+<span class="c-head">│                     USER INTERFACES                          │</span>
+<span class="c-head">└──────────┬──────────────────────────────┬────────────────────┘</span>
+           │                              │
+  <span class="c-val">WhatsApp</span> (Meta Cloud API)      <span class="c-val">Web Portal</span> (Next.js)
+           │                              │
+<span class="c-head">┌──────────▼──────────────────────▼────────────────────────────┐</span>
+<span class="c-head">│                      API LAYER (Next.js + tRPC)               │</span>
+<span class="c-head">│     Auth Middleware → Rate Limiter → Request Validator         │</span>
+<span class="c-head">└──────────┬───────────────────────────────────────────────────┘</span>
+           │
+<span class="c-head">┌──────────▼──────────────────────────────────────────────────┐</span>
+<span class="c-head">│               CORE SERVICES                                   │</span>
+<span class="c-head">│  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐    │</span>
+<span class="c-head">│  │ Intent Parser│  │  AI Router   │  │ Schedule Engine │    │</span>
+<span class="c-head">│  │   (Claude)   │  │ Claude/GPT/  │  │  (QStash Jobs)  │    │</span>
+<span class="c-head">│  │              │  │ Gemini/DALLE │  │                 │    │</span>
+<span class="c-head">│  └──────────────┘  └──────────────┘  └─────────────────┘    │</span>
+<span class="c-head">└──────────┬──────────────────────────────────────────────────┘</span>
+           │
+<span class="c-head">┌──────────▼──────────────────────────────────────────────────┐</span>
+<span class="c-head">│               PLATFORM ADAPTERS                               │</span>
+<span class="c-head">│  Instagram · TikTok · X/Twitter · Facebook · LinkedIn · YT    │</span>
+<span class="c-head">└──────────────────────────────────────────────────────────────┘</span>
+           │
+<span class="c-head">┌──────────▼──────────────────────────────────────────────────┐</span>
+<span class="c-head">│               DATA LAYER                                      │</span>
+<span class="c-head">│  Supabase PostgreSQL + RLS  ·  Upstash Redis  ·  Storage      │</span>
+<span class="c-head">└──────────────────────────────────────────────────────────────┘</span>
+
+<span class="c-cmt">Security perimeter: Cloudflare WAF → Vercel Edge → API middleware</span>
+<span class="c-cmt">All social tokens: encrypted at rest with per-user keys (zero-knowledge)</span>
+<span class="c-cmt">All jobs: audited, queued, retried, and notified via WhatsApp</span>
+  </div>
+</section>
+
+</div><!-- /wrap -->
+
+<div class="doc-footer">
+  <div class="df-logo">KREYA<span>.</span></div>
+  <p>Full-Stack Dev Prompt · v2.0 · Kreya Technologies Inc. · 2025 · Confidential</p>
+</div>
+
+</body>
+</html>

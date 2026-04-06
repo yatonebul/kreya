@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreya — Social Connections</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+:root {
+  --ink:#07070E; --dark:#0C0A1A; --surf:#121126; --surf2:#191733; --surf3:#221F3E;
+  --bdr:rgba(255,255,255,.07); --bdr2:rgba(255,255,255,.14);
+  --coral:#FF4F3B; --cdim:rgba(255,79,59,.13);
+  --violet:#5E35FF; --vdim:rgba(94,53,255,.13);
+  --mint:#00E5A0; --mdim:rgba(0,229,160,.1);
+  --gold:#FFD166; --gdim:rgba(255,209,102,.1);
+  --muted:rgba(255,255,255,.42); --muted2:rgba(255,255,255,.2);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body,#root{min-height:100%;}
+body{background:var(--ink);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:3px;} ::-webkit-scrollbar-thumb{background:var(--surf3);border-radius:2px;}
+input,button{font-family:inherit;} button{cursor:pointer;}
+
+/* ── LAYOUT ── */
+.app{max-width:960px;margin:0 auto;padding:32px 20px 80px;}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--bdr);}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:24px;letter-spacing:-.04em;}
+.logo .ac{color:var(--coral);}
+.top-badge{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);padding:3px 8px;border:1px solid var(--bdr2);border-radius:100px;}
+.top-sp{flex:1;}
+.user-pill{display:flex;align-items:center;gap:8px;background:var(--surf);border:1px solid var(--bdr2);border-radius:100px;padding:5px 12px 5px 5px;}
+.user-av{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--coral),var(--violet));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:10px;}
+.user-email{font-size:11px;font-weight:300;color:var(--muted);}
+
+/* ── SECTION HEADERS ── */
+.sec-lbl{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:var(--coral);margin-bottom:8px;display:block;}
+.sec-ttl{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(20px,3vw,26px);letter-spacing:-.03em;margin-bottom:4px;}
+.sec-sub{font-size:12px;font-weight:300;color:var(--muted);margin-bottom:24px;line-height:1.6;}
+
+/* ── HOW IT WORKS ── */
+.flow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-bottom:32px;}
+@media(max-width:700px){.flow-grid{grid-template-columns:repeat(2,1fr);}}
+.flow-step{background:var(--surf);border:1px solid var(--bdr);padding:18px;position:relative;}
+.flow-step::after{content:'→';position:absolute;right:-13px;top:50%;transform:translateY(-50%);color:var(--muted2);font-size:12px;z-index:1;}
+.flow-step:last-child::after{display:none;}
+@media(max-width:700px){.flow-step::after{display:none;}}
+.flow-num{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.2em;color:var(--coral);margin-bottom:8px;}
+.flow-ico{font-size:22px;margin-bottom:8px;}
+.flow-ttl{font-size:12px;font-weight:600;margin-bottom:3px;}
+.flow-desc{font-size:10px;color:var(--muted);font-weight:300;line-height:1.5;}
+
+/* ── ARCHITECTURE DIAGRAM ── */
+.arch{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:24px;margin-bottom:32px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.9;overflow-x:auto;}
+.arch-title{font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:var(--mint);margin-bottom:16px;}
+.arch-line{white-space:pre;}
+.arch-k{color:var(--coral);}
+.arch-v{color:var(--violet);}
+.arch-m{color:var(--mint);}
+.arch-g{color:var(--gold);}
+.arch-dim{color:var(--muted2);}
+
+/* ── CODE BLOCKS ── */
+.code-wrap{background:#050510;border:1px solid var(--bdr2);border-radius:8px;overflow:hidden;margin-bottom:20px;}
+.code-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surf2);border-bottom:1px solid var(--bdr);}
+.code-filename{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.code-lang{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.15em;text-transform:uppercase;padding:2px 7px;border-radius:3px;}
+.lang-ts{background:rgba(0,122,204,.2);color:#6EB5FF;}
+.lang-sql{background:rgba(255,209,102,.12);color:var(--gold);}
+.lang-env{background:rgba(0,229,160,.1);color:var(--mint);}
+.lang-sh{background:rgba(94,53,255,.2);color:#a080ff;}
+.code-copy{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;text-transform:uppercase;background:var(--surf3);border:1px solid var(--bdr);color:var(--muted);padding:4px 10px;border-radius:3px;cursor:pointer;transition:all .15s;}
+.code-copy:hover{border-color:var(--mint);color:var(--mint);}
+.code-copy.copied{border-color:var(--mint);color:var(--mint);}
+pre{padding:20px;overflow-x:auto;font-family:'Space Mono',monospace;font-size:11px;line-height:1.75;}
+.kw{color:#a080ff;} /* keywords */
+.fn{color:#6EB5FF;} /* functions */
+.st{color:var(--gold);} /* strings */
+.cm{color:var(--muted2);font-style:italic;} /* comments */
+.cn{color:var(--mint);} /* constants/env */
+.tp{color:var(--rose,#FF6B8A);} /* types */
+.op{color:var(--coral);} /* operators / important */
+
+/* ── PLATFORM CARDS ── */
+.platforms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:32px;}
+.platform-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;transition:border-color .15s;}
+.platform-card:hover{border-color:var(--bdr2);}
+.pc-header{padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--bdr);}
+.pc-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.pc-name{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:2px;}
+.pc-status{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:300;}
+.dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.dot.ok{background:var(--mint);box-shadow:0 0 6px var(--mint);}
+.dot.no{background:var(--muted2);}
+.dot.pend{background:var(--gold);}
+.pc-body{padding:14px 16px;}
+.pc-scope{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.08em;color:var(--muted2);margin-bottom:10px;line-height:1.6;}
+.pc-note{font-size:10px;font-weight:300;color:var(--muted);line-height:1.5;margin-bottom:12px;}
+.pc-btn{width:100%;padding:9px;border-radius:5px;border:none;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:opacity .15s;}
+.pc-btn:hover{opacity:.85;}
+.pc-btn.connect{background:var(--coral);color:#fff;}
+.pc-btn.connected{background:var(--surf3);color:var(--muted);border:1px solid var(--bdr);}
+.pc-btn.loading{opacity:.6;pointer-events:none;}
+
+/* ── INLINE DEMO ── */
+.demo-box{background:var(--surf);border:1px solid var(--bdr2);border-radius:8px;overflow:hidden;margin-bottom:32px;}
+.demo-tabs{display:flex;border-bottom:1px solid var(--bdr);}
+.demo-tab{padding:11px 18px;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;}
+.demo-tab.act{color:var(--coral);border-bottom-color:var(--coral);}
+.demo-content{padding:24px;}
+
+/* ── API RESPONSE VIEWER ── */
+.api-tester{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:640px){.api-tester{grid-template-columns:1fr;}}
+.api-panel{background:var(--ink);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;}
+.api-panel-hdr{padding:8px 12px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.2em;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.method-get{color:var(--mint);}
+.method-post{color:var(--gold);}
+.method-del{color:var(--coral);}
+.api-url{font-size:10px;color:var(--muted);letter-spacing:0;font-weight:300;}
+.api-body{padding:12px;font-family:'Space Mono',monospace;font-size:10px;line-height:1.7;overflow-x:auto;min-height:120px;}
+.api-run{width:100%;padding:9px;background:var(--violet);color:#fff;border:none;font-family:'Syne',sans-serif;font-weight:700;font-size:11px;cursor:pointer;transition:opacity .15s;}
+.api-run:hover{opacity:.85;}
+.api-run.loading{opacity:.6;pointer-events:none;}
+.resp-ok{color:var(--mint);}
+.resp-key{color:#a080ff;}
+.resp-val{color:var(--gold);}
+.resp-str{color:var(--mint);}
+
+/* ── DATABASE SCHEMA ── */
+.schema-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px;}
+.schema-table th{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted2);padding:8px 12px;background:var(--surf2);text-align:left;border-bottom:1px solid var(--bdr);}
+.schema-table td{padding:9px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;}
+.schema-table tr:last-child td{border-bottom:none;}
+.col-name{font-family:'Space Mono',monospace;font-size:10px;color:var(--mint);}
+.col-type{font-family:'Space Mono',monospace;font-size:9px;color:#a080ff;}
+.col-pk{font-family:'Space Mono',monospace;font-size:7px;background:rgba(255,79,59,.15);color:var(--coral);padding:1px 5px;border-radius:2px;}
+.col-fk{font-family:'Space Mono',monospace;font-size:7px;background:rgba(94,53,255,.15);color:#a080ff;padding:1px 5px;border-radius:2px;}
+.col-enc{font-family:'Space Mono',monospace;font-size:7px;background:rgba(0,229,160,.1);color:var(--mint);padding:1px 5px;border-radius:2px;}
+.col-desc{font-size:10px;color:var(--muted);font-weight:300;}
+
+/* ── BANNERS ── */
+.banner{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-radius:6px;margin-bottom:16px;font-size:12px;line-height:1.6;border:1px solid transparent;}
+.banner.warn{background:rgba(255,209,102,.08);border-color:rgba(255,209,102,.2);color:#ffe5a0;}
+.banner.info{background:rgba(94,53,255,.1);border-color:rgba(94,53,255,.25);color:#b0a0ff;}
+.banner.ok{background:rgba(0,229,160,.08);border-color:rgba(0,229,160,.2);color:#80f0ce;}
+.banner.tip{background:rgba(255,79,59,.08);border-color:rgba(255,79,59,.2);color:#ffb0a8;}
+.banner-ico{font-size:16px;flex-shrink:0;margin-top:1px;}
+
+/* ── PRICING ── */
+.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px;}
+@media(max-width:600px){.pricing-grid{grid-template-columns:1fr;}}
+.price-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:18px;}
+.price-card.rec{border-color:var(--coral);}
+.price-name{font-family:'Syne',sans-serif;font-weight:800;font-size:16px;margin-bottom:4px;}
+.price-card.rec .price-name{color:var(--coral);}
+.price-amount{font-size:20px;font-weight:700;margin-bottom:10px;}
+.price-amount span{font-size:12px;font-weight:300;color:var(--muted);}
+.price-f{font-size:11px;color:var(--muted);padding:3px 0;display:flex;align-items:center;gap:5px;}
+.price-f::before{content:'·';color:var(--coral);}
+.price-rec-badge{font-family:'Space Mono',monospace;font-size:7px;letter-spacing:.12em;text-transform:uppercase;background:var(--coral);color:#fff;padding:2px 7px;border-radius:100px;display:inline-block;margin-bottom:8px;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:5px;border:none;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:opacity .15s;}
+.btn:hover{opacity:.84;}
+.btn-c{background:var(--coral);color:#fff;}
+.btn-g{background:var(--surf2);color:var(--muted);border:1px solid var(--bdr2);}
+.btn-g:hover{color:#fff;}
+.btn-v{background:var(--vdim);color:#a080ff;border:1px solid rgba(94,53,255,.25);}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:20px;right:20px;z-index:9000;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;padding:10px 14px;max-width:280px;display:flex;align-items:center;gap:9px;border-left:3px solid var(--mint);transform:translateY(60px);opacity:0;transition:all .25s ease;pointer-events:none;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast-txt{font-size:12px;font-weight:500;}
+.toast-sub{font-size:10px;color:var(--muted);font-weight:300;margin-top:1px;}
+
+/* ── SPINNER ── */
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:inline-block;}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+/* ═══════════════ COPY HELPER ═══════════════ */
+function CopyBtn({ text }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 1800);
+    });
+  };
+  return (
+    <button className={`code-copy ${copied ? 'copied' : ''}`} onClick={copy}>
+      {copied ? '✓ Copied' : 'Copy'}
+    </button>
+  );
+}
+
+function CodeBlock({ filename, lang, langLabel, code }) {
+  return (
+    <div className="code-wrap">
+      <div className="code-header">
+        <div className="code-filename">
+          <span>{filename}</span>
+          <span className={`code-lang ${lang}`}>{langLabel}</span>
+        </div>
+        <CopyBtn text={code} />
+      </div>
+      <pre dangerouslySetInnerHTML={{ __html: code }} />
+    </div>
+  );
+}
+
+/* ═══════════════ PLATFORM DATA ═══════════════ */
+const PLATFORMS = [
+  {
+    id: 'instagram', name: 'Instagram', icon: '📸',
+    color: '#E1306C', bg: 'rgba(225,48,108,.12)',
+    status: 'ready',
+    scopes: 'instagram_content_publish\npages_manage_posts\nbusiness_management',
+    note: 'Business or Creator account required. Must be linked to a Facebook Page.',
+    requirement: 'Business/Creator account only'
+  },
+  {
+    id: 'tiktok', name: 'TikTok', icon: '🎵',
+    color: '#69C9D0', bg: 'rgba(105,201,208,.12)',
+    status: 'ready',
+    scopes: 'video.upload\nvideo.publish\nuser.info.basic',
+    note: 'Posts may be private until TikTok audits your app. Ayrshare handles this approval.',
+    requirement: 'Creator/Business account'
+  },
+  {
+    id: 'facebook', name: 'Facebook', icon: '📘',
+    color: '#1877F2', bg: 'rgba(24,119,242,.12)',
+    status: 'ready',
+    scopes: 'pages_manage_posts\npages_read_engagement\npublish_to_groups',
+    note: 'Posts to Facebook Pages, not personal profiles.',
+    requirement: 'Facebook Page required'
+  },
+  {
+    id: 'twitter', name: 'Twitter / X', icon: '𝕏',
+    color: '#ffffff', bg: 'rgba(255,255,255,.07)',
+    status: 'ready',
+    scopes: 'tweet.write\ntweet.read\nusers.read\noffline.access',
+    note: 'Standard API access via Ayrshare — no $100/mo developer fee.',
+    requirement: 'Any X account'
+  },
+  {
+    id: 'linkedin', name: 'LinkedIn', icon: '💼',
+    color: '#0A66C2', bg: 'rgba(10,102,194,.12)',
+    status: 'ready',
+    scopes: 'w_member_social\nr_liteprofile\nrw_company_admin',
+    note: 'Posts to personal profile and company pages.',
+    requirement: 'Personal or Company page'
+  },
+  {
+    id: 'youtube', name: 'YouTube', icon: '▶️',
+    color: '#FF0000', bg: 'rgba(255,0,0,.1)',
+    status: 'ready',
+    scopes: 'youtube.upload\nyoutube.readonly\nyt-analytics.readonly',
+    note: 'For Shorts uploads and channel analytics.',
+    requirement: 'YouTube channel'
+  },
+];
+
+/* ═══════════════ LIVE API DEMO ═══════════════ */
+function ApiDemo({ showToast }) {
+  const [activeTab, setActiveTab] = useState('create');
+  const [loading, setLoading] = useState(false);
+  const [response, setResponse] = useState(null);
+
+  const demos = {
+    create: {
+      method: 'POST', color: 'method-post',
+      url: '/api/kreya/profiles/create',
+      label: 'Create shadow profile',
+      desc: 'Called automatically when user signs up. Creates invisible Ayrshare profile, stores profileKey in Supabase.',
+      request: `<span class="cm">// Called in: app/api/kreya/profiles/create/route.ts</span>
+<span class="cm">// Triggered: automatically on Kreya sign-up</span>
+
+{
+  <span class="resp-key">"userId"</span>: <span class="resp-str">"supabase-user-uuid-here"</span>,
+  <span class="resp-key">"email"</span>: <span class="resp-str">"alex@myband.io"</span>,
+  <span class="resp-key">"brandName"</span>: <span class="resp-str">"Alex Music"</span>
+}`,
+      mockResponse: {
+        status: 'success',
+        profileKey: '7TVRLEZ-24A43C0-NJW0Z82-F11984N',
+        ayrshareTitle: 'alex@myband.io',
+        storedIn: 'supabase: organizations.ayrshare_profile_key',
+        userSees: 'nothing — runs silently in background'
+      }
+    },
+    link: {
+      method: 'GET', color: 'method-get',
+      url: '/api/kreya/profiles/link-url',
+      label: 'Get social link URL',
+      desc: 'Called when user clicks "Connect Instagram". Returns a secure, time-limited URL. User redirected there — connects their account without ever seeing Ayrshare branding.',
+      request: `<span class="cm">// Called in: app/api/kreya/profiles/link-url/route.ts</span>
+<span class="cm">// Triggered: when user clicks "Connect" on any platform</span>
+
+{
+  <span class="resp-key">"userId"</span>: <span class="resp-str">"supabase-user-uuid-here"</span>,
+  <span class="resp-key">"platform"</span>: <span class="resp-str">"instagram"</span>
+}`,
+      mockResponse: {
+        status: 'success',
+        url: 'https://app.ayrshare.com/jwt/link?token=eyJhbGci...abc123',
+        expiresIn: '5 minutes',
+        userSees: 'Instagram OAuth screen — connects their account',
+        brandedAs: 'Can be white-labeled with custom CSS'
+      }
+    },
+    post: {
+      method: 'POST', color: 'method-post',
+      url: '/api/kreya/content/publish',
+      label: 'Publish post',
+      desc: 'Called when user approves AI content (via WhatsApp or web). One call, all platforms, scheduled or immediate.',
+      request: `<span class="cm">// Called in: app/api/kreya/content/publish/route.ts</span>
+<span class="cm">// Triggered: user approves content in WhatsApp or Compose screen</span>
+
+{
+  <span class="resp-key">"userId"</span>: <span class="resp-str">"supabase-user-uuid-here"</span>,
+  <span class="resp-key">"platforms"</span>: [<span class="resp-str">"instagram"</span>, <span class="resp-str">"tiktok"</span>, <span class="resp-str">"twitter"</span>],
+  <span class="resp-key">"post"</span>: <span class="resp-str">"Behind the scenes 🎸✨ Something special coming Friday... #StudioLife #NewMusic"</span>,
+  <span class="resp-key">"mediaUrls"</span>: [<span class="resp-str">"https://storage.kreya.ai/alex/video.mp4"</span>],
+  <span class="resp-key">"scheduleDate"</span>: <span class="resp-str">"2026-03-22T18:00:00.000Z"</span>
+}`,
+      mockResponse: {
+        status: 'success',
+        postId: 'post_7f3a9b2c1d',
+        platforms: {
+          instagram: { status: 'scheduled', postId: 'ig_abc123' },
+          tiktok: { status: 'scheduled', postId: 'tt_def456' },
+          twitter: { status: 'scheduled', postId: 'tw_ghi789' }
+        },
+        scheduledFor: '2026-03-22T18:00:00.000Z',
+        whatsappNotification: 'sent'
+      }
+    },
+    analytics: {
+      method: 'GET', color: 'method-get',
+      url: '/api/kreya/analytics',
+      label: 'Get analytics',
+      desc: 'Fetches engagement, reach, and follower data across all connected platforms for one user.',
+      request: `<span class="cm">// Called in: app/api/kreya/analytics/route.ts</span>
+<span class="cm">// Triggered: user views Analytics page</span>
+
+{
+  <span class="resp-key">"userId"</span>: <span class="resp-str">"supabase-user-uuid-here"</span>,
+  <span class="resp-key">"platforms"</span>: [<span class="resp-str">"instagram"</span>, <span class="resp-str">"tiktok"</span>],
+  <span class="resp-key">"period"</span>: <span class="resp-str">"last_30_days"</span>
+}`,
+      mockResponse: {
+        status: 'success',
+        instagram: { followers: 4820, reach: 28400, engagement: '4.7%', posts: 18 },
+        tiktok: { followers: 12300, views: 84000, engagement: '6.2%', posts: 24 },
+        totalImpressions: 112400,
+        topPost: { platform: 'tiktok', views: 47000, postId: 'tt_top123' }
+      }
+    },
+    delete: {
+      method: 'DELETE', color: 'method-del',
+      url: '/api/kreya/profiles/delete',
+      label: 'Delete profile (GDPR)',
+      desc: 'Called when user deletes Kreya account. Removes Ayrshare profile, disconnects all social tokens, purges Supabase data.',
+      request: `<span class="cm">// Called in: app/api/kreya/profiles/delete/route.ts</span>
+<span class="cm">// Triggered: user requests account deletion (GDPR right to erasure)</span>
+
+{
+  <span class="resp-key">"userId"</span>: <span class="resp-str">"supabase-user-uuid-here"</span>,
+  <span class="resp-key">"reason"</span>: <span class="resp-str">"user_requested"</span>
+}`,
+      mockResponse: {
+        status: 'success',
+        ayrshareProfileDeleted: true,
+        supabaseUserDeleted: true,
+        socialTokensRevoked: ['instagram', 'tiktok', 'twitter'],
+        dataExportedBefore: true,
+        auditLogEntry: 'created',
+        gdprCompliant: true
+      }
+    }
+  };
+
+  const runDemo = async () => {
+    setLoading(true); setResponse(null);
+    await new Promise(r => setTimeout(r, 900));
+    setResponse(demos[activeTab].mockResponse);
+    setLoading(false);
+    showToast('✅', `${demos[activeTab].label}`, 'Simulated response — real call needs API keys');
+  };
+
+  const active = demos[activeTab];
+
+  return (
+    <div className="demo-box">
+      <div className="demo-tabs">
+        {Object.entries(demos).map(([key, d]) => (
+          <div key={key} className={`demo-tab ${activeTab === key ? 'act' : ''}`}
+            onClick={() => { setActiveTab(key); setResponse(null); }}>
+            {d.label}
+          </div>
+        ))}
+      </div>
+      <div className="demo-content">
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
+          {active.desc}
+        </div>
+        <div className="api-tester">
+          <div className="api-panel">
+            <div className="api-panel-hdr">
+              <span className={active.color}>{active.method}</span>
+              <span className="api-url">{active.url}</span>
+            </div>
+            <div className="api-body" dangerouslySetInnerHTML={{ __html: active.request }} />
+            <button className={`api-run ${loading ? 'loading' : ''}`} onClick={runDemo}>
+              {loading ? <><span className="spin" /> Running…</> : '▶ Run (simulated)'}
+            </button>
+          </div>
+          <div className="api-panel">
+            <div className="api-panel-hdr">
+              <span className={response ? 'resp-ok' : ''} style={{ color: response ? 'var(--mint)' : 'var(--muted2)' }}>
+                {response ? '200 OK' : 'Response'}
+              </span>
+            </div>
+            <div className="api-body">
+              {!response && !loading && (
+                <span style={{ color: 'var(--muted2)' }}>Press ▶ to simulate the API call</span>
+              )}
+              {loading && (
+                <span style={{ color: 'var(--muted)' }}>Calling Ayrshare API…</span>
+              )}
+              {response && (
+                <pre style={{ padding: 0, fontSize: 10 }}>
+                  {JSON.stringify(response, null, 2)
+                    .replace(/"([^"]+)":/g, (m, k) => `<span class="resp-key">"${k}"</span>:`)
+                    .replace(/: "([^"]+)"/g, (m, v) => `: <span class="resp-str">"${v}"</span>`)
+                    .replace(/: (true|false)/g, (m, v) => `: <span class="resp-ok">${v}</span>`)
+                    .replace(/: (\d+\.?\d*)/g, (m, v) => `: <span class="resp-val">${v}</span>`)
+                  }
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════ PLATFORM CARDS ═══════════════ */
+function PlatformCards({ showToast }) {
+  const [connected, setConnected] = useState({ instagram: true, tiktok: true });
+  const [loading, setLoading] = useState({});
+
+  const connect = async (id) => {
+    setLoading(l => ({ ...l, [id]: true }));
+    await new Promise(r => setTimeout(r, 1100));
+    setLoading(l => ({ ...l, [id]: false }));
+    if (connected[id]) {
+      setConnected(c => ({ ...c, [id]: false }));
+      showToast('🔌', `${PLATFORMS.find(p=>p.id===id)?.name} disconnected`, 'Token revoked. User can reconnect anytime.');
+    } else {
+      setConnected(c => ({ ...c, [id]: true }));
+      showToast('✅', `${PLATFORMS.find(p=>p.id===id)?.name} connected!`, 'OAuth token stored encrypted in Supabase.');
+    }
+  };
+
+  return (
+    <div className="platforms-grid">
+      {PLATFORMS.map(p => {
+        const isConnected = !!connected[p.id];
+        const isLoading = !!loading[p.id];
+        return (
+          <div key={p.id} className="platform-card">
+            <div className="pc-header">
+              <div className="pc-icon" style={{ background: p.bg }}>{p.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div className="pc-name">{p.name}</div>
+                <div className="pc-status">
+                  <div className={`dot ${isConnected ? 'ok' : 'no'}`} />
+                  <span style={{ color: isConnected ? 'var(--mint)' : 'var(--muted)' }}>
+                    {isConnected ? 'Connected' : 'Not connected'}
+                  </span>
+                </div>
+              </div>
+              {isConnected && (
+                <div style={{ fontFamily: 'Space Mono,monospace', fontSize: 8, letterSpacing: '.1em', background: 'var(--mdim)', color: 'var(--mint)', padding: '3px 8px', borderRadius: 100 }}>
+                  LIVE
+                </div>
+              )}
+            </div>
+            <div className="pc-body">
+              <div className="pc-scope">{p.scopes}</div>
+              <div className="pc-note">{p.note}</div>
+              <button
+                className={`pc-btn ${isConnected ? 'connected' : 'connect'} ${isLoading ? 'loading' : ''}`}
+                onClick={() => connect(p.id)}
+              >
+                {isLoading ? <><span className="spin" /> {isConnected ? 'Disconnecting…' : 'Connecting…'}</> :
+                  isConnected ? '🔌 Disconnect' : `Connect ${p.name} →`}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════ TOAST ═══════════════ */
+function Toast({ t }) {
+  return (
+    <div className={`toast ${t.show ? 'show' : ''}`}>
+      <span style={{ fontSize: 16 }}>{t.icon}</span>
+      <div><div className="toast-txt">{t.text}</div><div className="toast-sub">{t.sub}</div></div>
+    </div>
+  );
+}
+
+/* ═══════════════ MAIN PAGE ═══════════════ */
+function App() {
+  const [toast, setToast] = useState({ show: false, icon: '', text: '', sub: '' });
+  const timer = useRef();
+  const showToast = useCallback((icon, text, sub = '') => {
+    clearTimeout(timer.current);
+    setToast({ show: true, icon, text, sub });
+    timer.current = setTimeout(() => setToast(t => ({ ...t, show: false })), 3000);
+  }, []);
+
+  const envCode = `# .env.local — NEVER commit this file
+
+# Supabase (from supabase.com → Settings → API)
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGci...
+
+# Ayrshare (from app.ayrshare.com → API Key)
+AYRSHARE_API_KEY=K2R5A-XXXX-XXXX-XXXX
+
+# Claude AI (from console.anthropic.com)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Other keys
+RESEND_API_KEY=re_...
+UPSTASH_REDIS_REST_URL=https://...upstash.io
+UPSTASH_REDIS_REST_TOKEN=AX...`;
+
+  const sqlCode = `-- Run this in Supabase SQL Editor
+-- Adds Ayrshare profile tracking to organizations table
+
+ALTER TABLE organizations
+  ADD COLUMN ayrshare_profile_key TEXT,
+  ADD COLUMN ayrshare_ref_id      TEXT;
+
+-- Social accounts: tracks which platforms each user connected
+-- Token storage is handled by Ayrshare — we only store metadata
+CREATE TABLE social_accounts (
+  id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id        UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  platform      TEXT NOT NULL,
+  handle        TEXT,
+  connected_at  TIMESTAMPTZ DEFAULT NOW(),
+  token_expires TIMESTAMPTZ,
+  scopes        TEXT[],
+  is_active     BOOLEAN DEFAULT TRUE,
+  follower_count INT,
+  UNIQUE(org_id, platform)
+);
+
+-- Audit log for all social actions (GDPR + security)
+CREATE TABLE social_audit_log (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id     UUID REFERENCES organizations(id),
+  user_id    UUID REFERENCES auth.users(id),
+  action     TEXT NOT NULL,
+  platform   TEXT,
+  post_id    TEXT,
+  ip_address INET,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Row Level Security: users can only see their own data
+ALTER TABLE social_accounts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see own social accounts"
+  ON social_accounts FOR ALL
+  USING (org_id IN (
+    SELECT id FROM organizations WHERE owner_id = auth.uid()
+  ));
+
+ALTER TABLE social_audit_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see own audit log"
+  ON social_audit_log FOR SELECT
+  USING (user_id = auth.uid());`;
+
+  const createProfileCode = `<span class="cm">// app/api/kreya/profiles/create/route.ts</span>
+<span class="cm">// Called automatically when user completes signup in Kreya</span>
+<span class="cm">// The user never sees Ayrshare — it runs silently in the background</span>
+
+<span class="kw">import</span> { NextRequest, NextResponse } <span class="kw">from</span> <span class="st">'next/server'</span>
+<span class="kw">import</span> { createClient } <span class="kw">from</span> <span class="st">'@/lib/supabase/server'</span>
+
+<span class="kw">export async function</span> <span class="fn">POST</span>(req: NextRequest) {
+  <span class="kw">const</span> { userId, email, brandName } = <span class="kw">await</span> req.json()
+
+  <span class="cm">// 1. Create a shadow profile in Ayrshare for this user</span>
+  <span class="cm">//    User never sees or logs into Ayrshare — it's invisible</span>
+  <span class="kw">const</span> ayrRes = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="st">'https://api.ayrshare.com/api/profiles'</span>, {
+    method: <span class="st">'POST'</span>,
+    headers: {
+      <span class="st">'Authorization'</span>: <span class="st">\`Bearer \${process.env.AYRSHARE_API_KEY}\`</span>,
+      <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span>,
+    },
+    body: <span class="fn">JSON.stringify</span>({
+      title: email,              <span class="cm">// internal label — user never sees this</span>
+      tags: [userId, brandName],
+    }),
+  })
+
+  <span class="kw">const</span> ayrData = <span class="kw">await</span> ayrRes.json()
+  <span class="cm">// ayrData.profileKey = "7TVRLEZ-24A43C0-NJW0Z82-F11984N"</span>
+  <span class="cm">// This key is how we post on this user's behalf later</span>
+
+  <span class="kw">if</span> (ayrData.status !== <span class="st">'success'</span>) {
+    <span class="kw">return</span> NextResponse.json({ error: <span class="st">'Ayrshare profile creation failed'</span> }, { status: 500 })
+  }
+
+  <span class="cm">// 2. Store the profileKey securely in Supabase</span>
+  <span class="cm">//    This is NOT a secret — it's a reference key, not an auth token</span>
+  <span class="kw">const</span> supabase = <span class="kw">await</span> <span class="fn">createClient</span>()
+  <span class="kw">await</span> supabase
+    .from(<span class="st">'organizations'</span>)
+    .update({
+      ayrshare_profile_key: ayrData.profileKey,
+      ayrshare_ref_id: ayrData.refId,
+    })
+    .eq(<span class="st">'owner_id'</span>, userId)
+
+  <span class="cm">// 3. Log the action for audit trail</span>
+  <span class="kw">await</span> supabase.from(<span class="st">'social_audit_log'</span>).insert({
+    org_id: userId,
+    user_id: userId,
+    action: <span class="st">'ayrshare_profile_created'</span>,
+    ip_address: req.headers.get(<span class="st">'x-forwarded-for'</span>),
+  })
+
+  <span class="kw">return</span> NextResponse.json({ status: <span class="st">'success'</span>, profileKey: ayrData.profileKey })
+}`;
+
+  const linkAccountCode = `<span class="cm">// app/api/kreya/profiles/link-url/route.ts</span>
+<span class="cm">// Generates a secure, time-limited URL for the user to connect their social accounts</span>
+<span class="cm">// This URL opens Ayrshare's OAuth page — which can be white-labeled with Kreya CSS</span>
+
+<span class="kw">import</span> { NextRequest, NextResponse } <span class="kw">from</span> <span class="st">'next/server'</span>
+<span class="kw">import</span> { createClient } <span class="kw">from</span> <span class="st">'@/lib/supabase/server'</span>
+
+<span class="kw">export async function</span> <span class="fn">POST</span>(req: NextRequest) {
+  <span class="kw">const</span> { userId } = <span class="kw">await</span> req.json()
+  <span class="kw">const</span> supabase = <span class="kw">await</span> <span class="fn">createClient</span>()
+
+  <span class="cm">// Verify user is authenticated — never trust client-sent userId</span>
+  <span class="kw">const</span> { data: { user } } = <span class="kw">await</span> supabase.auth.<span class="fn">getUser</span>()
+  <span class="kw">if</span> (!user || user.id !== userId) {
+    <span class="kw">return</span> NextResponse.json({ error: <span class="st">'Unauthorized'</span> }, { status: 401 })
+  }
+
+  <span class="cm">// Get user's Ayrshare profileKey from database</span>
+  <span class="kw">const</span> { data: org } = <span class="kw">await</span> supabase
+    .from(<span class="st">'organizations'</span>)
+    .select(<span class="st">'ayrshare_profile_key'</span>)
+    .eq(<span class="st">'owner_id'</span>, userId)
+    .single()
+
+  <span class="cm">// Generate a JWT link — valid for 5 minutes only</span>
+  <span class="cm">// This is single-use. Ayrshare invalidates it after the user connects.</span>
+  <span class="kw">const</span> jwtRes = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="st">'https://api.ayrshare.com/api/profiles/generateJWT'</span>, {
+    method: <span class="st">'POST'</span>,
+    headers: {
+      <span class="st">'Authorization'</span>: <span class="st">\`Bearer \${process.env.AYRSHARE_API_KEY}\`</span>,
+      <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span>,
+    },
+    body: <span class="fn">JSON.stringify</span>({
+      profileKey: org.ayrshare_profile_key,
+      <span class="cm">// White-label options:</span>
+      title: <span class="st">'Connect your social accounts'</span>,
+      subTitle: <span class="st">'Powered by Kreya'</span>,
+      <span class="cm">// allowedSocial: ['instagram', 'tiktok']  // restrict to specific platforms</span>
+    }),
+  })
+
+  <span class="kw">const</span> { url } = <span class="kw">await</span> jwtRes.json()
+  <span class="cm">// url = "https://app.ayrshare.com/jwt/link?token=eyJ..."</span>
+  <span class="cm">// Open this in a new tab — NOT an iframe (blocked by social platforms)</span>
+
+  <span class="kw">return</span> NextResponse.json({ url })
+}`;
+
+  const publishCode = `<span class="cm">// app/api/kreya/content/publish/route.ts</span>
+<span class="cm">// The core posting engine — one call, all platforms, scheduled or immediate</span>
+<span class="cm">// Called when user approves AI content via WhatsApp ("yes") or web compose screen</span>
+
+<span class="kw">import</span> { NextRequest, NextResponse } <span class="kw">from</span> <span class="st">'next/server'</span>
+<span class="kw">import</span> { createClient } <span class="kw">from</span> <span class="st">'@/lib/supabase/server'</span>
+<span class="kw">import</span> { sendWhatsAppNotification } <span class="kw">from</span> <span class="st">'@/lib/whatsapp'</span>
+
+<span class="kw">export async function</span> <span class="fn">POST</span>(req: NextRequest) {
+  <span class="kw">const</span> supabase = <span class="kw">await</span> <span class="fn">createClient</span>()
+  <span class="kw">const</span> { data: { user } } = <span class="kw">await</span> supabase.auth.<span class="fn">getUser</span>()
+  <span class="kw">if</span> (!user) <span class="kw">return</span> NextResponse.json({ error: <span class="st">'Unauthorized'</span> }, { status: 401 })
+
+  <span class="kw">const</span> { platforms, post, mediaUrls, scheduleDate } = <span class="kw">await</span> req.json()
+
+  <span class="cm">// Get this user's Ayrshare profileKey</span>
+  <span class="kw">const</span> { data: org } = <span class="kw">await</span> supabase
+    .from(<span class="st">'organizations'</span>)
+    .select(<span class="st">'ayrshare_profile_key, id'</span>)
+    .eq(<span class="st">'owner_id'</span>, user.id)
+    .single()
+
+  <span class="cm">// Post to all selected platforms in ONE API call</span>
+  <span class="kw">const</span> ayrRes = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="st">'https://api.ayrshare.com/api/post'</span>, {
+    method: <span class="st">'POST'</span>,
+    headers: {
+      <span class="st">'Authorization'</span>: <span class="st">\`Bearer \${process.env.AYRSHARE_API_KEY}\`</span>,
+      <span class="st">'Profile-Key'</span>: org.ayrshare_profile_key, <span class="cm">// ← THIS scopes it to THIS user's accounts</span>
+      <span class="st">'Content-Type'</span>: <span class="st">'application/json'</span>,
+    },
+    body: <span class="fn">JSON.stringify</span>({
+      post,
+      platforms,
+      mediaUrls: mediaUrls || [],
+      scheduleDate: scheduleDate || undefined,
+    }),
+  })
+
+  <span class="kw">const</span> result = <span class="kw">await</span> ayrRes.json()
+
+  <span class="cm">// Save to Kreya's own database for history/analytics</span>
+  <span class="kw">await</span> supabase.from(<span class="st">'scheduled_posts'</span>).insert({
+    org_id: org.id,
+    ayrshare_post_id: result.id,
+    platforms,
+    body: post,
+    media_urls: mediaUrls,
+    scheduled_at: scheduleDate,
+    status: scheduleDate ? <span class="st">'scheduled'</span> : <span class="st">'published'</span>,
+  })
+
+  <span class="cm">// Notify user on WhatsApp</span>
+  <span class="kw">await</span> <span class="fn">sendWhatsAppNotification</span>(user.id,
+    scheduleDate
+      ? <span class="st">\`✅ Scheduled for \${new Date(scheduleDate).toLocaleString()}. I'll notify you when it goes live.\`</span>
+      : <span class="st">\`✅ Posted to \${platforms.join(', ')}! Go check it out 🚀\`</span>
+  )
+
+  <span class="kw">return</span> NextResponse.json({ status: <span class="st">'success'</span>, postId: result.id })
+}`;
+
+  return (
+    <div className="app">
+      {/* TOPBAR */}
+      <div className="top">
+        <div className="logo">KREY<span className="ac">A</span>.</div>
+        <div className="top-badge">Social Integration Layer</div>
+        <div className="top-sp" />
+        <div className="user-pill">
+          <div className="user-av">A</div>
+          <div className="user-email">alex@myband.io · Pro</div>
+        </div>
+      </div>
+
+      {/* HOW IT WORKS */}
+      <span className="sec-lbl">Architecture</span>
+      <div className="sec-ttl">How Kreya + Ayrshare work together</div>
+      <div className="sec-sub">
+        Ayrshare runs entirely in the background. Your users sign up to Kreya, connect their social accounts once, and never think about Ayrshare. You own the relationship — Ayrshare is invisible infrastructure.
+      </div>
+
+      <div className="flow-grid">
+        {[
+          { n:'01', ico:'🔐', ttl:'User signs up to Kreya', desc:'Supabase creates their account. Kreya silently creates an Ayrshare shadow profile in the background. User sees nothing.' },
+          { n:'02', ico:'🔗', ttl:'User connects Instagram/TikTok', desc:'Kreya generates a secure 5-min JWT link. User authenticates with the platform directly. Ayrshare stores the OAuth tokens securely.' },
+          { n:'03', ico:'💬', ttl:'User sends WhatsApp prompt', desc:'Claude AI generates the content. User approves. Kreya calls Ayrshare with the profileKey to post on their behalf.' },
+          { n:'04', ico:'📊', ttl:'Posts go live + analytics', desc:'All platforms receive the post. Kreya pulls analytics back via Ayrshare. User gets WhatsApp notification when live.' },
+        ].map(s => (
+          <div key={s.n} className="flow-step">
+            <div className="flow-num">{s.n}</div>
+            <div className="flow-ico">{s.ico}</div>
+            <div className="flow-ttl">{s.ttl}</div>
+            <div className="flow-desc">{s.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ARCHITECTURE */}
+      <div className="arch">
+        <div className="arch-title">System architecture — data flow</div>
+        <div className="arch-line"><span className="arch-k">Kreya User</span> <span className="arch-dim">──signs up──▶</span> <span className="arch-v">Supabase Auth</span> <span className="arch-dim">──creates──▶</span> <span className="arch-m">Ayrshare Shadow Profile</span></div>
+        <div className="arch-line"><span className="arch-dim">                              stores profileKey ◀──────────────────────────────────</span></div>
+        <br/>
+        <div className="arch-line"><span className="arch-k">User connects Instagram</span> <span className="arch-dim">──▶</span> <span className="arch-v">Kreya API</span> <span className="arch-dim">──generateJWT──▶</span> <span className="arch-m">Ayrshare</span> <span className="arch-dim">──▶</span> <span className="arch-g">Instagram OAuth</span></div>
+        <div className="arch-line"><span className="arch-dim">                                                         token stored by Ayrshare (encrypted) ◀──────────</span></div>
+        <br/>
+        <div className="arch-line"><span className="arch-k">User approves post (WhatsApp/web)</span></div>
+        <div className="arch-line">  <span className="arch-dim">──▶</span> <span className="arch-v">Kreya API /publish</span></div>
+        <div className="arch-line">      <span className="arch-dim">──▶</span> <span className="arch-m">Ayrshare POST /api/post</span> <span className="arch-dim">(with Profile-Key header)</span></div>
+        <div className="arch-line">          <span className="arch-dim">──▶</span> <span className="arch-g">Instagram</span> <span className="arch-dim">+</span> <span className="arch-g">TikTok</span> <span className="arch-dim">+</span> <span className="arch-g">Twitter</span> <span className="arch-dim">simultaneously</span></div>
+        <div className="arch-line">      <span className="arch-dim">◀── success / post IDs returned</span></div>
+        <div className="arch-line">  <span className="arch-dim">──▶</span> <span className="arch-v">Supabase</span> <span className="arch-dim">save to scheduled_posts table</span></div>
+        <div className="arch-line">  <span className="arch-dim">──▶</span> <span className="arch-v">WhatsApp</span> <span className="arch-dim">"✅ Posted to Instagram & TikTok! 🚀"</span></div>
+        <br/>
+        <div className="arch-line"><span className="arch-dim">Security scope: Profile-Key ensures User A can NEVER post to User B's accounts</span></div>
+        <div className="arch-line"><span className="arch-dim">GDPR: delete profile endpoint removes all tokens from Ayrshare + wipes Supabase data</span></div>
+      </div>
+
+      {/* IMPORTANT BANNERS */}
+      <div className="banner warn">
+        <span className="banner-ico">⚡</span>
+        <div><strong>Instagram & Facebook:</strong> Users must have a Business or Creator account linked to a Facebook Page. Personal accounts cannot be connected. Add this requirement clearly in your onboarding flow.</div>
+      </div>
+      <div className="banner info">
+        <span className="banner-ico">🔒</span>
+        <div><strong>Social tokens are never stored in Kreya's database.</strong> Ayrshare holds the OAuth tokens on their encrypted infrastructure. Kreya only stores the profileKey — a reference string, not a credential. Even if your database is compromised, attackers cannot post to your users' accounts.</div>
+      </div>
+      <div className="banner ok">
+        <span className="banner-ico">✓</span>
+        <div><strong>TikTok audit already passed.</strong> Ayrshare has already passed TikTok's Content Publishing API audit. Your users' posts will be public immediately — no waiting for your own app approval.</div>
+      </div>
+
+      {/* PLATFORM CARDS */}
+      <span className="sec-lbl" style={{marginTop:32,display:'block'}}>Step 1 — Platform connections</span>
+      <div className="sec-ttl">Connected social accounts</div>
+      <div className="sec-sub">Each user connects their own accounts. Ayrshare handles OAuth. You control posting via API.</div>
+      <PlatformCards showToast={showToast} />
+
+      {/* LIVE API DEMO */}
+      <span className="sec-lbl">Step 2 — API routes</span>
+      <div className="sec-ttl">Live API simulator</div>
+      <div className="sec-sub">These are the actual Next.js route handlers you'll build. Press ▶ to see simulated responses.</div>
+      <ApiDemo showToast={showToast} />
+
+      {/* DATABASE SCHEMA */}
+      <span className="sec-lbl">Step 3 — Database</span>
+      <div className="sec-ttl">Schema changes needed</div>
+      <div className="sec-sub">Run this SQL in your Supabase dashboard → SQL Editor → New query.</div>
+
+      <div style={{overflowX:'auto',marginBottom:20}}>
+        <table className="schema-table">
+          <thead>
+            <tr>
+              <th>Table</th>
+              <th>Column</th>
+              <th>Type</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { table:'organizations', col:'ayrshare_profile_key', type:'TEXT', tags:['enc'], note:'The key used in every API call for this user. Not a secret but stored server-side only.' },
+              { table:'organizations', col:'ayrshare_ref_id', type:'TEXT', tags:[], note:'Ayrshare internal reference. Needed for deletion (GDPR).' },
+              { table:'social_accounts', col:'id', type:'UUID', tags:['pk'], note:'Primary key.' },
+              { table:'social_accounts', col:'org_id', type:'UUID', tags:['fk'], note:'References organizations.id. Scoped per user.' },
+              { table:'social_accounts', col:'platform', type:'TEXT', tags:[], note:'instagram | tiktok | facebook | twitter | linkedin | youtube' },
+              { table:'social_accounts', col:'handle', type:'TEXT', tags:[], note:'@username for display in UI. Fetched from platform on connect.' },
+              { table:'social_accounts', col:'is_active', type:'BOOLEAN', tags:[], note:'False when user disconnects. Used to show status in UI.' },
+              { table:'social_audit_log', col:'action', type:'TEXT', tags:[], note:'post_created | account_connected | account_disconnected | profile_deleted' },
+            ].map((r,i) => (
+              <tr key={i}>
+                <td><span className="col-name">{r.table}</span></td>
+                <td style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                  <span className="col-name">{r.col}</span>
+                  {r.tags.map(t => <span key={t} className={`col-${t}`}>{t.toUpperCase()}</span>)}
+                </td>
+                <td><span className="col-type">{r.type}</span></td>
+                <td><span className="col-desc">{r.note}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <CodeBlock filename="supabase/migrations/002_social_accounts.sql" lang="lang-sql" langLabel="SQL" code={sqlCode} />
+
+      {/* CODE: ENV */}
+      <span className="sec-lbl" style={{marginTop:32,display:'block'}}>Step 4 — Configuration</span>
+      <div className="sec-ttl">Environment variables</div>
+      <div className="sec-sub">Add your Ayrshare API key from <strong style={{color:'#fff'}}>app.ayrshare.com → API Key</strong>. Never commit this file.</div>
+      <CodeBlock filename=".env.local" lang="lang-env" langLabel="ENV" code={envCode} />
+
+      {/* CODE: CREATE PROFILE */}
+      <span className="sec-lbl" style={{marginTop:32,display:'block'}}>Step 5 — API Routes</span>
+      <div className="sec-ttl">Build these 4 routes</div>
+      <div className="sec-sub">Copy each route into your Next.js project under <code style={{fontFamily:'Space Mono,monospace',fontSize:11,color:'var(--violet)'}}>app/api/kreya/</code></div>
+
+      <CodeBlock filename="app/api/kreya/profiles/create/route.ts" lang="lang-ts" langLabel="TypeScript" code={createProfileCode} />
+      <CodeBlock filename="app/api/kreya/profiles/link-url/route.ts" lang="lang-ts" langLabel="TypeScript" code={linkAccountCode} />
+      <CodeBlock filename="app/api/kreya/content/publish/route.ts" lang="lang-ts" langLabel="TypeScript" code={publishCode} />
+
+      {/* PRICING */}
+      <span className="sec-lbl" style={{marginTop:32,display:'block'}}>Step 6 — Pricing</span>
+      <div className="sec-ttl">Ayrshare plan for Kreya</div>
+      <div className="sec-sub">
+        Ayrshare charges per active social profile — one profile per Kreya user, regardless of how many platforms they connect. When a user cancels, call Delete Profile and stop paying for them immediately.
+      </div>
+      <div className="pricing-grid">
+        <div className="price-card">
+          <div className="price-name">Free / Dev</div>
+          <div className="price-amount">$0<span>/mo</span></div>
+          <div className="price-f">1 profile</div>
+          <div className="price-f">All platforms</div>
+          <div className="price-f">Testing only</div>
+          <div className="price-f">No SLA</div>
+        </div>
+        <div className="price-card rec">
+          <div className="price-rec-badge">Recommended for Kreya launch</div>
+          <div className="price-name">Business</div>
+          <div className="price-amount">~$149<span>/mo</span></div>
+          <div className="price-f">Unlimited profiles</div>
+          <div className="price-f">All 13+ platforms</div>
+          <div className="price-f">White-label linking page</div>
+          <div className="price-f">Webhooks + analytics</div>
+          <div className="price-f">Per-profile pricing as you grow</div>
+        </div>
+        <div className="price-card">
+          <div className="price-name">Enterprise</div>
+          <div className="price-amount">Custom<span>/mo</span></div>
+          <div className="price-f">Volume discounts</div>
+          <div className="price-f">SLA + uptime guarantee</div>
+          <div className="price-f">Dedicated support</div>
+          <div className="price-f">Custom contracts</div>
+        </div>
+      </div>
+      <div className="banner tip">
+        <span className="banner-ico">💡</span>
+        <div><strong>Cost math for Kreya:</strong> If you charge users $19/mo (Pro plan) and Ayrshare costs ~$1–2 per active user at scale, your social infrastructure margin is &gt;90%. The Business plan base covers you until roughly 50–100 active users, after which per-profile pricing kicks in — still very healthy margins.</div>
+      </div>
+
+      {/* INSTALL COMMAND */}
+      <span className="sec-lbl" style={{marginTop:32,display:'block'}}>Quick start</span>
+      <div className="sec-ttl">Get running in 10 minutes</div>
+      <CodeBlock filename="terminal" lang="lang-sh" langLabel="Shell" code={`<span class="cm"># 1. Install nothing — Ayrshare is REST-only, no SDK required
+# Just use fetch() in your Next.js routes</span>
+
+<span class="cm"># 2. Test your API key immediately</span>
+curl -H <span class="st">"Authorization: Bearer YOUR_AYRSHARE_API_KEY"</span> \\
+     https://api.ayrshare.com/api/user
+
+<span class="cm"># 3. Create your first test profile</span>
+curl -X POST \\
+     -H <span class="st">"Authorization: Bearer YOUR_AYRSHARE_API_KEY"</span> \\
+     -H <span class="st">"Content-Type: application/json"</span> \\
+     -d <span class="st">'{"title": "Test User"}'</span> \\
+     https://api.ayrshare.com/api/profiles
+
+<span class="cm"># 4. Sign up at ayrshare.com → get API key → paste in .env.local
+# 5. Run the SQL migration in Supabase SQL Editor
+# 6. Add the 4 route files to your Next.js project
+# Done. First real post: ~30 minutes of work total.</span>`} />
+
+      <Toast t={toast} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

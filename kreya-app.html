@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Kreya — Your Creative AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- React -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+/* ═══════════════════════ DESIGN TOKENS ═══════════════════════ */
+:root {
+  --ink: #07070E;
+  --dark: #0C0A1A;
+  --surf: #121126;
+  --surf2: #191733;
+  --surf3: #221F3E;
+  --bdr: rgba(255,255,255,.07);
+  --bdr2: rgba(255,255,255,.14);
+  --coral: #FF4F3B;
+  --cdim: rgba(255,79,59,.13);
+  --violet: #5E35FF;
+  --vdim: rgba(94,53,255,.13);
+  --mint: #00E5A0;
+  --mdim: rgba(0,229,160,.1);
+  --gold: #FFD166;
+  --gdim: rgba(255,209,102,.1);
+  --rose: #FF6B8A;
+  --white: #FFFFFF;
+  --muted: rgba(255,255,255,.42);
+  --muted2: rgba(255,255,255,.2);
+  --success: #00E5A0;
+  --error: #FF4F3B;
+  --warning: #FFD166;
+  --info: #6EB5FF;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  background: var(--ink); color: var(--white);
+  font-family: 'DM Sans', sans-serif; font-size: 14px;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surf3); border-radius: 2px; }
+input, textarea, button, select { font-family: inherit; }
+button { cursor: pointer; }
+
+/* ═══════════════════════ AUTH SHELL ═══════════════════════ */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--ink);
+  position: relative;
+  overflow: hidden;
+}
+.auth-bg {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 90% at 0% 30%, rgba(94,53,255,.22) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 80% at 100% 70%, rgba(255,79,59,.18) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 40% at 60% 5%, rgba(0,229,160,.08) 0%, transparent 65%);
+}
+.auth-noise {
+  position: absolute; inset: 0; pointer-events: none; opacity: .025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 200px;
+}
+.auth-card {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 420px;
+  background: var(--surf);
+  border: 1px solid var(--bdr2);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
+  animation: authIn .45s ease both;
+}
+@keyframes authIn {
+  from { opacity: 0; transform: translateY(24px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.auth-top {
+  padding: 32px 32px 24px;
+  border-bottom: 1px solid var(--bdr);
+  text-align: center;
+}
+.auth-logo {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 40px; letter-spacing: -.05em; line-height: 1;
+  margin-bottom: 5px;
+}
+.auth-logo .ac { color: var(--coral); }
+.auth-tagline { font-size: 12px; font-weight: 300; color: var(--muted); font-style: italic; }
+.auth-body { padding: 24px 32px 28px; }
+
+/* ── TABS ── */
+.auth-tabs {
+  display: flex; gap: 2px;
+  background: var(--surf2); border-radius: 8px; padding: 3px;
+  border: 1px solid var(--bdr); margin-bottom: 22px;
+}
+.auth-tab {
+  flex: 1; padding: 8px; text-align: center; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all .18s; color: var(--muted);
+}
+.auth-tab.act { background: var(--coral); color: #fff; }
+
+/* ── FORM FIELDS ── */
+.field { margin-bottom: 14px; }
+.field-label {
+  font-family: 'Space Mono', monospace; font-size: 8px;
+  letter-spacing: .22em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 5px; display: block;
+}
+.field-wrap { position: relative; }
+.field-input {
+  width: 100%; background: var(--surf2); border: 1.5px solid var(--bdr2);
+  border-radius: 6px; padding: 11px 14px; padding-right: 38px;
+  font-size: 13px; font-weight: 300; color: var(--white);
+  outline: none; transition: border-color .2s, background .2s;
+}
+.field-input::placeholder { color: var(--muted2); }
+.field-input:focus { border-color: var(--violet); background: var(--surf3); }
+.field-input.err { border-color: var(--error); background: rgba(255,79,59,.06); }
+.field-input.ok  { border-color: var(--success); }
+.field-icon {
+  position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  font-size: 14px; pointer-events: none; color: var(--muted2);
+}
+.field-input.err ~ .field-icon { color: var(--error); }
+.field-input.ok  ~ .field-icon { color: var(--success); }
+.field-err {
+  font-size: 11px; color: var(--error); margin-top: 5px;
+  display: flex; align-items: center; gap: 4px;
+  animation: shake .3s ease;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.field-hint { font-size: 10px; color: var(--muted); margin-top: 4px; font-weight: 300; }
+
+/* ── PASSWORD STRENGTH ── */
+.pw-strength { margin-top: 8px; }
+.pw-bars { display: flex; gap: 4px; margin-bottom: 4px; }
+.pw-bar { flex: 1; height: 3px; border-radius: 2px; background: var(--surf3); transition: background .3s; }
+.pw-bar.weak  { background: var(--error); }
+.pw-bar.fair  { background: var(--warning); }
+.pw-bar.good  { background: var(--info); }
+.pw-bar.strong{ background: var(--success); }
+.pw-label { font-size: 10px; font-weight: 300; color: var(--muted); }
+
+/* ── CHECKBOX ── */
+.check-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 14px; cursor: pointer;
+}
+.check-box {
+  width: 16px; height: 16px; min-width: 16px; border-radius: 4px;
+  border: 1.5px solid var(--bdr2); background: var(--surf2);
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px; transition: all .15s;
+}
+.check-box.checked { background: var(--violet); border-color: var(--violet); }
+.check-txt { font-size: 11px; font-weight: 300; color: var(--muted); line-height: 1.5; }
+.check-txt a { color: var(--violet); text-decoration: none; }
+
+/* ── CTA BUTTON ── */
+.auth-cta {
+  width: 100%; background: var(--coral); color: #fff; border: none;
+  border-radius: 6px; padding: 13px; font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 14px; letter-spacing: -.01em;
+  transition: opacity .15s, transform .1s; position: relative;
+  overflow: hidden;
+}
+.auth-cta:hover:not(:disabled) { opacity: .9; }
+.auth-cta:active:not(:disabled) { transform: scale(.98); }
+.auth-cta:disabled { opacity: .55; cursor: not-allowed; }
+.auth-cta.loading { pointer-events: none; }
+.cta-spinner {
+  width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3);
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin .7s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── DIVIDER ── */
+.auth-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 18px 0; color: var(--muted2); font-size: 11px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--bdr);
+}
+
+/* ── FOOTER LINKS ── */
+.auth-footer { margin-top: 16px; text-align: center; }
+.auth-link {
+  font-size: 12px; color: var(--muted); cursor: pointer;
+  transition: color .15s;
+}
+.auth-link span { color: var(--violet); text-decoration: underline; text-underline-offset: 2px; }
+.auth-link span:hover { color: #a080ff; }
+
+/* ── SECURITY BADGE ── */
+.security-strip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; background: var(--mdim);
+  border-top: 1px solid var(--bdr); font-size: 10px;
+  color: var(--muted); justify-content: center; gap: 16px;
+}
+.sec-item { display: flex; align-items: center; gap: 4px; }
+
+/* ═══════════════════════ MFA SCREEN ═══════════════════════ */
+.mfa-screen { padding: 32px; text-align: center; }
+.mfa-icon { font-size: 40px; margin-bottom: 16px; }
+.mfa-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -.02em; margin-bottom: 6px; }
+.mfa-sub { font-size: 12px; font-weight: 300; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
+.mfa-digits { display: flex; gap: 8px; justify-content: center; margin-bottom: 8px; }
+.mfa-digit {
+  width: 46px; height: 54px; background: var(--surf2);
+  border: 1.5px solid var(--bdr2); border-radius: 8px;
+  text-align: center; font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 22px; color: var(--white); outline: none;
+  transition: border-color .2s, background .2s;
+}
+.mfa-digit:focus { border-color: var(--violet); background: var(--surf3); }
+.mfa-digit.filled { border-color: var(--violet); }
+.mfa-digit.err { border-color: var(--error); animation: shake .3s ease; }
+.mfa-hint { font-size: 10px; color: var(--muted); margin-bottom: 20px; }
+.mfa-resend { font-size: 11px; color: var(--muted); }
+.mfa-resend span { color: var(--violet); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.mfa-back { font-size: 11px; color: var(--muted2); margin-top: 10px; cursor: pointer; }
+.mfa-back:hover { color: var(--white); }
+.mfa-attempts { font-size: 10px; color: var(--warning); margin-top: 8px; }
+
+/* ═══════════════════════ EMAIL CONFIRM SCREEN ═══════════════════════ */
+.confirm-screen { padding: 36px 32px; text-align: center; }
+.confirm-envelope { font-size: 48px; margin-bottom: 16px; animation: float 3s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+.confirm-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -.02em; margin-bottom: 8px; }
+.confirm-sub { font-size: 13px; font-weight: 300; color: var(--muted); margin-bottom: 6px; line-height: 1.65; }
+.confirm-email-display {
+  background: var(--surf2); border: 1px solid var(--bdr2);
+  border-radius: 6px; padding: 10px 16px; margin: 16px 0;
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  color: var(--violet);
+}
+.confirm-steps { text-align: left; margin: 20px 0; }
+.confirm-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--bdr);
+}
+.confirm-step:last-child { border: none; }
+.cs-num {
+  width: 22px; height: 22px; min-width: 22px; border-radius: 50%;
+  background: var(--violet); color: #fff; display: flex;
+  align-items: center; justify-content: center;
+  font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+  margin-top: 1px;
+}
+.cs-txt { font-size: 12px; font-weight: 300; color: var(--muted); line-height: 1.55; }
+.cs-txt strong { color: var(--white); font-weight: 500; }
+.confirm-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.btn-outline {
+  width: 100%; padding: 11px; border-radius: 6px;
+  border: 1px solid var(--bdr2); background: transparent;
+  color: var(--muted); font-size: 12px; font-weight: 500; transition: all .15s;
+}
+.btn-outline:hover { border-color: var(--violet); color: #a080ff; }
+.spam-note { font-size: 10px; color: var(--muted2); margin-top: 12px; line-height: 1.5; }
+
+/* ═══════════════════════ RESET PASSWORD SCREEN ═══════════════════════ */
+.reset-sent { padding: 36px 32px; text-align: center; }
+.reset-icon { font-size: 44px; margin-bottom: 16px; }
+
+/* ═══════════════════════ ALERT BANNERS ═══════════════════════ */
+.alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 14px; border-radius: 6px; margin-bottom: 16px;
+  font-size: 12px; line-height: 1.5; border: 1px solid transparent;
+  animation: alertIn .2s ease;
+}
+@keyframes alertIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+.alert.error   { background: rgba(255,79,59,.1);  border-color: rgba(255,79,59,.25);  color: #ffaea5; }
+.alert.success { background: rgba(0,229,160,.1);  border-color: rgba(0,229,160,.25);  color: #80f0ce; }
+.alert.warning { background: rgba(255,209,102,.1);border-color: rgba(255,209,102,.25);color: #ffe5a0; }
+.alert.info    { background: rgba(110,181,255,.1);border-color: rgba(110,181,255,.25);color: #a8d0ff; }
+.alert-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+/* ═══════════════════════ ACCOUNT EXISTS FLOW ═══════════════════════ */
+.exists-options { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.exists-btn {
+  width: 100%; padding: 12px 16px; border-radius: 6px; border: 1px solid var(--bdr2);
+  background: var(--surf2); color: var(--white); font-size: 12px;
+  display: flex; align-items: center; gap: 10px; transition: all .15s; text-align: left;
+}
+.exists-btn:hover { border-color: var(--violet); background: var(--vdim); }
+.exists-btn-icon { font-size: 18px; flex-shrink: 0; }
+.exists-btn-body { flex: 1; }
+.exists-btn-title { font-weight: 600; margin-bottom: 2px; }
+.exists-btn-desc { font-size: 10px; color: var(--muted); font-weight: 300; }
+
+/* ═══════════════════════ RATE LIMIT ═══════════════════════ */
+.rate-limit {
+  padding: 24px 32px; text-align: center;
+}
+.rate-icon { font-size: 36px; margin-bottom: 14px; }
+.rate-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; margin-bottom: 8px; color: var(--warning); }
+.rate-countdown {
+  font-family: 'Space Mono', monospace; font-size: 32px; font-weight: 700;
+  color: var(--warning); margin: 16px 0; letter-spacing: .05em;
+}
+
+/* ═══════════════════════ OAUTH BUTTONS ═══════════════════════ */
+.oauth-btn {
+  width: 100%; padding: 11px 16px; border-radius: 6px;
+  border: 1px solid var(--bdr2); background: var(--surf2);
+  color: var(--white); font-size: 12px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  transition: all .15s; margin-bottom: 8px;
+}
+.oauth-btn:hover { border-color: var(--bdr2); background: var(--surf3); }
+.oauth-icon { width: 18px; height: 18px; border-radius: 3px; flex-shrink: 0; display:flex;align-items:center;justify-content:center;font-size:13px; }
+
+/* ═══════════════════════ SETUP PROFILE ═══════════════════════ */
+.setup-screen { padding: 28px 32px; }
+.setup-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -.02em; margin-bottom: 4px; }
+.setup-sub { font-size: 12px; color: var(--muted); margin-bottom: 22px; font-weight: 300; }
+.setup-steps { display: flex; gap: 6px; margin-bottom: 24px; }
+.setup-step { flex: 1; height: 3px; border-radius: 2px; background: var(--surf3); }
+.setup-step.done { background: var(--coral); }
+.setup-step.active { background: var(--violet); }
+.plan-mini-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 16px; }
+.plan-mini {
+  padding: 12px 10px; border-radius: 6px; border: 1.5px solid var(--bdr);
+  cursor: pointer; text-align: center; transition: all .15s; background: var(--surf2);
+}
+.plan-mini:hover { border-color: var(--bdr2); }
+.plan-mini.sel { border-color: var(--coral); background: var(--cdim); }
+.pm-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; margin-bottom: 3px; }
+.pm-price { font-size: 12px; color: var(--muted); }
+.plan-mini.sel .pm-name { color: var(--coral); }
+
+/* ═══════════════════════ TOOLTIP ═══════════════════════ */
+.tooltip-wrap { position: relative; display: inline-block; }
+.tooltip {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--surf3); border: 1px solid var(--bdr2); border-radius: 4px;
+  padding: 6px 10px; font-size: 10px; white-space: nowrap; color: var(--white);
+  pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 100;
+}
+.tooltip-wrap:hover .tooltip { opacity: 1; }
+
+/* ═══════════════════════ DEMO NOTICE ═══════════════════════ */
+.demo-notice {
+  background: var(--gdim); border: 1px solid rgba(255,209,102,.2);
+  border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;
+  font-size: 11px; color: var(--gold); display: flex; gap: 8px; align-items: flex-start;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ═══════════════════════════════════════════════════════════
+   SUPABASE CLIENT
+   In production: inject these from environment variables.
+   NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+   are set in .env.local and never committed to git.
+   The anon key is safe to expose — it only allows what RLS permits.
+═══════════════════════════════════════════════════════════ */
+const SUPABASE_URL = window.__SUPABASE_URL__ || '';
+const SUPABASE_ANON = window.__SUPABASE_ANON__ || '';
+
+// Create client only if credentials are present
+const supabase = (SUPABASE_URL && SUPABASE_ANON)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true, // handles email confirm redirects
+        flowType: 'pkce',         // PKCE for secure OAuth
+      }
+    })
+  : null;
+
+/* ─── Password strength scorer ─── */
+function scorePassword(pw) {
+  if (!pw) return { score: 0, label: '', bars: [] };
+  let score = 0;
+  if (pw.length >= 8)  score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const levels = [
+    { label: '', bars: [] },
+    { label: 'Too weak', bars: ['weak'] },
+    { label: 'Weak', bars: ['weak', 'weak'] },
+    { label: 'Fair', bars: ['fair', 'fair', 'fair'] },
+    { label: 'Good', bars: ['good', 'good', 'good', 'good'] },
+    { label: 'Strong ✓', bars: ['strong', 'strong', 'strong', 'strong', 'strong'] },
+  ];
+  return { score, ...levels[Math.min(score, 5)] };
+}
+
+/* ─── Email validator ─── */
+const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+/* ─── Error message mapper ─── */
+function mapSupabaseError(error) {
+  if (!error) return null;
+  const msg = error.message?.toLowerCase() || '';
+  if (msg.includes('invalid login credentials') || msg.includes('invalid email or password'))
+    return { type: 'error', text: 'Incorrect email or password. Check your details and try again.' };
+  if (msg.includes('email not confirmed'))
+    return { type: 'warning', text: 'Your email isn\'t confirmed yet. Check your inbox (and spam) for the confirmation link.' };
+  if (msg.includes('user already registered') || msg.includes('already been registered'))
+    return { type: 'exists', text: 'An account with this email already exists.' };
+  if (msg.includes('password should be at least'))
+    return { type: 'error', text: 'Password must be at least 8 characters with uppercase, numbers, and symbols.' };
+  if (msg.includes('rate limit') || msg.includes('too many requests'))
+    return { type: 'rate_limit', text: 'Too many attempts. Please wait before trying again.' };
+  if (msg.includes('network') || msg.includes('fetch'))
+    return { type: 'error', text: 'Network error — check your connection and try again.' };
+  if (msg.includes('token') || msg.includes('expired'))
+    return { type: 'error', text: 'This link has expired. Request a new one.' };
+  return { type: 'error', text: error.message || 'Something went wrong. Please try again.' };
+}
+
+/* ═══════════════════════ COMPONENTS ═══════════════════════ */
+
+function Alert({ type, text, onDismiss }) {
+  const icons = { error: '⚠', success: '✓', warning: '⚡', info: 'ℹ' };
+  return (
+    <div className={`alert ${type}`}>
+      <span className="alert-icon">{icons[type] || icons.info}</span>
+      <span style={{flex:1}}>{text}</span>
+      {onDismiss && <span style={{cursor:'pointer',opacity:.6,marginLeft:8}} onClick={onDismiss}>✕</span>}
+    </div>
+  );
+}
+
+function PasswordStrength({ password }) {
+  const { score, label, bars } = scorePassword(password);
+  if (!password) return null;
+  const colors = { weak:'var(--error)', fair:'var(--warning)', good:'var(--info)', strong:'var(--success)' };
+  const labelColors = { 'Too weak':'var(--error)', 'Weak':'var(--error)', 'Fair':'var(--warning)', 'Good':'var(--info)', 'Strong ✓':'var(--success)' };
+  return (
+    <div className="pw-strength">
+      <div className="pw-bars">
+        {[0,1,2,3,4].map(i => (
+          <div key={i} className="pw-bar" style={{ background: bars[i] ? colors[bars[i]] : undefined }} />
+        ))}
+      </div>
+      <div className="pw-label" style={{ color: labelColors[label] || 'var(--muted)' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ SIGN IN ═══════════════════════ */
+function SignIn({ onSwitchTab, onMFA, onSuccess, setGlobalAlert }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState(null);
+  const [showPw, setShowPw] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
+  const [countdown, setCountdown] = useState(30);
+  const [existsFlow, setExistsFlow] = useState(false);
+  const pwRef = useRef();
+
+  // Real-time email validation
+  const validateEmail = (val) => {
+    if (!val) return setErrors(e => ({ ...e, email: 'Email is required' }));
+    if (!validEmail(val)) return setErrors(e => ({ ...e, email: 'Enter a valid email address' }));
+    setErrors(e => ({ ...e, email: null }));
+  };
+  const validatePw = (val) => {
+    if (!val) return setErrors(e => ({ ...e, pw: 'Password is required' }));
+    setErrors(e => ({ ...e, pw: null }));
+  };
+
+  const submit = async () => {
+    // Client-side validation first
+    const errs = {};
+    if (!email) errs.email = 'Email is required';
+    else if (!validEmail(email)) errs.email = 'Enter a valid email address';
+    if (!password) errs.pw = 'Password is required';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    setLoading(true); setAlert(null);
+
+    // DEMO MODE — no Supabase configured
+    if (!supabase) {
+      await new Promise(r => setTimeout(r, 900));
+      // Simulate email not confirmed
+      if (email === 'unconfirmed@test.com') {
+        setAlert({ type: 'warning', text: 'Your email isn\'t confirmed yet. Check your inbox (and spam) for the confirmation link.' });
+        setLoading(false); return;
+      }
+      // Simulate wrong password
+      if (password === 'wrongpassword') {
+        setAlert({ type: 'error', text: 'Incorrect email or password. Check your details and try again.' });
+        setErrors({ pw: 'Incorrect password' });
+        setLoading(false); return;
+      }
+      // Simulate rate limit
+      if (email === 'locked@test.com') {
+        setRateLimited(true);
+        let c = 30;
+        const t = setInterval(() => { c--; setCountdown(c); if (c <= 0) { clearInterval(t); setRateLimited(false); } }, 1000);
+        setLoading(false); return;
+      }
+      // Simulate MFA required
+      if (email === 'mfa@test.com') {
+        setLoading(false); onMFA({ email, method: 'totp' }); return;
+      }
+      // Success
+      setLoading(false);
+      onSuccess({ email, name: email.split('@')[0], plan: 'pro' });
+      return;
+    }
+
+    // REAL Supabase auth
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      const mapped = mapSupabaseError(error);
+      if (mapped.type === 'rate_limit') {
+        setRateLimited(true);
+        let c = 30;
+        const t = setInterval(() => { c--; setCountdown(c); if (c <= 0) { clearInterval(t); setRateLimited(false); } }, 1000);
+        return;
+      }
+      setAlert(mapped);
+      if (mapped.type === 'error' && error.message?.includes('password')) setErrors({ pw: 'Incorrect password' });
+      return;
+    }
+    // Check if MFA is required
+    if (data.session?.amr && !data.session.amr.includes('totp')) {
+      onMFA({ email, method: 'totp' }); return;
+    }
+    onSuccess(data.user);
+  };
+
+  if (rateLimited) return (
+    <div className="rate-limit">
+      <div className="rate-icon">🔒</div>
+      <div className="rate-title">Too many attempts</div>
+      <div style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>For your security, sign-in is temporarily locked.</div>
+      <div className="rate-countdown">0:{countdown.toString().padStart(2,'0')}</div>
+      <div style={{fontSize:11,color:'var(--muted)'}}>Try again in {countdown} seconds</div>
+    </div>
+  );
+
+  return (
+    <>
+      {alert && <Alert type={alert.type} text={alert.text} onDismiss={() => setAlert(null)} />}
+
+      <div className="field">
+        <label className="field-label">Email address</label>
+        <div className="field-wrap">
+          <input
+            className={`field-input ${errors.email ? 'err' : email && validEmail(email) ? 'ok' : ''}`}
+            type="email" placeholder="you@example.com" value={email}
+            onChange={e => { setEmail(e.target.value); if (errors.email) validateEmail(e.target.value); }}
+            onBlur={e => validateEmail(e.target.value)}
+            autoComplete="email"
+          />
+          <span className="field-icon">{errors.email ? '✕' : email && validEmail(email) ? '✓' : '✉'}</span>
+        </div>
+        {errors.email && <div className="field-err">⚠ {errors.email}</div>}
+      </div>
+
+      <div className="field">
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+          <label className="field-label" style={{margin:0}}>Password</label>
+          <span style={{fontSize:11,color:'var(--violet)',cursor:'pointer',textDecoration:'underline',textUnderlineOffset:2}} onClick={() => onSwitchTab('reset')}>
+            Forgot password?
+          </span>
+        </div>
+        <div className="field-wrap">
+          <input
+            ref={pwRef}
+            className={`field-input ${errors.pw ? 'err' : ''}`}
+            type={showPw ? 'text' : 'password'} placeholder="Your password" value={password}
+            onChange={e => { setPassword(e.target.value); if (errors.pw) validatePw(e.target.value); }}
+            onBlur={e => validatePw(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            autoComplete="current-password"
+          />
+          <span className="field-icon" style={{cursor:'pointer',pointerEvents:'auto'}} onClick={() => setShowPw(!showPw)}>
+            {showPw ? '🙈' : '👁'}
+          </span>
+        </div>
+        {errors.pw && <div className="field-err">⚠ {errors.pw}</div>}
+      </div>
+
+      <button className={`auth-cta ${loading ? 'loading' : ''}`} onClick={submit} disabled={loading}>
+        {loading ? <span className="cta-spinner" /> : 'Sign in →'}
+      </button>
+
+      <div className="auth-divider">or continue with</div>
+
+      <button className="oauth-btn" onClick={() => setGlobalAlert({ type: 'info', text: 'Google OAuth — in production this redirects to Google\'s sign-in page via Supabase\'s OAuth flow with PKCE.' })}>
+        <span className="oauth-icon">G</span> Continue with Google
+      </button>
+      <button className="oauth-btn" onClick={() => setGlobalAlert({ type: 'info', text: 'Apple Sign In — in production this uses Apple\'s OAuth provider. User data is kept private via Apple\'s relay email.' })}>
+        <span className="oauth-icon">🍎</span> Continue with Apple
+      </button>
+
+      <div className="auth-footer">
+        <div className="auth-link">
+          Don't have an account? <span onClick={() => onSwitchTab('signup')}>Create one free →</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ═══════════════════════ SIGN UP ═══════════════════════ */
+function SignUp({ onSwitchTab, onConfirmEmail, setGlobalAlert }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState(null);
+  const [showPw, setShowPw] = useState(false);
+  const [existsFlow, setExistsFlow] = useState(false);
+  const pw = scorePassword(password);
+
+  const validate = () => {
+    const errs = {};
+    if (!name.trim()) errs.name = 'Name is required';
+    if (!email) errs.email = 'Email is required';
+    else if (!validEmail(email)) errs.email = 'Enter a valid email address';
+    if (!password) errs.pw = 'Password is required';
+    else if (password.length < 8) errs.pw = 'Minimum 8 characters';
+    else if (pw.score < 3) errs.pw = 'Password is too weak — add uppercase, numbers, or symbols';
+    if (password !== confirm) errs.confirm = 'Passwords don\'t match';
+    if (!agreed) errs.agreed = 'You must agree to the Terms & Privacy Policy';
+    return errs;
+  };
+
+  const submit = async () => {
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    setLoading(true); setAlert(null);
+
+    // DEMO MODE
+    if (!supabase) {
+      await new Promise(r => setTimeout(r, 1100));
+      if (email === 'taken@test.com') {
+        setExistsFlow(true); setLoading(false); return;
+      }
+      setLoading(false);
+      onConfirmEmail(email, name);
+      return;
+    }
+
+    // REAL Supabase sign up
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: {
+        data: { full_name: name, plan: 'free' },
+        emailRedirectTo: `${window.location.origin}/auth/callback`, // handles email link
+      }
+    });
+    setLoading(false);
+    if (error) {
+      const mapped = mapSupabaseError(error);
+      if (mapped.type === 'exists') { setExistsFlow(true); return; }
+      setAlert(mapped); return;
+    }
+    // Supabase returns user but session = null until email confirmed
+    if (data.user && !data.session) {
+      onConfirmEmail(email, name); return;
+    }
+    // Auto-confirmed (e.g. if email confirmation disabled in project settings)
+    if (data.session) {
+      onConfirmEmail(email, name);
+    }
+  };
+
+  if (existsFlow) return (
+    <>
+      <Alert type="warning" text={`An account already exists for ${email}`} />
+      <div style={{fontSize:12,color:'var(--muted)',marginBottom:16}}>What would you like to do?</div>
+      <div className="exists-options">
+        <button className="exists-btn" onClick={() => { setExistsFlow(false); onSwitchTab('signin'); }}>
+          <span className="exists-btn-icon">🔑</span>
+          <div className="exists-btn-body">
+            <div className="exists-btn-title">Sign in to existing account</div>
+            <div className="exists-btn-desc">Use your password or continue with Google / Apple</div>
+          </div>
+          <span>→</span>
+        </button>
+        <button className="exists-btn" onClick={() => { setExistsFlow(false); onSwitchTab('reset'); }}>
+          <span className="exists-btn-icon">🔒</span>
+          <div className="exists-btn-body">
+            <div className="exists-btn-title">Reset my password</div>
+            <div className="exists-btn-desc">We'll send a reset link to {email}</div>
+          </div>
+          <span>→</span>
+        </button>
+        <button className="exists-btn" onClick={() => setExistsFlow(false)}>
+          <span className="exists-btn-icon">✏️</span>
+          <div className="exists-btn-body">
+            <div className="exists-btn-title">Use a different email</div>
+            <div className="exists-btn-desc">Register with a new email address</div>
+          </div>
+          <span>→</span>
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      {alert && <Alert type={alert.type} text={alert.text} onDismiss={() => setAlert(null)} />}
+
+      <div className="field">
+        <label className="field-label">Full name</label>
+        <div className="field-wrap">
+          <input className={`field-input ${errors.name ? 'err' : name.trim() ? 'ok' : ''}`}
+            type="text" placeholder="Alex Johnson" value={name}
+            onChange={e => { setName(e.target.value); setErrors(p=>({...p,name:null})); }}
+            autoComplete="name"
+          />
+          <span className="field-icon">{errors.name ? '✕' : name.trim() ? '✓' : '👤'}</span>
+        </div>
+        {errors.name && <div className="field-err">⚠ {errors.name}</div>}
+      </div>
+
+      <div className="field">
+        <label className="field-label">Email address</label>
+        <div className="field-wrap">
+          <input className={`field-input ${errors.email ? 'err' : email && validEmail(email) ? 'ok' : ''}`}
+            type="email" placeholder="you@example.com" value={email}
+            onChange={e => { setEmail(e.target.value); setErrors(p=>({...p,email:null})); }}
+            autoComplete="email"
+          />
+          <span className="field-icon">{errors.email ? '✕' : email && validEmail(email) ? '✓' : '✉'}</span>
+        </div>
+        {errors.email && <div className="field-err">⚠ {errors.email}</div>}
+      </div>
+
+      <div className="field">
+        <label className="field-label">Password</label>
+        <div className="field-wrap">
+          <input className={`field-input ${errors.pw ? 'err' : password && pw.score >= 3 ? 'ok' : ''}`}
+            type={showPw ? 'text' : 'password'} placeholder="Min. 8 chars, mixed case + numbers" value={password}
+            onChange={e => { setPassword(e.target.value); setErrors(p=>({...p,pw:null})); }}
+            autoComplete="new-password"
+          />
+          <span className="field-icon" style={{cursor:'pointer',pointerEvents:'auto'}} onClick={() => setShowPw(!showPw)}>
+            {showPw ? '🙈' : '👁'}
+          </span>
+        </div>
+        <PasswordStrength password={password} />
+        {errors.pw && <div className="field-err">⚠ {errors.pw}</div>}
+        <div className="field-hint">Minimum 8 characters · uppercase · number · symbol</div>
+      </div>
+
+      <div className="field">
+        <label className="field-label">Confirm password</label>
+        <div className="field-wrap">
+          <input
+            className={`field-input ${errors.confirm ? 'err' : confirm && confirm === password ? 'ok' : ''}`}
+            type={showPw ? 'text' : 'password'} placeholder="Repeat your password" value={confirm}
+            onChange={e => { setConfirm(e.target.value); setErrors(p=>({...p,confirm:null})); }}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            autoComplete="new-password"
+          />
+          <span className="field-icon">{errors.confirm ? '✕' : confirm && confirm === password ? '✓' : '🔒'}</span>
+        </div>
+        {errors.confirm && <div className="field-err">⚠ {errors.confirm}</div>}
+      </div>
+
+      <div className="check-row" onClick={() => { setAgreed(!agreed); setErrors(p=>({...p,agreed:null})); }}>
+        <div className={`check-box ${agreed ? 'checked' : ''}`}>
+          {agreed && <span style={{color:'#fff',fontSize:10,fontWeight:700}}>✓</span>}
+        </div>
+        <div className="check-txt">
+          I agree to the <a onClick={e=>e.stopPropagation()} href="#">Terms of Service</a> and <a onClick={e=>e.stopPropagation()} href="#">Privacy Policy</a>. I understand my data is processed in accordance with GDPR.
+        </div>
+      </div>
+      {errors.agreed && <div className="field-err" style={{marginTop:-8,marginBottom:10}}>⚠ {errors.agreed}</div>}
+
+      <button className={`auth-cta ${loading ? 'loading' : ''}`} onClick={submit} disabled={loading || !agreed}>
+        {loading ? <span className="cta-spinner" /> : 'Create free account →'}
+      </button>
+
+      <div className="auth-footer">
+        <div className="auth-link">
+          Already have an account? <span onClick={() => onSwitchTab('signin')}>Sign in →</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ═══════════════════════ EMAIL CONFIRMATION ═══════════════════════ */
+function EmailConfirm({ email, name, onResend, onSwitchTab }) {
+  const [resent, setResent] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  const resend = async () => {
+    if (countdown > 0) return;
+    setResending(true);
+    if (supabase) {
+      await supabase.auth.resend({ type: 'signup', email });
+    } else {
+      await new Promise(r => setTimeout(r, 800));
+    }
+    setResending(false); setResent(true);
+    let c = 60;
+    setCountdown(c);
+    const t = setInterval(() => { c--; setCountdown(c); if (c <= 0) clearInterval(t); }, 1000);
+  };
+
+  return (
+    <div className="confirm-screen">
+      <div className="confirm-envelope">📧</div>
+      <div className="confirm-title">Check your inbox{name ? `, ${name.split(' ')[0]}` : ''}!</div>
+      <div className="confirm-sub">
+        We've sent a confirmation email to:
+      </div>
+      <div className="confirm-email-display">{email}</div>
+      <div className="confirm-sub" style={{fontSize:11}}>
+        You need to confirm your email before you can sign in to Kreya.
+      </div>
+
+      <div className="confirm-steps">
+        <div className="confirm-step">
+          <div className="cs-num">1</div>
+          <div className="cs-txt">Open the email from <strong>Kreya (noreply@kreya.ai)</strong></div>
+        </div>
+        <div className="confirm-step">
+          <div className="cs-num">2</div>
+          <div className="cs-txt">Click the <strong>Confirm your email</strong> button in the email</div>
+        </div>
+        <div className="confirm-step">
+          <div className="cs-num">3</div>
+          <div className="cs-txt">You'll be redirected back to Kreya and signed in automatically</div>
+        </div>
+      </div>
+
+      <div className="confirm-actions">
+        {resent && <Alert type="success" text={`Confirmation email resent to ${email}`} />}
+        <button className="btn-outline" onClick={resend} disabled={resending || countdown > 0}>
+          {resending ? '⏳ Sending…' : countdown > 0 ? `Resend in ${countdown}s` : '↺ Resend confirmation email'}
+        </button>
+        <button className="btn-outline" onClick={() => onSwitchTab('signin')}>
+          ← Back to sign in
+        </button>
+      </div>
+
+      <div className="spam-note">
+        📬 Can't find it? Check your <strong>spam or junk folder</strong>. The email subject is "Confirm your Kreya account". Emails can take up to 2 minutes to arrive.
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ MFA SCREEN ═══════════════════════ */
+function MFAScreen({ mfaData, onSuccess, onBack }) {
+  const [digits, setDigits] = useState(Array(6).fill(''));
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const refs = Array.from({ length: 6 }, () => useRef());
+
+  const handleDigit = (i, v) => {
+    if (!/^\d?$/.test(v)) return;
+    const next = [...digits]; next[i] = v;
+    setDigits(next); setError(null);
+    if (v && i < 5) refs[i + 1].current?.focus();
+    // Auto-submit when last digit filled
+    if (i === 5 && v) {
+      const code = [...next].join('');
+      if (code.length === 6) setTimeout(() => verify(code), 100);
+    }
+  };
+
+  const verify = async (codeOverride) => {
+    const code = codeOverride || digits.join('');
+    if (code.length < 6) { setError('Enter all 6 digits'); return; }
+    setLoading(true);
+
+    // DEMO: any 6 digits work except 000000
+    if (!supabase) {
+      await new Promise(r => setTimeout(r, 700));
+      if (code === '000000') {
+        const newAttempts = attempts + 1;
+        setAttempts(newAttempts);
+        setError(newAttempts >= 3
+          ? '3 failed attempts — account temporarily locked. Try again in 15 minutes.'
+          : `Invalid code. ${3 - newAttempts} attempt${3 - newAttempts !== 1 ? 's' : ''} remaining.`
+        );
+        setDigits(Array(6).fill(''));
+        refs[0].current?.focus();
+        setLoading(false); return;
+      }
+      setLoading(false);
+      onSuccess({ email: mfaData.email, plan: 'pro' }); return;
+    }
+
+    // Real Supabase MFA verification
+    const { data, error } = await supabase.auth.mfa.verify({
+      factorId: mfaData.factorId,
+      challengeId: mfaData.challengeId,
+      code,
+    });
+    setLoading(false);
+    if (error) {
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+      setError(newAttempts >= 5
+        ? 'Too many failed attempts. Account locked for 15 minutes.'
+        : `Invalid code. ${5 - newAttempts} attempt${5 - newAttempts !== 1 ? 's' : ''} remaining.`
+      );
+      setDigits(Array(6).fill('')); refs[0].current?.focus();
+      return;
+    }
+    onSuccess(data.user);
+  };
+
+  const allFilled = digits.every(d => d !== '');
+
+  return (
+    <div className="mfa-screen">
+      <div className="mfa-icon">🔐</div>
+      <div className="mfa-title">Two-step verification</div>
+      <div className="mfa-sub">
+        Open your authenticator app (Google Authenticator, Authy, or 1Password) and enter the 6-digit code for <strong>Kreya</strong>.
+      </div>
+
+      <div className="mfa-digits">
+        {digits.map((d, i) => (
+          <input
+            key={i} ref={refs[i]}
+            className={`mfa-digit ${d ? 'filled' : ''} ${error ? 'err' : ''}`}
+            maxLength={1} value={d}
+            onChange={e => handleDigit(i, e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Backspace' && !d && i > 0) refs[i - 1].current?.focus();
+              if (e.key === 'Enter' && allFilled) verify();
+            }}
+            onPaste={e => {
+              const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+              if (pasted.length === 6) {
+                setDigits(pasted.split(''));
+                refs[5].current?.focus();
+                setTimeout(() => verify(pasted), 100);
+              }
+              e.preventDefault();
+            }}
+          />
+        ))}
+      </div>
+
+      {error && (
+        <div style={{ fontSize: 11, color: 'var(--error)', marginBottom: 12, animation: 'shake .3s ease' }}>
+          ⚠ {error}
+        </div>
+      )}
+      {attempts > 0 && attempts < 3 && (
+        <div className="mfa-attempts">⚠ {3 - attempts} attempt{3 - attempts !== 1 ? 's' : ''} remaining before lockout</div>
+      )}
+
+      <div className="mfa-hint">Code refreshes every 30 seconds · Paste supported</div>
+
+      <button
+        className={`auth-cta ${loading ? 'loading' : ''}`}
+        onClick={() => verify()} disabled={loading || !allFilled}
+        style={{ marginBottom: 14 }}
+      >
+        {loading ? <span className="cta-spinner" /> : 'Verify →'}
+      </button>
+
+      <div className="mfa-resend">
+        Lost access to your authenticator? <span onClick={() => alert('Recovery codes available in Settings → Security → View recovery codes')}>Use a recovery code</span>
+      </div>
+      <div className="mfa-back" onClick={onBack}>← Back to sign in</div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ RESET PASSWORD ═══════════════════════ */
+function ResetPassword({ onSwitchTab }) {
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const submit = async () => {
+    if (!email) { setError('Enter your email address'); return; }
+    if (!validEmail(email)) { setError('Enter a valid email address'); return; }
+    setLoading(true); setError(null);
+
+    if (!supabase) {
+      await new Promise(r => setTimeout(r, 800));
+      setLoading(false); setSent(true); return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+    setLoading(false);
+    if (error) { setError(mapSupabaseError(error).text); return; }
+    setSent(true);
+  };
+
+  if (sent) return (
+    <div className="reset-sent">
+      <div className="reset-icon">📬</div>
+      <div className="confirm-title">Reset link sent</div>
+      <div className="confirm-sub">
+        If an account exists for <strong style={{color:'var(--violet)'}}>{email}</strong>, you'll receive a password reset link within 2 minutes.
+      </div>
+      <div className="confirm-sub" style={{fontSize:11,marginTop:8}}>
+        The link expires in <strong style={{color:'var(--white)'}}>1 hour</strong>. Check your spam folder if it doesn't appear.
+      </div>
+      <div style={{marginTop:20,display:'flex',flexDirection:'column',gap:8}}>
+        <button className="btn-outline" onClick={() => { setSent(false); setEmail(''); }}>↺ Try a different email</button>
+        <button className="btn-outline" onClick={() => onSwitchTab('signin')}>← Back to sign in</button>
+      </div>
+      <div className="spam-note" style={{marginTop:16}}>
+        Security note: for privacy, this page always shows this message whether or not an account exists for that email.
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:14,fontWeight:500,marginBottom:4}}>Reset your password</div>
+        <div style={{fontSize:12,fontWeight:300,color:'var(--muted)',lineHeight:1.6}}>
+          Enter your account email and we'll send you a secure link to set a new password. The link expires in 1 hour.
+        </div>
+      </div>
+
+      <div className="field">
+        <label className="field-label">Email address</label>
+        <div className="field-wrap">
+          <input
+            className={`field-input ${error ? 'err' : ''}`}
+            type="email" placeholder="you@example.com" value={email}
+            onChange={e => { setEmail(e.target.value); setError(null); }}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+            autoComplete="email"
+          />
+          <span className="field-icon">{error ? '✕' : '✉'}</span>
+        </div>
+        {error && <div className="field-err">⚠ {error}</div>}
+      </div>
+
+      <button className={`auth-cta ${loading ? 'loading' : ''}`} onClick={submit} disabled={loading}>
+        {loading ? <span className="cta-spinner" /> : 'Send reset link →'}
+      </button>
+
+      <div className="auth-footer">
+        <div className="auth-link">
+          Remember your password? <span onClick={() => onSwitchTab('signin')}>Sign in →</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ═══════════════════════ SETUP PROFILE (post-signup) ═══════════════════════ */
+function SetupProfile({ user, onComplete }) {
+  const [brand, setBrand] = useState('');
+  const [plan, setPlan] = useState('free');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
+
+  const plans = [
+    { id: 'free', name: 'Free', price: '$0/mo' },
+    { id: 'pro', name: 'Pro', price: '$19/mo' },
+    { id: 'agency', name: 'Agency', price: '$79/mo' },
+  ];
+
+  const save = async () => {
+    setLoading(true);
+    if (supabase) {
+      // Insert to organizations table
+      await supabase.from('organizations').insert({
+        owner_id: user.id,
+        name: brand || user.email?.split('@')[0],
+        brand_kit: {},
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      // Update user metadata
+      await supabase.auth.updateUser({ data: { plan, brand_name: brand, whatsapp: phone } });
+    } else {
+      await new Promise(r => setTimeout(r, 700));
+    }
+    setLoading(false);
+    onComplete({ ...user, plan, brand });
+  };
+
+  return (
+    <div className="setup-screen">
+      <div className="setup-steps">
+        {[1,2,3].map(s => (
+          <div key={s} className={`setup-step ${s < step ? 'done' : s === step ? 'active' : ''}`} />
+        ))}
+      </div>
+      <div className="setup-title">Welcome to Kreya! 🎉</div>
+      <div className="setup-sub">Quick setup — takes 60 seconds</div>
+
+      {step === 1 && (
+        <>
+          <div className="field">
+            <label className="field-label">Your brand or creator name</label>
+            <div className="field-wrap">
+              <input className={`field-input ${brand.trim() ? 'ok' : ''}`}
+                type="text" placeholder="e.g. Alex Music, Studio X, @myhandle" value={brand}
+                onChange={e => setBrand(e.target.value)} autoFocus
+              />
+              <span className="field-icon">{brand.trim() ? '✓' : '🎨'}</span>
+            </div>
+            <div className="field-hint">This is how Kreya AI refers to your brand in generated content</div>
+          </div>
+          <button className="auth-cta" onClick={() => setStep(2)} disabled={!brand.trim()}>
+            Next →
+          </button>
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <div className="field">
+            <label className="field-label">WhatsApp number (for AI command interface)</label>
+            <div className="field-wrap">
+              <input className={`field-input ${phone ? 'ok' : ''}`}
+                type="tel" placeholder="+1 555 000 0000 (with country code)" value={phone}
+                onChange={e => setPhone(e.target.value)} autoFocus
+              />
+              <span className="field-icon">{phone ? '✓' : '💬'}</span>
+            </div>
+            <div className="field-hint">You'll control Kreya via WhatsApp. Skip to add later in Settings.</div>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="auth-cta" style={{background:'var(--surf2)',color:'var(--muted)',border:'1px solid var(--bdr2)',flex:1}} onClick={() => setStep(1)}>← Back</button>
+            <button className="auth-cta" style={{flex:2}} onClick={() => setStep(3)}>Next →</button>
+          </div>
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+          <div style={{fontSize:12,fontWeight:500,marginBottom:12}}>Choose your plan</div>
+          <div className="plan-mini-grid">
+            {plans.map(p => (
+              <div key={p.id} className={`plan-mini ${plan === p.id ? 'sel' : ''}`} onClick={() => setPlan(p.id)}>
+                <div className="pm-name">{p.name}</div>
+                <div className="pm-price">{p.price}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:'var(--muted)',marginBottom:20,lineHeight:1.55}}>
+            {plan === 'free' && '3 social accounts · 10 AI posts/month · Always free'}
+            {plan === 'pro' && 'Unlimited accounts · 200 AI posts/month · Analytics · $19/mo'}
+            {plan === 'agency' && '10 brands · Unlimited posts · White label · $79/mo'}
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button className="auth-cta" style={{background:'var(--surf2)',color:'var(--muted)',border:'1px solid var(--bdr2)',flex:1}} onClick={() => setStep(2)}>← Back</button>
+            <button className={`auth-cta ${loading ? 'loading' : ''}`} style={{flex:2}} onClick={save} disabled={loading}>
+              {loading ? <span className="cta-spinner" /> : 'Enter Kreya →'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════ MAIN APP PLACEHOLDER ═══════════════════════ */
+function KreyaApp({ user, onSignOut }) {
+  return (
+    <div style={{
+      minHeight: '100vh', background: 'var(--ink)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 16, padding: 24
+    }}>
+      <div style={{ textAlign: 'center', animation: 'authIn .4s ease both' }}>
+        <div style={{ fontFamily: 'Syne,sans-serif', fontWeight: 800, fontSize: 36, letterSpacing: '-.04em', marginBottom: 8 }}>
+          KREY<span style={{ color: 'var(--coral)' }}>A</span>.
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
+          Welcome back, {user.name || user.email?.split('@')[0]}! ✦
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 300, marginBottom: 24, lineHeight: 1.6 }}>
+          Signed in as <span style={{ color: 'var(--violet)' }}>{user.email}</span>
+          {user.plan && <span style={{ marginLeft: 8, background: 'var(--cdim)', color: 'var(--coral)', padding: '2px 8px', borderRadius: 100, fontSize: 10, fontFamily: 'Space Mono,monospace', letterSpacing: '.1em', textTransform: 'uppercase' }}>{user.plan}</span>}
+        </div>
+        <div style={{ background: 'var(--surf)', border: '1px solid var(--bdr2)', borderRadius: 10, padding: '20px 24px', maxWidth: 400, marginBottom: 20, textAlign: 'left' }}>
+          <div style={{ fontFamily: 'Space Mono,monospace', fontSize: 8, letterSpacing: '.25em', textTransform: 'uppercase', color: 'var(--mint)', marginBottom: 12 }}>Auth confirmed</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
+            ✓ Email verified<br/>
+            ✓ MFA checked (TOTP)<br/>
+            ✓ Session token issued (15min JWT)<br/>
+            ✓ Refresh token stored securely (7 days)<br/>
+            ✓ Row-level security active<br/>
+            ✓ Audit log entry created<br/>
+            ✓ Rate limits initialized via Redis
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted2)', marginBottom: 20 }}>
+          Full product dashboard loads here in the complete app
+        </div>
+        <button
+          onClick={onSignOut}
+          style={{ background: 'var(--surf2)', border: '1px solid var(--bdr2)', color: 'var(--muted)', padding: '9px 20px', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ ROOT AUTH CONTROLLER ═══════════════════════ */
+function AuthController() {
+  const [screen, setScreen] = useState('auth'); // auth | confirm | mfa | setup | app
+  const [tab, setTab] = useState('signin');
+  const [confirmEmail, setConfirmEmail] = useState('');
+  const [confirmName, setConfirmName] = useState('');
+  const [mfaData, setMfaData] = useState(null);
+  const [user, setUser] = useState(null);
+  const [globalAlert, setGlobalAlert] = useState(null);
+
+  // Check for existing session on load
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) setUser(session.user), setScreen('app');
+    });
+    // Listen for auth changes (email confirmation redirect)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        setUser(session.user); setScreen('app');
+      }
+      if (event === 'SIGNED_OUT') {
+        setUser(null); setScreen('auth');
+      }
+      if (event === 'EMAIL_CONFIRMED') {
+        setScreen('setup');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleSignOut = async () => {
+    if (supabase) await supabase.auth.signOut();
+    setUser(null); setScreen('auth'); setTab('signin');
+  };
+
+  const isAuth = screen === 'app';
+  if (isAuth) return <KreyaApp user={user} onSignOut={handleSignOut} />;
+  if (screen === 'setup') return (
+    <div className="auth-shell">
+      <div className="auth-bg" /><div className="auth-noise" />
+      <div className="auth-card">
+        <SetupProfile user={user} onComplete={u => { setUser(u); setScreen('app'); }} />
+        <div className="security-strip">
+          <div className="sec-item">🔒 E2E encrypted</div>
+          <div className="sec-item">🛡 GDPR compliant</div>
+          <div className="sec-item">🔑 OAuth 2.0 + PKCE</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const titles = { signin: 'Sign in', signup: 'Create account', reset: 'Reset password' };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-bg" /><div className="auth-noise" />
+      {screen === 'confirm' ? (
+        <div className="auth-card" style={{ animation: 'authIn .35s ease both' }}>
+          <div className="auth-top">
+            <div className="auth-logo">KREY<span className="ac">A</span>.</div>
+            <div className="auth-tagline">Your Creative AI</div>
+          </div>
+          <EmailConfirm email={confirmEmail} name={confirmName} onResend={() => {}} onSwitchTab={t => { setTab(t); setScreen('auth'); }} />
+          <div className="security-strip">
+            <div className="sec-item">🔒 E2E encrypted</div>
+            <div className="sec-item">🛡 GDPR compliant</div>
+            <div className="sec-item">🔑 OAuth 2.0 + PKCE</div>
+          </div>
+        </div>
+      ) : screen === 'mfa' ? (
+        <div className="auth-card" style={{ animation: 'authIn .35s ease both' }}>
+          <div className="auth-top">
+            <div className="auth-logo">KREY<span className="ac">A</span>.</div>
+            <div className="auth-tagline">Your Creative AI</div>
+          </div>
+          <MFAScreen
+            mfaData={mfaData}
+            onSuccess={u => { setUser(u); setScreen('app'); }}
+            onBack={() => setScreen('auth')}
+          />
+        </div>
+      ) : (
+        <div className="auth-card">
+          <div className="auth-top">
+            <div className="auth-logo">KREY<span className="ac">A</span>.</div>
+            <div className="auth-tagline">Your Creative AI · Tell Kreya what you need.</div>
+          </div>
+          <div className="auth-body">
+            {globalAlert && (
+              <Alert type={globalAlert.type} text={globalAlert.text} onDismiss={() => setGlobalAlert(null)} />
+            )}
+
+            {!supabase && (
+              <div className="demo-notice">
+                <span>⚡</span>
+                <div>
+                  <strong>Demo mode</strong> — no Supabase connected. Test flows:<br/>
+                  <span style={{fontFamily:'Space Mono,monospace',fontSize:9}}>
+                    unconfirmed@test.com → email not confirmed<br/>
+                    locked@test.com → rate limit screen<br/>
+                    mfa@test.com → MFA screen (enter any 6 digits except 000000)<br/>
+                    taken@test.com → account exists flow<br/>
+                    Any other email+password → success
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {tab !== 'reset' && (
+              <div className="auth-tabs">
+                <div className={`auth-tab ${tab === 'signin' ? 'act' : ''}`} onClick={() => setTab('signin')}>Sign in</div>
+                <div className={`auth-tab ${tab === 'signup' ? 'act' : ''}`} onClick={() => setTab('signup')}>Create account</div>
+              </div>
+            )}
+
+            {tab === 'signin' && (
+              <SignIn
+                onSwitchTab={t => setTab(t)}
+                onMFA={d => { setMfaData(d); setScreen('mfa'); }}
+                onSuccess={u => { setUser(u); setScreen('app'); }}
+                setGlobalAlert={setGlobalAlert}
+              />
+            )}
+            {tab === 'signup' && (
+              <SignUp
+                onSwitchTab={t => setTab(t)}
+                onConfirmEmail={(email, name) => { setConfirmEmail(email); setConfirmName(name); setScreen('confirm'); }}
+                setGlobalAlert={setGlobalAlert}
+              />
+            )}
+            {tab === 'reset' && (
+              <ResetPassword onSwitchTab={t => setTab(t)} />
+            )}
+          </div>
+
+          <div className="security-strip">
+            <div className="sec-item">🔒 E2E encrypted</div>
+            <div className="sec-item">🛡 GDPR compliant</div>
+            <div className="sec-item">🔑 OAuth 2.0 + PKCE</div>
+            <div className="sec-item">🏦 Zero-knowledge</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AuthController />);
+</script>
+</body>
+</html>

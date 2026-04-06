@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreya — Instagram Integration Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#07070E;--dark:#0C0A1A;--surf:#121126;--surf2:#191733;--surf3:#221F3E;--bdr:rgba(255,255,255,.07);--bdr2:rgba(255,255,255,.14);--coral:#FF4F3B;--violet:#5E35FF;--mint:#00E5A0;--gold:#FFD166;--muted:rgba(255,255,255,.42);--muted2:rgba(255,255,255,.2);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--ink);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:3px;} ::-webkit-scrollbar-thumb{background:var(--surf3);border-radius:2px;}
+.wrap{max-width:860px;margin:0 auto;padding:40px 20px 80px;}
+/* header */
+.hdr{padding:40px 20px 32px;background:linear-gradient(180deg,var(--dark),var(--ink));border-bottom:1px solid var(--bdr);margin-bottom:0;position:relative;overflow:hidden;}
+.hdr::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 0% 50%,rgba(255,79,59,.2),transparent 60%),radial-gradient(ellipse 50% 60% at 100% 50%,rgba(94,53,255,.15),transparent 60%);}
+.hdr-inner{max-width:860px;margin:0 auto;position:relative;}
+.hdr-badge{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:var(--mint);margin-bottom:10px;display:block;}
+.hdr-title{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(24px,4vw,36px);letter-spacing:-.035em;margin-bottom:6px;}
+.hdr-title span{color:var(--coral);}
+.hdr-sub{font-size:13px;font-weight:300;color:var(--muted);max-width:600px;line-height:1.65;}
+/* steps */
+.steps-nav{display:flex;gap:2px;margin:0 0 0;background:var(--surf);border-bottom:1px solid var(--bdr);overflow-x:auto;}
+.step-tab{padding:11px 18px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s;display:flex;align-items:center;gap:7px;}
+.step-tab.act{color:var(--coral);border-bottom-color:var(--coral);}
+.step-tab .sn{width:18px;height:18px;border-radius:50%;background:var(--surf3);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;}
+.step-tab.act .sn{background:var(--coral);color:#fff;}
+.step-tab.done .sn{background:var(--mint);color:var(--ink);}
+/* content */
+.step-content{display:none;} .step-content.act{display:block;}
+h2{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(18px,2.5vw,24px);letter-spacing:-.025em;margin-bottom:6px;margin-top:32px;}
+h2:first-child{margin-top:0;}
+h3{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;letter-spacing:-.01em;margin:20px 0 8px;}
+p{font-size:13px;color:var(--muted);font-weight:300;margin-bottom:12px;line-height:1.7;}
+p strong{color:#fff;font-weight:500;}
+/* code */
+.code{background:#040410;border:1px solid var(--bdr2);border-radius:6px;overflow:hidden;margin:12px 0;}
+.code-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--surf2);border-bottom:1px solid var(--bdr);}
+.code-fn{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.code-lang{font-family:'Space Mono',monospace;font-size:7px;letter-spacing:.12em;text-transform:uppercase;padding:2px 6px;border-radius:2px;}
+.l-ts{background:rgba(94,53,255,.2);color:#a080ff;}
+.l-sql{background:rgba(255,209,102,.12);color:var(--gold);}
+.l-sh{background:rgba(0,229,160,.1);color:var(--mint);}
+.l-env{background:rgba(255,79,59,.1);color:var(--coral);}
+.copy-btn{font-family:'Space Mono',monospace;font-size:7px;letter-spacing:.1em;text-transform:uppercase;background:var(--surf3);border:1px solid var(--bdr);color:var(--muted);padding:3px 9px;border-radius:3px;cursor:pointer;transition:all .15s;}
+.copy-btn:hover{border-color:var(--mint);color:var(--mint);}
+.copy-btn.ok{border-color:var(--mint);color:var(--mint);}
+pre{padding:16px;font-family:'Space Mono',monospace;font-size:10.5px;line-height:1.75;overflow-x:auto;color:rgba(255,255,255,.82);}
+.kw{color:#a080ff;} .fn{color:#6EB5FF;} .st{color:var(--gold);} .cm{color:var(--muted2);font-style:italic;} .cn{color:var(--mint);} .op{color:var(--coral);}
+/* banners */
+.banner{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:5px;margin:12px 0;font-size:12px;line-height:1.55;border:1px solid transparent;}
+.b-warn{background:rgba(255,209,102,.08);border-color:rgba(255,209,102,.2);color:#ffe598;}
+.b-ok{background:rgba(0,229,160,.08);border-color:rgba(0,229,160,.2);color:#80f0ce;}
+.b-info{background:rgba(94,53,255,.1);border-color:rgba(94,53,255,.25);color:#b0a0ff;}
+.b-tip{background:rgba(255,79,59,.08);border-color:rgba(255,79,59,.2);color:#ffb0a8;}
+.bi{font-size:15px;flex-shrink:0;margin-top:1px;}
+/* checklist */
+.checklist{list-style:none;margin:12px 0;}
+.checklist li{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdr);font-size:13px;font-weight:300;color:var(--muted);}
+.checklist li:last-child{border:none;}
+.checklist li::before{content:'□';font-size:14px;color:var(--muted2);flex-shrink:0;margin-top:1px;cursor:pointer;}
+.checklist li.done{color:rgba(255,255,255,.55);}
+.checklist li.done::before{content:'✓';color:var(--mint);}
+/* flow */
+.flow{display:flex;gap:2px;margin:16px 0;}
+@media(max-width:600px){.flow{flex-direction:column;}}
+.flow-step{flex:1;background:var(--surf);border:1px solid var(--bdr);padding:14px;border-radius:4px;}
+.flow-n{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.2em;color:var(--coral);margin-bottom:6px;}
+.flow-t{font-size:12px;font-weight:600;margin-bottom:3px;}
+.flow-d{font-size:10px;color:var(--muted);font-weight:300;line-height:1.5;}
+/* nav buttons */
+.nav-btns{display:flex;justify-content:space-between;margin-top:32px;padding-top:20px;border-top:1px solid var(--bdr);}
+.btn{padding:9px 18px;border-radius:5px;border:none;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:opacity .15s;}
+.btn:hover{opacity:.84;}
+.btn-c{background:var(--coral);color:#fff;}
+.btn-g{background:var(--surf2);color:var(--muted);border:1px solid var(--bdr2);}
+/* file tree */
+.tree{background:#040410;border:1px solid var(--bdr2);border-radius:6px;padding:16px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.9;margin:12px 0;}
+.tree-dir{color:#a080ff;} .tree-file{color:var(--mint);} .tree-new{color:var(--coral);font-size:9px;margin-left:6px;letter-spacing:.1em;}
+/* progress */
+.progress{display:flex;gap:6px;margin-bottom:32px;padding:16px 20px;background:var(--surf);border-bottom:1px solid var(--bdr);}
+.prog-step{flex:1;height:3px;border-radius:2px;background:var(--surf3);}
+.prog-step.done{background:var(--coral);}
+.prog-step.act{background:var(--violet);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-inner">
+    <span class="hdr-badge">Instagram Direct Integration · Free · No third-party API</span>
+    <div class="hdr-title">Drop-in Instagram integration<br>for <span>Kreya</span> + Next.js</div>
+    <div class="hdr-sub">6 steps. ~45 minutes. Uses Meta's official Graph API v24.0 directly — zero cost, full control, no monthly fees to third parties.</div>
+  </div>
+</div>
+
+<div id="progress" class="progress">
+  <div class="prog-step act" id="prog-0"></div>
+  <div class="prog-step" id="prog-1"></div>
+  <div class="prog-step" id="prog-2"></div>
+  <div class="prog-step" id="prog-3"></div>
+  <div class="prog-step" id="prog-4"></div>
+  <div class="prog-step" id="prog-5"></div>
+</div>
+
+<div class="steps-nav" id="steps-nav">
+  <div class="step-tab act" onclick="goStep(0)" id="tab-0"><span class="sn">1</span>Meta Setup</div>
+  <div class="step-tab" onclick="goStep(1)" id="tab-1"><span class="sn">2</span>Install Files</div>
+  <div class="step-tab" onclick="goStep(2)" id="tab-2"><span class="sn">3</span>Database</div>
+  <div class="step-tab" onclick="goStep(3)" id="tab-3"><span class="sn">4</span>Env Variables</div>
+  <div class="step-tab" onclick="goStep(4)" id="tab-4"><span class="sn">5</span>Schedule Cron</div>
+  <div class="step-tab" onclick="goStep(5)" id="tab-5"><span class="sn">6</span>Test It</div>
+</div>
+
+<div class="wrap">
+
+<!-- ════════ STEP 1: META SETUP ════════ -->
+<div class="step-content act" id="step-0">
+  <h2>Step 1 — Create your Meta App</h2>
+  <p>This is the one-time setup on Meta's developer portal. Takes about 15 minutes. The API itself is <strong>free</strong> — Meta does not charge for Graph API access.</p>
+
+  <div class="banner b-warn"><span class="bi">⚡</span><div><strong>Before you start:</strong> Your users need Instagram Business or Creator accounts. Personal accounts cannot connect. Add this requirement clearly in your Kreya onboarding.</div></div>
+
+  <h3>1.1 Create a Meta Developer account</h3>
+  <p>Go to <strong style="color:var(--violet)">developers.facebook.com</strong> → Log in with your Facebook account → Register as a developer (if not already).</p>
+
+  <h3>1.2 Create the app</h3>
+  <ul class="checklist" id="checklist-1">
+    <li onclick="toggleCheck(this)">Click <strong>Create App</strong> → choose <strong>Business</strong> as app type</li>
+    <li onclick="toggleCheck(this)">App name: <strong>Kreya</strong> (or anything — users won't see this during OAuth)</li>
+    <li onclick="toggleCheck(this)">Contact email: your email</li>
+    <li onclick="toggleCheck(this)">Click <strong>Create App</strong> → complete security check</li>
+  </ul>
+
+  <h3>1.3 Add Instagram Platform product</h3>
+  <ul class="checklist">
+    <li onclick="toggleCheck(this)">In your app dashboard → <strong>Add Product</strong></li>
+    <li onclick="toggleCheck(this)">Find <strong>Instagram Platform</strong> → click <strong>Set Up</strong></li>
+    <li onclick="toggleCheck(this)">Choose <strong>"Instagram API with Instagram Login"</strong> (not Graph API — that's the old one requiring a Facebook Page)</li>
+  </ul>
+
+  <div class="banner b-ok"><span class="bi">✓</span><div><strong>Instagram Platform API (July 2024)</strong> — this is the new direct login API. Users authenticate with Instagram directly, no Facebook Page required. Works for Business and Creator accounts.</div></div>
+
+  <h3>1.4 Configure OAuth redirect URIs</h3>
+  <p>In Instagram → API Setup with Instagram Login → <strong>OAuth Redirect URIs</strong>, add both:</p>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn">Redirect URIs to add in Meta Console</div></div>
+    <pre>http://localhost:3000/api/instagram/callback
+https://kreya.ai/api/instagram/callback</pre>
+  </div>
+
+  <h3>1.5 Set required permissions</h3>
+  <p>In Instagram → Permissions and Features, request:</p>
+  <ul class="checklist">
+    <li onclick="toggleCheck(this)"><code style="color:var(--mint);font-family:Space Mono,monospace;font-size:11px">instagram_business_basic</code> — read profile info</li>
+    <li onclick="toggleCheck(this)"><code style="color:var(--mint);font-family:Space Mono,monospace;font-size:11px">instagram_business_content_publish</code> — post content</li>
+  </ul>
+
+  <div class="banner b-info"><span class="bi">ℹ</span><div>During development, you can test with your own IG account as a <strong>test user</strong> — no App Review needed. You only need to submit for App Review when you want real users to connect. Review takes 1–4 weeks but runs in the background while you build.</div></div>
+
+  <h3>1.6 Get your credentials</h3>
+  <p>Go to Instagram → <strong>API Setup with Instagram Login</strong>. Copy two values:</p>
+  <ul class="checklist">
+    <li onclick="toggleCheck(this)"><strong>Instagram App ID</strong> — paste as <code style="color:var(--mint);font-size:11px;font-family:Space Mono,monospace">INSTAGRAM_APP_ID</code></li>
+    <li onclick="toggleCheck(this)"><strong>Instagram App Secret</strong> — paste as <code style="color:var(--mint);font-size:11px;font-family:Space Mono,monospace">INSTAGRAM_APP_SECRET</code></li>
+  </ul>
+  <div class="banner b-tip"><span class="bi">⚠</span><div>The Instagram App ID is <strong>different</strong> from the Facebook App ID shown in the main app settings. Make sure you copy from the Instagram product section.</div></div>
+
+  <div class="nav-btns">
+    <div></div>
+    <button class="btn btn-c" onclick="goStep(1)">Next: Install files →</button>
+  </div>
+</div>
+
+<!-- ════════ STEP 2: INSTALL FILES ════════ -->
+<div class="step-content" id="step-1">
+  <h2>Step 2 — Drop the files into your Next.js project</h2>
+  <p>All files were generated for you. Copy them into your project at the paths shown below.</p>
+
+  <h3>2.1 Install dependencies</h3>
+  <div class="code">
+    <div class="code-hdr">
+      <div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div>
+      <button class="copy-btn" onclick="copyCode(this,'npm install @upstash/redis @upstash/ratelimit @upstash/qstash')">Copy</button>
+    </div>
+    <pre><span class="cm"># From your Kreya project root</span>
+npm install @upstash/redis @upstash/ratelimit @upstash/qstash
+
+<span class="cm"># Verify your Supabase SSR package is current</span>
+npm install @supabase/ssr@latest</pre>
+  </div>
+
+  <h3>2.2 File structure — drop these files in exactly</h3>
+  <div class="tree">
+<span class="tree-dir">kreya/</span>
+├── <span class="tree-dir">types/</span>
+│   └── <span class="tree-file">instagram.ts</span> <span class="tree-new">← NEW</span>
+├── <span class="tree-dir">lib/</span>
+│   └── <span class="tree-dir">instagram/</span>
+│       ├── <span class="tree-file">crypto.ts</span>   <span class="tree-new">← NEW — AES-256 token encryption</span>
+│       ├── <span class="tree-file">oauth.ts</span>    <span class="tree-new">← NEW — OAuth flow + token management</span>
+│       └── <span class="tree-file">publish.ts</span>  <span class="tree-new">← NEW — post images, videos, reels, carousels</span>
+├── <span class="tree-dir">app/</span>
+│   └── <span class="tree-dir">api/</span>
+│       └── <span class="tree-dir">instagram/</span>
+│           ├── <span class="tree-dir">oauth/</span>
+│           │   └── <span class="tree-file">route.ts</span>       <span class="tree-new">← NEW — starts OAuth flow</span>
+│           ├── <span class="tree-dir">callback/</span>
+│           │   └── <span class="tree-file">route.ts</span>       <span class="tree-new">← NEW — handles IG redirect back</span>
+│           ├── <span class="tree-dir">post/</span>
+│           │   └── <span class="tree-file">route.ts</span>       <span class="tree-new">← NEW — publishes content</span>
+│           ├── <span class="tree-dir">refresh/</span>
+│           │   └── <span class="tree-file">route.ts</span>       <span class="tree-new">← NEW — nightly token refresh cron</span>
+│           ├── <span class="tree-dir">disconnect/</span>
+│           │   └── <span class="tree-file">route.ts</span>       <span class="tree-new">← NEW — disconnects account</span>
+│           └── <span class="tree-dir">status/</span>
+│               └── <span class="tree-file">route.ts</span>       <span class="tree-new">← NEW — connection health check</span>
+├── <span class="tree-dir">supabase/</span>
+│   └── <span class="tree-dir">migrations/</span>
+│       └── <span class="tree-file">003_instagram_direct.sql</span>  <span class="tree-new">← NEW — run in Supabase dashboard</span>
+└── <span class="tree-file">.env.instagram.example</span>  <span class="tree-new">← NEW — add contents to .env.local</span>
+  </div>
+
+  <h3>2.3 What each file does</h3>
+  <div class="flow">
+    <div class="flow-step"><div class="flow-n">lib/instagram/crypto.ts</div><div class="flow-t">Token Encryption</div><div class="flow-d">AES-256-CBC. Encrypts tokens before DB. Decrypts server-side only before API calls. Plaintext never touches the database.</div></div>
+    <div class="flow-step"><div class="flow-n">lib/instagram/oauth.ts</div><div class="flow-t">OAuth + Token Management</div><div class="flow-d">Builds auth URLs, exchanges codes, gets long-lived tokens (60 days), handles refresh logic.</div></div>
+    <div class="flow-step"><div class="flow-n">lib/instagram/publish.ts</div><div class="flow-t">Publishing Engine</div><div class="flow-d">2-step publish (container → publish). Handles images, videos, Reels, carousels. Polls until container ready.</div></div>
+  </div>
+  <div class="flow">
+    <div class="flow-step"><div class="flow-n">api/instagram/oauth</div><div class="flow-t">OAuth Start</div><div class="flow-d">Generates secure state, stores in Redis, redirects user to Instagram.</div></div>
+    <div class="flow-step"><div class="flow-n">api/instagram/callback</div><div class="flow-t">OAuth Return</div><div class="flow-d">Validates state (CSRF), exchanges code, encrypts token, saves to Supabase.</div></div>
+    <div class="flow-step"><div class="flow-n">api/instagram/post</div><div class="flow-t">Publish Content</div><div class="flow-d">Auth check, plan limits, rate limit, decrypt token, publish, save record, audit log.</div></div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="goStep(0)">← Back</button>
+    <button class="btn btn-c" onclick="goStep(2)">Next: Database →</button>
+  </div>
+</div>
+
+<!-- ════════ STEP 3: DATABASE ════════ -->
+<div class="step-content" id="step-2">
+  <h2>Step 3 — Run the database migration</h2>
+  <p>Open your <strong>Supabase Dashboard</strong> → <strong>SQL Editor</strong> → <strong>New query</strong> → paste and run:</p>
+
+  <div class="code">
+    <div class="code-hdr">
+      <div class="code-fn"><span>supabase/migrations/003_instagram_direct.sql</span><span class="code-lang l-sql">SQL</span></div>
+      <button class="copy-btn" onclick="copySql(this)">Copy SQL</button>
+    </div>
+    <pre id="sql-block">CREATE TABLE instagram_accounts (
+  id                    UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id                UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  instagram_user_id     TEXT NOT NULL,
+  username              TEXT NOT NULL,
+  name                  TEXT,
+  profile_picture_url   TEXT,
+  followers_count       INT DEFAULT 0,
+  account_type          TEXT CHECK (account_type IN ('BUSINESS','CREATOR','PERSONAL')),
+  is_active             BOOLEAN DEFAULT TRUE,
+  encrypted_token       TEXT NOT NULL,
+  token_iv              TEXT NOT NULL,
+  token_expires_at      TIMESTAMPTZ NOT NULL,
+  connected_at          TIMESTAMPTZ DEFAULT NOW(),
+  disconnected_at       TIMESTAMPTZ,
+  UNIQUE (org_id, instagram_user_id)
+);
+
+CREATE TABLE instagram_posts (
+  id                    UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id                UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  instagram_account_id  UUID NOT NULL REFERENCES instagram_accounts(id),
+  caption               TEXT NOT NULL,
+  media_type            TEXT NOT NULL CHECK (media_type IN ('IMAGE','VIDEO','REEL','CAROUSEL')),
+  media_urls            TEXT[] NOT NULL,
+  status                TEXT NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending','published','failed','scheduled')),
+  instagram_media_id    TEXT,
+  instagram_permalink   TEXT,
+  scheduled_for         TIMESTAMPTZ,
+  published_at          TIMESTAMPTZ,
+  error_message         TEXT,
+  retry_count           INT DEFAULT 0,
+  created_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE organizations
+  ADD COLUMN IF NOT EXISTS monthly_ai_posts_used INT DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS monthly_reset_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE INDEX idx_ig_accounts_expires ON instagram_accounts (token_expires_at) WHERE is_active = TRUE;
+CREATE INDEX idx_ig_accounts_active  ON instagram_accounts (org_id, is_active);
+CREATE INDEX idx_ig_posts_org        ON instagram_posts (org_id, created_at DESC);
+
+ALTER TABLE instagram_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE instagram_posts    ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see own IG accounts" ON instagram_accounts FOR SELECT
+  USING (org_id = auth.uid());
+CREATE POLICY "Users see own IG posts" ON instagram_posts FOR SELECT
+  USING (org_id = auth.uid());</pre>
+  </div>
+
+  <div class="banner b-ok"><span class="bi">✓</span><div>RLS policies ensure users can only ever read their own data. Even if a bug exposed the raw query, User A cannot see User B's connected accounts or posts. Insert/update is done server-side using service role key which bypasses RLS intentionally.</div></div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="goStep(1)">← Back</button>
+    <button class="btn btn-c" onclick="goStep(3)">Next: Env Variables →</button>
+  </div>
+</div>
+
+<!-- ════════ STEP 4: ENV VARIABLES ════════ -->
+<div class="step-content" id="step-3">
+  <h2>Step 4 — Add environment variables</h2>
+  <p>Add these to your <strong>.env.local</strong> file (development) and to <strong>Vercel → Settings → Environment Variables</strong> (production).</p>
+
+  <div class="code">
+    <div class="code-hdr">
+      <div class="code-fn"><span>.env.local — add to existing file</span><span class="code-lang l-env">ENV</span></div>
+      <button class="copy-btn" onclick="copyCode(this,`INSTAGRAM_APP_ID=your_instagram_app_id\nINSTAGRAM_APP_SECRET=your_instagram_app_secret\nINSTAGRAM_GRAPH_API_VERSION=v24.0\nINSTAGRAM_REDIRECT_URI=http://localhost:3000/api/instagram/callback\nTOKEN_ENCRYPTION_KEY=generate-with-openssl-rand-base64-32\nUPSTASH_REDIS_REST_URL=https://your-db.upstash.io\nUPSTASH_REDIS_REST_TOKEN=your-token\nQSTASH_CURRENT_SIGNING_KEY=sig_xxx\nQSTASH_NEXT_SIGNING_KEY=sig_xxx\nQSTASH_TOKEN=your-qstash-token`)">Copy</button>
+    </div>
+    <pre><span class="cm"># Instagram / Meta (from developers.facebook.com → Your App → Instagram)</span>
+<span class="cn">INSTAGRAM_APP_ID</span>=your_instagram_app_id
+<span class="cn">INSTAGRAM_APP_SECRET</span>=your_instagram_app_secret
+<span class="cn">INSTAGRAM_GRAPH_API_VERSION</span>=v24.0
+<span class="cn">INSTAGRAM_REDIRECT_URI</span>=http://localhost:3000/api/instagram/callback
+
+<span class="cm"># Token encryption — 32+ chars, generate with:</span>
+<span class="cm"># openssl rand -base64 32</span>
+<span class="cn">TOKEN_ENCRYPTION_KEY</span>=your-32-plus-char-random-string
+
+<span class="cm"># Upstash Redis (upstash.com → Create Database → REST API)</span>
+<span class="cn">UPSTASH_REDIS_REST_URL</span>=https://your-db.upstash.io
+<span class="cn">UPSTASH_REDIS_REST_TOKEN</span>=your-upstash-token
+
+<span class="cm"># Upstash QStash (for nightly token refresh cron)</span>
+<span class="cn">QSTASH_CURRENT_SIGNING_KEY</span>=sig_xxx
+<span class="cn">QSTASH_NEXT_SIGNING_KEY</span>=sig_xxx
+<span class="cn">QSTASH_TOKEN</span>=your-qstash-token</pre>
+  </div>
+
+  <h3>Generate the encryption key</h3>
+  <div class="code">
+    <div class="code-hdr">
+      <div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div>
+      <button class="copy-btn" onclick="copyCode(this,'openssl rand -base64 32')">Copy</button>
+    </div>
+    <pre>openssl rand -base64 32
+<span class="cm"># Example output: dK7bX9mN3pQ8rV2sL5wY1cA6eH4jF0gT
+# Copy this output as TOKEN_ENCRYPTION_KEY</span></pre>
+  </div>
+
+  <div class="banner b-tip"><span class="bi">⚠</span><div><strong>Critical:</strong> Never change TOKEN_ENCRYPTION_KEY after users have connected accounts. Changing it makes all stored tokens undecryptable — every user would need to reconnect Instagram.</div></div>
+
+  <h3>For production — add to Vercel</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>terminal — push env vars to Vercel</span><span class="code-lang l-sh">Shell</span></div>
+    <button class="copy-btn" onclick="copyCode(this,'vercel env add INSTAGRAM_APP_ID\nvercel env add INSTAGRAM_APP_SECRET\nvercel env add TOKEN_ENCRYPTION_KEY\nvercel env pull .env.local')">Copy</button></div>
+    <pre><span class="cm"># Interactive — Vercel CLI will prompt for the value</span>
+vercel env add INSTAGRAM_APP_ID
+vercel env add INSTAGRAM_APP_SECRET
+vercel env add TOKEN_ENCRYPTION_KEY
+<span class="cm"># Or paste all at once in Vercel Dashboard → Settings → Environment Variables</span></pre>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="goStep(2)">← Back</button>
+    <button class="btn btn-c" onclick="goStep(4)">Next: Schedule Cron →</button>
+  </div>
+</div>
+
+<!-- ════════ STEP 5: CRON ════════ -->
+<div class="step-content" id="step-4">
+  <h2>Step 5 — Set up nightly token refresh</h2>
+  <p>Instagram long-lived tokens expire after 60 days. The refresh route runs nightly via <strong>Upstash QStash</strong> — a serverless cron service. Free tier covers up to 500 messages/day which is more than enough.</p>
+
+  <h3>5.1 Create the QStash schedule</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>upstash.com → QStash → Schedules → Create</span></div></div>
+    <pre>URL:      https://kreya.ai/api/instagram/refresh
+Method:   POST
+Schedule: 0 3 * * *     <span class="cm"># Every day at 3am UTC</span>
+Headers:  none needed   <span class="cm"># QStash adds its own signature header automatically</span></pre>
+  </div>
+
+  <h3>5.2 Or via curl (one-time setup)</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div>
+    <button class="copy-btn" onclick="copyCode(this,`curl -X POST https://qstash.upstash.io/v2/schedules \\\n  -H 'Authorization: Bearer YOUR_QSTASH_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"destination\": \"https://kreya.ai/api/instagram/refresh\",\n    \"cron\": \"0 3 * * *\"\n  }'`)">Copy</button></div>
+    <pre>curl -X POST https://qstash.upstash.io/v2/schedules \
+  -H <span class="st">'Authorization: Bearer YOUR_QSTASH_TOKEN'</span> \
+  -H <span class="st">'Content-Type: application/json'</span> \
+  -d <span class="st">'{"destination":"https://kreya.ai/api/instagram/refresh","cron":"0 3 * * *"}'</span></pre>
+  </div>
+
+  <div class="banner b-ok"><span class="bi">✓</span><div>The refresh route is protected by QStash signature verification — <code style="font-family:Space Mono,monospace;font-size:10px">verifySignatureAppRouter</code> checks the cryptographic signature on every request. Nobody else can trigger it, even if they know the URL.</div></div>
+
+  <h3>5.3 Reset monthly post counters</h3>
+  <p>Add a second QStash schedule to reset monthly usage on the 1st of each month:</p>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>QStash second schedule</span></div></div>
+    <pre>URL:      https://kreya.ai/api/billing/reset-monthly
+Method:   POST
+Schedule: 0 0 1 * *     <span class="cm"># 1st of every month at midnight UTC</span></pre>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="goStep(3)">← Back</button>
+    <button class="btn btn-c" onclick="goStep(5)">Next: Test it →</button>
+  </div>
+</div>
+
+<!-- ════════ STEP 6: TEST ════════ -->
+<div class="step-content" id="step-5">
+  <h2>Step 6 — Test the full flow</h2>
+  <p>Run these tests in order. Each verifies a different part of the integration.</p>
+
+  <h3>6.1 Test OAuth flow locally</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div>
+    <button class="copy-btn" onclick="copyCode(this,'npm run dev\n# Then open: http://localhost:3000/api/instagram/oauth')">Copy</button></div>
+    <pre>npm run dev
+<span class="cm"># Open in browser (must be logged into Kreya first):</span>
+http://localhost:3000/api/instagram/oauth
+
+<span class="cm"># Expected: redirects you to Instagram login page
+# After authorizing: redirects to /dashboard/connections?success=instagram_connected
+# Check Supabase → Table Editor → instagram_accounts → your row should appear</span></pre>
+  </div>
+
+  <h3>6.2 Test status endpoint</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div>
+    <button class="copy-btn" onclick="copyCode(this,`curl http://localhost:3000/api/instagram/status \\\n  -H 'Cookie: YOUR_SESSION_COOKIE'`)">Copy</button></div>
+    <pre>curl http://localhost:3000/api/instagram/status \
+  -H <span class="st">'Cookie: YOUR_SESSION_COOKIE'</span>
+
+<span class="cm"># Expected response:</span>
+{
+  <span class="st">"connected"</span>: true,
+  <span class="st">"username"</span>: <span class="st">"yourusername"</span>,
+  <span class="st">"followersCount"</span>: 4820,
+  <span class="st">"tokenHealthy"</span>: true,
+  <span class="st">"tokenDaysRemaining"</span>: 58
+}</pre>
+  </div>
+
+  <h3>6.3 Test posting a real image</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>terminal — post a test image</span><span class="code-lang l-sh">Shell</span></div>
+    <button class="copy-btn" onclick="copyCode(this,`curl -X POST http://localhost:3000/api/instagram/post \\\n  -H 'Content-Type: application/json' \\\n  -H 'Cookie: YOUR_SESSION_COOKIE' \\\n  -d '{\n    \"caption\": \"Test post from Kreya 🚀 #test\",\n    \"mediaType\": \"IMAGE\",\n    \"mediaUrls\": [\"https://picsum.photos/1080/1080\"]\n  }'`)">Copy</button></div>
+    <pre>curl -X POST http://localhost:3000/api/instagram/post \
+  -H <span class="st">'Content-Type: application/json'</span> \
+  -H <span class="st">'Cookie: YOUR_SESSION_COOKIE'</span> \
+  -d <span class="st">'{
+    "caption": "Test post from Kreya 🚀 #test",
+    "mediaType": "IMAGE",
+    "mediaUrls": ["https://picsum.photos/1080/1080"]
+  }'</span>
+
+<span class="cm"># Expected response:</span>
+{
+  <span class="st">"status"</span>: <span class="st">"published"</span>,
+  <span class="st">"instagramMediaId"</span>: <span class="st">"17846368219941196"</span>,
+  <span class="st">"permalink"</span>: <span class="st">"https://www.instagram.com/p/XXXXXXXX/"</span>,
+  <span class="st">"postedAs"</span>: <span class="st">"@yourusername"</span>,
+  <span class="st">"postsRemainingToday"</span>: 24
+}</pre>
+  </div>
+
+  <div class="banner b-warn"><span class="bi">⚡</span><div><strong>Test account requirement:</strong> The IG account used for testing must be added as a Test User in Meta Developer Console → Roles → Test Users. This lets you test before your app is approved by Meta.</div></div>
+
+  <h3>6.4 Common errors and fixes</h3>
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>Error reference</span></div></div>
+    <pre><span class="cm">Error: "state_mismatch"</span>
+→ Redis not configured or state expired (&gt;10min). Check UPSTASH_REDIS_REST_URL.
+
+<span class="cm">Error: "token exchange failed"</span>
+→ INSTAGRAM_APP_ID or SECRET wrong. Check Meta Console → Instagram section (not Facebook section).
+
+<span class="cm">Error: "URL must be accessible" / error code 36003</span>
+→ mediaUrl is not publicly accessible. Upload to Supabase Storage public bucket first.
+
+<span class="cm">Error code 190: "Invalid OAuth access token"</span>
+→ Token expired. User needs to reconnect. Frontend should redirect to /api/instagram/oauth.
+
+<span class="cm">Error: "This endpoint requires the 'instagram_business_content_publish' permission"</span>
+→ Permission not approved yet. Add yourself as test user in Meta Console → Roles.
+
+<span class="cm">Error: "redirect_uri does not match"</span>
+→ INSTAGRAM_REDIRECT_URI in .env.local must exactly match what's in Meta Console.
+   Trailing slashes, http vs https, port numbers — must be identical.</pre>
+  </div>
+
+  <div class="banner b-ok"><span class="bi">🎉</span><div><strong>Done!</strong> Your Instagram integration is live. Every Kreya user who signs up and clicks "Connect Instagram" goes through this exact flow — fully automated, free forever, fully under your control.</div></div>
+
+  <h3>What's next</h3>
+  <ul class="checklist">
+    <li onclick="toggleCheck(this)">Submit your Meta app for <strong>App Review</strong> — needed for non-test users. Apply at developers.facebook.com → Your App → App Review</li>
+    <li onclick="toggleCheck(this)">Build the <strong>Connections UI</strong> in Kreya dashboard — calls <code style="font-size:11px;font-family:Space Mono,monospace">/api/instagram/status</code> to show connected account</li>
+    <li onclick="toggleCheck(this)">Wire <strong>WhatsApp approval</strong> to call <code style="font-size:11px;font-family:Space Mono,monospace">/api/instagram/post</code> when user replies "yes"</li>
+    <li onclick="toggleCheck(this)">Upload media to <strong>Supabase Storage</strong> (public bucket) before passing URLs to the post endpoint</li>
+    <li onclick="toggleCheck(this)">Apply for <strong>TikTok API</strong> access in parallel — slow approval, start now</li>
+  </ul>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="goStep(4)">← Back</button>
+    <div style="font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.15em;color:var(--mint);align-self:center;">✓ Integration complete</div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<script>
+let currentStep = 0;
+const totalSteps = 6;
+
+function goStep(n) {
+  document.getElementById('step-' + currentStep).classList.remove('act');
+  document.getElementById('tab-' + currentStep).classList.remove('act');
+
+  // Mark previous steps as done
+  for (let i = 0; i < n; i++) {
+    document.getElementById('tab-' + i).classList.add('done');
+    document.getElementById('tab-' + i).classList.remove('act');
+  }
+  for (let i = n; i < totalSteps; i++) {
+    document.getElementById('tab-' + i).classList.remove('done');
+  }
+
+  currentStep = n;
+  document.getElementById('step-' + n).classList.add('act');
+  document.getElementById('tab-' + n).classList.add('act');
+
+  // Update progress bar
+  for (let i = 0; i < totalSteps; i++) {
+    const p = document.getElementById('prog-' + i);
+    if (i < n) p.className = 'prog-step done';
+    else if (i === n) p.className = 'prog-step act';
+    else p.className = 'prog-step';
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleCheck(li) {
+  li.classList.toggle('done');
+}
+
+function copyCode(btn, text) {
+  navigator.clipboard?.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 1800);
+  });
+}
+
+function copySql(btn) {
+  const text = document.getElementById('sql-block').textContent;
+  copyCode(btn, text);
+}
+</script>
+</body>
+</html>

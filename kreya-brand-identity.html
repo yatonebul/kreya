@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreya — Brand Identity</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0D0D0D;
+    --paper: #F5F2EC;
+    --kreya-coral: #FF4F3B;
+    --kreya-violet: #6B3DFF;
+    --kreya-mint: #00E5A0;
+    --kreya-sky: #C8F0FF;
+    --kreya-gold: #FFD166;
+    --kreya-dark: #1A1025;
+    --text-muted: #6B6860;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Sans', sans-serif;
+    overflow-x: hidden;
+  }
+
+  /* ── COVER ── */
+  .cover {
+    min-height: 100vh;
+    background: var(--kreya-dark);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 60px 40px;
+  }
+
+  .cover-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 50% at 20% 30%, rgba(107,61,255,0.4) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 80% 70%, rgba(255,79,59,0.35) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 50% 50%, rgba(0,229,160,0.15) 0%, transparent 70%);
+  }
+
+  .cover-noise {
+    position: absolute;
+    inset: 0;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 200px;
+  }
+
+  .cover-content { position: relative; text-align: center; }
+
+  .cover-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--kreya-mint);
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    opacity: 0.9;
+  }
+
+  .cover-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(72px, 14vw, 140px);
+    color: #fff;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    position: relative;
+    display: inline-block;
+  }
+
+  .cover-logo .dot {
+    color: var(--kreya-coral);
+    display: inline-block;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+
+  .cover-tagline {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    font-size: clamp(16px, 2.5vw, 22px);
+    color: rgba(255,255,255,0.65);
+    margin-top: 20px;
+    letter-spacing: 0.01em;
+    font-style: italic;
+  }
+
+  .cover-tagline strong {
+    color: rgba(255,255,255,0.95);
+    font-style: normal;
+    font-weight: 500;
+  }
+
+  .cover-meta {
+    margin-top: 60px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+
+  /* ── SECTIONS ── */
+  section {
+    padding: 80px 40px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--kreya-coral);
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 48px;
+    color: var(--ink);
+  }
+
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, var(--kreya-coral), var(--kreya-violet), transparent);
+    margin: 0;
+  }
+
+  /* ── BRAND ESSENCE ── */
+  .essence-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2px;
+    margin-top: 0;
+  }
+
+  .essence-card {
+    background: var(--ink);
+    color: #fff;
+    padding: 40px 36px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .essence-card:nth-child(2) { background: var(--kreya-violet); }
+  .essence-card:nth-child(3) { background: var(--kreya-coral); }
+  .essence-card:nth-child(4) { background: #1A1025; }
+
+  .essence-card .card-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    opacity: 0.5;
+    margin-bottom: 20px;
+  }
+
+  .essence-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    margin-bottom: 14px;
+    letter-spacing: -0.02em;
+  }
+
+  .essence-card p {
+    font-size: 14px;
+    line-height: 1.7;
+    opacity: 0.8;
+    font-weight: 300;
+  }
+
+  /* ── COLORS ── */
+  .color-section { background: var(--ink); padding: 80px 40px; }
+  .color-section h2 { color: #fff; max-width: 1100px; margin: 0 auto 48px; display: block; }
+  .color-section .section-label { color: var(--kreya-mint); max-width: 1100px; margin: 0 auto 12px; display: block; }
+
+  .color-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+  }
+
+  .color-card { border-radius: 4px; overflow: hidden; }
+
+  .color-swatch {
+    height: 120px;
+    position: relative;
+  }
+
+  .color-swatch.primary { background: var(--kreya-coral); }
+  .color-swatch.secondary { background: var(--kreya-violet); }
+  .color-swatch.accent { background: var(--kreya-mint); }
+  .color-swatch.warm { background: var(--kreya-gold); }
+  .color-swatch.light { background: var(--kreya-sky); }
+  .color-swatch.dark { background: var(--kreya-dark); border: 1px solid rgba(255,255,255,0.1); }
+
+  .color-info {
+    background: #1A1A1A;
+    padding: 16px;
+  }
+
+  .color-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .color-role {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 8px;
+    font-weight: 300;
+  }
+
+  .color-hex {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* ── TYPOGRAPHY ── */
+  .type-section { padding: 80px 40px; background: var(--paper); }
+
+  .type-showcase {
+    margin-bottom: 48px;
+    padding: 48px;
+    background: #fff;
+    border-left: 4px solid var(--kreya-violet);
+  }
+
+  .type-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+
+  .type-display {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(36px, 6vw, 72px);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+
+  .type-body-demo {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--text-muted);
+    max-width: 600px;
+    margin-top: 16px;
+  }
+
+  .type-mono-demo {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--kreya-violet);
+    letter-spacing: 0.05em;
+    margin-top: 16px;
+  }
+
+  .font-detail {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+    margin-top: 40px;
+  }
+
+  .font-card {
+    padding: 32px;
+    background: var(--ink);
+    color: #fff;
+  }
+
+  .font-card-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--kreya-mint);
+    margin-bottom: 12px;
+  }
+
+  .font-card-display {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 8px;
+    line-height: 1.1;
+  }
+
+  .font-card-display.syne { font-family: 'Syne', sans-serif; }
+  .font-card-display.dm { font-family: 'DM Sans', sans-serif; font-weight: 300; }
+  .font-card-display.mono { font-family: 'Space Mono', monospace; font-size: 18px; }
+
+  .font-card-use {
+    font-size: 12px;
+    opacity: 0.5;
+    font-weight: 300;
+    margin-top: 10px;
+  }
+
+  /* ── TONE OF VOICE ── */
+  .tov-section { background: var(--kreya-dark); padding: 80px 40px; }
+  .tov-inner { max-width: 1100px; margin: 0 auto; }
+  .tov-section h2 { color: #fff; }
+  .tov-section .section-label { color: var(--kreya-gold); }
+
+  .tov-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 2px;
+    margin-bottom: 48px;
+  }
+
+  .tov-card {
+    padding: 36px 32px;
+    background: rgba(255,255,255,0.04);
+    border-top: 3px solid transparent;
+    transition: background 0.3s;
+  }
+
+  .tov-card:nth-child(1) { border-color: var(--kreya-coral); }
+  .tov-card:nth-child(2) { border-color: var(--kreya-violet); }
+  .tov-card:nth-child(3) { border-color: var(--kreya-mint); }
+  .tov-card:nth-child(4) { border-color: var(--kreya-gold); }
+
+  .tov-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: #fff;
+    margin-bottom: 12px;
+  }
+
+  .tov-card p {
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.7;
+    font-weight: 300;
+  }
+
+  /* Say / Never say */
+  .say-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+  }
+
+  @media (max-width: 640px) { .say-grid { grid-template-columns: 1fr; } }
+
+  .say-card { padding: 36px; }
+  .say-card.do { background: rgba(0,229,160,0.08); }
+  .say-card.dont { background: rgba(255,79,59,0.08); }
+
+  .say-card-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .say-card.do .say-card-label { color: var(--kreya-mint); }
+  .say-card.dont .say-card-label { color: var(--kreya-coral); }
+
+  .say-item {
+    font-size: 14px;
+    color: rgba(255,255,255,0.75);
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-weight: 300;
+    font-style: italic;
+    line-height: 1.5;
+  }
+
+  .say-item:last-child { border-bottom: none; }
+
+  /* ── LOGO DIRECTION ── */
+  .logo-section { padding: 80px 40px; background: var(--paper); }
+  .logo-inner { max-width: 1100px; margin: 0 auto; }
+
+  .logo-variants {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-top: 0;
+  }
+
+  .logo-card {
+    padding: 48px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    position: relative;
+  }
+
+  .logo-card.dark-bg { background: var(--kreya-dark); }
+  .logo-card.light-bg { background: #fff; border: 1px solid rgba(0,0,0,0.08); }
+  .logo-card.coral-bg { background: var(--kreya-coral); }
+  .logo-card.violet-bg { background: var(--kreya-violet); }
+
+  .logo-wordmark {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 48px;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  .logo-wordmark.white { color: #fff; }
+  .logo-wordmark.dark { color: var(--ink); }
+  .logo-wordmark.coral { color: var(--kreya-coral); }
+
+  .logo-wordmark .k-accent { position: relative; display: inline-block; }
+  .logo-wordmark .k-accent::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: currentColor;
+    opacity: 0.4;
+  }
+
+  .logo-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin-top: 10px;
+    opacity: 0.5;
+  }
+
+  .logo-card-label {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    opacity: 0.4;
+    white-space: nowrap;
+  }
+
+  .logo-card.dark-bg .logo-card-label,
+  .logo-card.coral-bg .logo-card-label,
+  .logo-card.violet-bg .logo-card-label { color: #fff; }
+  .logo-card.light-bg .logo-card-label { color: var(--ink); }
+
+  /* Icon mark */
+  .icon-mark {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, var(--kreya-coral), var(--kreya-violet));
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+
+  .icon-mark span {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 28px;
+    color: #fff;
+    letter-spacing: -0.04em;
+  }
+
+  /* ── MESSAGING ── */
+  .msg-section { background: var(--ink); padding: 80px 40px; }
+  .msg-inner { max-width: 1100px; margin: 0 auto; }
+  .msg-section h2 { color: #fff; }
+  .msg-section .section-label { color: var(--kreya-sky); }
+
+  .tagline-list {
+    list-style: none;
+    margin-bottom: 48px;
+  }
+
+  .tagline-item {
+    padding: 24px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+  }
+
+  .tagline-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--kreya-coral);
+    width: 24px;
+    flex-shrink: 0;
+  }
+
+  .tagline-text {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(18px, 3vw, 28px);
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .tagline-note {
+    font-size: 12px;
+    color: rgba(255,255,255,0.35);
+    margin-top: 6px;
+    font-weight: 300;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .hero-statement {
+    padding: 48px;
+    background: linear-gradient(135deg, var(--kreya-violet), var(--kreya-coral));
+    margin-top: 48px;
+    text-align: center;
+  }
+
+  .hero-statement p {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(24px, 4vw, 42px);
+    color: #fff;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+  }
+
+  .hero-statement .hero-sub {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.75);
+    margin-top: 16px;
+    letter-spacing: 0;
+    font-style: italic;
+  }
+
+  /* ── PERSONA ── */
+  .persona-section { padding: 80px 40px; background: var(--paper); }
+  .persona-inner { max-width: 1100px; margin: 0 auto; }
+
+  .persona-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2px;
+  }
+
+  .persona-card {
+    background: #fff;
+    padding: 36px 28px;
+    border-bottom: 4px solid transparent;
+  }
+
+  .persona-card:nth-child(1) { border-color: var(--kreya-coral); }
+  .persona-card:nth-child(2) { border-color: var(--kreya-violet); }
+  .persona-card:nth-child(3) { border-color: var(--kreya-mint); }
+  .persona-card:nth-child(4) { border-color: var(--kreya-gold); }
+
+  .persona-emoji { font-size: 32px; margin-bottom: 16px; display: block; }
+
+  .persona-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .persona-card p {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    font-weight: 300;
+  }
+
+  /* ── FOOTER ── */
+  .brand-footer {
+    background: var(--kreya-dark);
+    padding: 48px 40px;
+    text-align: center;
+  }
+
+  .brand-footer-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 32px;
+    color: #fff;
+    letter-spacing: -0.04em;
+    margin-bottom: 12px;
+  }
+
+  .brand-footer-logo span { color: var(--kreya-coral); }
+
+  .brand-footer p {
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    section { padding: 60px 24px; }
+    .color-section, .tov-section, .msg-section { padding: 60px 24px; }
+    .type-section, .persona-section, .logo-section { padding: 60px 24px; }
+    .type-showcase { padding: 28px; }
+    .hero-statement { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-bg"></div>
+  <div class="cover-noise"></div>
+  <div class="cover-content">
+    <div class="cover-label">Brand Identity System · 2025</div>
+    <div class="cover-logo">KREYA<span class="dot">.</span></div>
+    <div class="cover-tagline">Your AI creative team, <strong>on WhatsApp.</strong></div>
+    <div class="cover-meta">Confidential · Kreya Technologies Inc.</div>
+  </div>
+</div>
+<div class="divider"></div>
+
+<!-- BRAND ESSENCE -->
+<section>
+  <div class="section-label">01 — Brand Essence</div>
+  <h2>What Kreya stands for</h2>
+</section>
+<div class="essence-grid" style="max-width:100%;">
+  <div class="essence-card">
+    <div class="card-num">01</div>
+    <h3>Empowerment</h3>
+    <p>Kreya exists to hand the power of digital agencies back to individual creators. No gatekeeping, no jargon, no expensive retainers. Just you and your ideas, amplified.</p>
+  </div>
+  <div class="essence-card">
+    <div class="card-num">02</div>
+    <h3>Intelligence</h3>
+    <p>Every interaction is backed by the world's most powerful AI — but hidden behind a simple WhatsApp message. Kreya is smart so you don't have to be technical.</p>
+  </div>
+  <div class="essence-card">
+    <div class="card-num">03</div>
+    <h3>Simplicity</h3>
+    <p>No dashboards to learn, no software to install. If you can send a voice note, you can run your entire content operation. That's the Kreya promise.</p>
+  </div>
+  <div class="essence-card">
+    <div class="card-num">04</div>
+    <h3>Trust</h3>
+    <p>Kreya handles your brand, your accounts, your audience. Security and privacy are non-negotiable — encrypted, protected, and always in your control.</p>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- COLORS -->
+<div class="color-section">
+  <span class="section-label">02 — Color System</span>
+  <h2 style="color:#fff;">The Kreya palette</h2>
+  <div class="color-grid">
+    <div class="color-card">
+      <div class="color-swatch primary"></div>
+      <div class="color-info">
+        <div class="color-name">Kreya Coral</div>
+        <div class="color-role">Primary · CTA · Energy</div>
+        <div class="color-hex">#FF4F3B</div>
+      </div>
+    </div>
+    <div class="color-card">
+      <div class="color-swatch secondary"></div>
+      <div class="color-info">
+        <div class="color-name">Kreya Violet</div>
+        <div class="color-role">Secondary · AI · Depth</div>
+        <div class="color-hex">#6B3DFF</div>
+      </div>
+    </div>
+    <div class="color-card">
+      <div class="color-swatch accent"></div>
+      <div class="color-info">
+        <div class="color-name">Kreya Mint</div>
+        <div class="color-role">Accent · Success · Growth</div>
+        <div class="color-hex">#00E5A0</div>
+      </div>
+    </div>
+    <div class="color-card">
+      <div class="color-swatch warm"></div>
+      <div class="color-info">
+        <div class="color-name">Kreya Gold</div>
+        <div class="color-role">Highlight · Premium · Warmth</div>
+        <div class="color-hex">#FFD166</div>
+      </div>
+    </div>
+    <div class="color-card">
+      <div class="color-swatch light"></div>
+      <div class="color-info">
+        <div class="color-name">Kreya Sky</div>
+        <div class="color-role">Background · Calm · Clarity</div>
+        <div class="color-hex">#C8F0FF</div>
+      </div>
+    </div>
+    <div class="color-card">
+      <div class="color-swatch dark"></div>
+      <div class="color-info">
+        <div class="color-name">Kreya Dark</div>
+        <div class="color-role">Base · Night mode · Luxury</div>
+        <div class="color-hex">#1A1025</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- TYPOGRAPHY -->
+<div class="type-section">
+  <section style="padding:0; max-width:1100px; margin:0 auto 0;">
+    <div class="section-label">03 — Typography</div>
+    <h2>Type that commands attention</h2>
+  </section>
+  <div style="max-width:1100px; margin:0 auto;">
+    <div class="type-showcase">
+      <div class="type-label">Display — Syne ExtraBold</div>
+      <div class="type-display">Create. Post.<br>Dominate.</div>
+      <div class="type-body-demo">Your entire content operation, managed with a single WhatsApp message. Kreya handles the rest — writing, designing, scheduling, and publishing across every platform.</div>
+      <div class="type-mono-demo">// api.kreya.ai · version 1.0.0 · secure</div>
+    </div>
+    <div class="font-detail">
+      <div class="font-card">
+        <div class="font-card-name">Display Font</div>
+        <div class="font-card-display syne">Syne ExtraBold</div>
+        <div class="font-card-use">Headlines · Logo · Impact statements · UI labels</div>
+      </div>
+      <div class="font-card">
+        <div class="font-card-name">Body Font</div>
+        <div class="font-card-display dm">DM Sans Light</div>
+        <div class="font-card-use">Body copy · Descriptions · UI text · Onboarding</div>
+      </div>
+      <div class="font-card">
+        <div class="font-card-name">Utility Font</div>
+        <div class="font-card-display mono">Space Mono</div>
+        <div class="font-card-use">Code · Labels · Metadata · Technical details</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- LOGO DIRECTION -->
+<div class="logo-section">
+  <div class="logo-inner">
+    <div class="section-label">04 — Logo Direction</div>
+    <h2>Visual identity</h2>
+    <div class="logo-variants">
+      <div class="logo-card dark-bg">
+        <div class="logo-wordmark white">KREYA</div>
+        <div class="logo-sub" style="color:rgba(255,255,255,0.4);">AI Content OS</div>
+        <div class="logo-card-label">Primary — Dark</div>
+      </div>
+      <div class="logo-card light-bg">
+        <div class="logo-wordmark dark">KREYA</div>
+        <div class="logo-sub" style="color:rgba(0,0,0,0.4);">AI Content OS</div>
+        <div class="logo-card-label">Primary — Light</div>
+      </div>
+      <div class="logo-card coral-bg">
+        <div class="logo-wordmark white">KREYA</div>
+        <div class="logo-sub" style="color:rgba(255,255,255,0.6);">AI Content OS</div>
+        <div class="logo-card-label">Brand Color</div>
+      </div>
+      <div class="logo-card violet-bg">
+        <div class="logo-wordmark white">KREYA</div>
+        <div class="logo-sub" style="color:rgba(255,255,255,0.6);">AI Content OS</div>
+        <div class="logo-card-label">Secondary Color</div>
+      </div>
+      <div class="logo-card light-bg" style="min-height:200px;">
+        <div class="icon-mark"><span>K</span></div>
+        <div class="logo-card-label">App Icon / Favicon</div>
+      </div>
+      <div class="logo-card dark-bg" style="min-height:200px;">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="icon-mark" style="margin-bottom:0;width:48px;height:48px;border-radius:12px;"><span style="font-size:22px;">K</span></div>
+          <div class="logo-wordmark white" style="font-size:36px;">KREYA</div>
+        </div>
+        <div class="logo-card-label">Icon + Wordmark</div>
+      </div>
+    </div>
+    <div style="margin-top:24px; padding:28px; background:#fff; border-left:4px solid var(--kreya-violet);">
+      <div class="type-label" style="margin-bottom:12px;">Logo Design Brief for Designer</div>
+      <p style="font-size:14px; line-height:1.8; color:var(--text-muted); font-weight:300;">The Kreya wordmark uses <strong style="color:var(--ink);">Syne ExtraBold</strong> with tight tracking (−0.04em). The icon mark is a rounded square (18px radius) with a coral-to-violet diagonal gradient, containing a bold "K". The K letterform can optionally incorporate a subtle upward-right arrow motif in its diagonal stroke — symbolizing growth, creation, and forward motion. Avoid serifs, thin weights, or rounded/bubbly letterforms. The mark should feel confident, modern, and tech-forward without being cold.</p>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- TONE OF VOICE -->
+<div class="tov-section">
+  <div class="tov-inner">
+    <div class="section-label">05 — Tone of Voice</div>
+    <h2 style="color:#fff;">How Kreya speaks</h2>
+    <div class="tov-grid">
+      <div class="tov-card">
+        <h3>Confident, not arrogant</h3>
+        <p>Kreya knows what it can do and says it plainly. No over-promising, no hollow hype — just clear, direct value. Speak like a trusted expert friend, not a salesperson.</p>
+      </div>
+      <div class="tov-card">
+        <h3>Warm, not fluffy</h3>
+        <p>We care about our creators genuinely. But warmth means being useful and honest — not using 10 emojis and saying "amazing!" after everything. Real warmth = real help.</p>
+      </div>
+      <div class="tov-card">
+        <h3>Simple, not dumbed-down</h3>
+        <p>Our users aren't stupid — they're just busy. We explain things clearly without jargon, and we never make them feel like they need a degree to use our product.</p>
+      </div>
+      <div class="tov-card">
+        <h3>Playful, not childish</h3>
+        <p>There's room for wit and personality. A clever line, a light pun, a knowing tone — but always in service of the message, never at the expense of clarity or trust.</p>
+      </div>
+    </div>
+    <div class="say-grid">
+      <div class="say-card do">
+        <div class="say-card-label">✓ Kreya says</div>
+        <div class="say-item">"Just send a voice note. Kreya handles the rest."</div>
+        <div class="say-item">"Your post is ready — want to tweak anything before it goes live?"</div>
+        <div class="say-item">"Connect your Instagram and you're good to go."</div>
+        <div class="say-item">"Kreya repurposed that into 6 formats automatically."</div>
+        <div class="say-item">"You're the creator. We're the engine."</div>
+      </div>
+      <div class="say-card dont">
+        <div class="say-card-label">✗ Kreya never says</div>
+        <div class="say-item">"Leverage our cutting-edge AI-powered synergistic platform."</div>
+        <div class="say-item">"Congratulations!! You crushed it today! 🎉🎉🎉"</div>
+        <div class="say-item">"Please navigate to the content scheduling module."</div>
+        <div class="say-item">"Our proprietary algorithm optimizes your content pipeline."</div>
+        <div class="say-item">"We cannot process your request at this time."</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- MESSAGING -->
+<div class="msg-section">
+  <div class="msg-inner">
+    <div class="section-label">06 — Core Messaging</div>
+    <h2 style="color:#fff;">Taglines & positioning</h2>
+    <ul class="tagline-list">
+      <li class="tagline-item">
+        <span class="tagline-num">01</span>
+        <div>
+          <div class="tagline-text">"Your AI creative team, on WhatsApp."</div>
+          <div class="tagline-note">Primary tagline — use everywhere. Simple, specific, surprising.</div>
+        </div>
+      </li>
+      <li class="tagline-item">
+        <span class="tagline-num">02</span>
+        <div>
+          <div class="tagline-text">"You're the creator. Kreya is the engine."</div>
+          <div class="tagline-note">Positioning line — empowers without diminishing the user's role.</div>
+        </div>
+      </li>
+      <li class="tagline-item">
+        <span class="tagline-num">03</span>
+        <div>
+          <div class="tagline-text">"Post to everywhere. Work from anywhere."</div>
+          <div class="tagline-note">Feature tagline — highlights multi-platform + WhatsApp mobility.</div>
+        </div>
+      </li>
+      <li class="tagline-item">
+        <span class="tagline-num">04</span>
+        <div>
+          <div class="tagline-text">"Fire your agency. Keep your results."</div>
+          <div class="tagline-note">Bold campaign line — confrontational, memorable, shareable.</div>
+        </div>
+      </li>
+      <li class="tagline-item">
+        <span class="tagline-num">05</span>
+        <div>
+          <div class="tagline-text">"One message. Six platforms. Done."</div>
+          <div class="tagline-note">Feature-specific — perfect for ad copy and onboarding.</div>
+        </div>
+      </li>
+    </ul>
+    <div class="hero-statement">
+      <p>The content OS built for creators<br>who outgrow agencies.</p>
+      <div class="hero-sub">Kreya — AI-powered. WhatsApp-native. Built for you.</div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- TARGET PERSONAS -->
+<div class="persona-section">
+  <div class="persona-inner">
+    <div class="section-label">07 — Target Personas</div>
+    <h2>Who Kreya is built for</h2>
+    <div class="persona-grid">
+      <div class="persona-card">
+        <span class="persona-emoji">📱</span>
+        <h3>The Solo Creator</h3>
+        <p>Building a personal brand on TikTok & Instagram. Knows what to say, hates figuring out how to post it consistently.</p>
+      </div>
+      <div class="persona-card">
+        <span class="persona-emoji">🛍️</span>
+        <h3>The Small Business Owner</h3>
+        <p>Runs a boutique, restaurant, or online store. Needs to show up on social daily but has zero time and no marketing team.</p>
+      </div>
+      <div class="persona-card">
+        <span class="persona-emoji">🎙️</span>
+        <h3>The Expert / Coach</h3>
+        <p>Consultant, trainer, or educator building authority online. Has expertise but needs help packaging and distributing content.</p>
+      </div>
+      <div class="persona-card">
+        <span class="persona-emoji">🚀</span>
+        <h3>The Early Startup</h3>
+        <p>1-5 person team that can't afford an agency. Needs pro-level content output without the agency price tag or complexity.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="brand-footer">
+  <div class="brand-footer-logo">KREYA<span>.</span></div>
+  <p>Brand Identity v1.0 · Kreya Technologies Inc. · 2025 · Confidential</p>
+</div>
+
+</body>
+</html>

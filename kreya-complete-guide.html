@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kreya — Complete Setup Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:#07070E; --dark:#0C0A1A; --surf:#121126; --surf2:#191733; --surf3:#221F3E;
+  --bdr:rgba(255,255,255,.07); --bdr2:rgba(255,255,255,.14);
+  --coral:#FF4F3B; --cdim:rgba(255,79,59,.12);
+  --violet:#5E35FF; --vdim:rgba(94,53,255,.12);
+  --mint:#00E5A0; --mdim:rgba(0,229,160,.1);
+  --gold:#FFD166; --gdim:rgba(255,209,102,.1);
+  --muted:rgba(255,255,255,.42); --muted2:rgba(255,255,255,.2);
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { background:var(--ink); color:#fff; font-family:'DM Sans',sans-serif; font-size:14px; -webkit-font-smoothing:antialiased; }
+::-webkit-scrollbar { width:3px; } ::-webkit-scrollbar-thumb { background:var(--surf3); border-radius:2px; }
+
+/* ── LAYOUT ── */
+.app { display:flex; min-height:100vh; }
+
+/* ── SIDEBAR NAV ── */
+.sidenav {
+  width:260px; min-width:260px; background:var(--dark);
+  border-right:1px solid var(--bdr); position:fixed; top:0; left:0;
+  height:100vh; overflow-y:auto; display:flex; flex-direction:column;
+  z-index:100;
+}
+.sidenav-logo {
+  padding:20px 18px 16px; border-bottom:1px solid var(--bdr);
+  font-family:'Syne',sans-serif; font-weight:800; font-size:20px; letter-spacing:-.04em;
+}
+.sidenav-logo .ac { color:var(--coral); }
+.sidenav-logo .sub { font-family:'Space Mono',monospace; font-size:8px; letter-spacing:.2em; text-transform:uppercase; color:var(--muted); display:block; margin-top:3px; }
+
+.nav-group { padding:6px 0; }
+.nav-group-lbl { font-family:'Space Mono',monospace; font-size:7px; letter-spacing:.28em; text-transform:uppercase; color:var(--muted2); padding:10px 18px 4px; }
+.nav-item {
+  display:flex; align-items:center; gap:9px; padding:8px 18px;
+  cursor:pointer; color:var(--muted); font-size:12px; font-weight:400;
+  transition:all .12s; position:relative;
+}
+.nav-item:hover { background:var(--surf); color:#fff; }
+.nav-item.act { background:var(--cdim); color:var(--coral); }
+.nav-item.act::before { content:''; position:absolute; left:0; top:20%; bottom:20%; width:2px; background:var(--coral); border-radius:1px; }
+.nav-item.done { color:var(--mint); opacity:.7; }
+.nav-num { width:18px; height:18px; min-width:18px; border-radius:50%; background:var(--surf3); display:flex; align-items:center; justify-content:center; font-family:'Space Mono',monospace; font-size:8px; font-weight:700; flex-shrink:0; }
+.nav-item.act .nav-num { background:var(--coral); color:#fff; }
+.nav-item.done .nav-num { background:var(--mint); color:var(--ink); }
+.nav-item .nav-num::before { content:attr(data-n); }
+.nav-item.done .nav-num::before { content:'✓'; }
+
+/* progress bar bottom of sidenav */
+.sidenav-progress { margin-top:auto; padding:16px 18px; border-top:1px solid var(--bdr); }
+.prog-lbl { font-family:'Space Mono',monospace; font-size:8px; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; display:flex; justify-content:space-between; }
+.prog-bar { height:3px; background:var(--surf3); border-radius:2px; overflow:hidden; }
+.prog-fill { height:100%; background:linear-gradient(90deg, var(--coral), var(--violet)); border-radius:2px; transition:width .4s ease; }
+
+/* ── MAIN CONTENT ── */
+.main { margin-left:260px; flex:1; }
+.section { display:none; padding:36px 40px 80px; max-width:780px; animation:pgIn .2s ease both; }
+.section.act { display:block; }
+@keyframes pgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── TOP OF EACH SECTION ── */
+.sec-lbl { font-family:'Space Mono',monospace; font-size:8px; letter-spacing:.3em; text-transform:uppercase; color:var(--coral); margin-bottom:8px; display:block; }
+.sec-title { font-family:'Syne',sans-serif; font-weight:800; font-size:clamp(22px,3vw,28px); letter-spacing:-.03em; margin-bottom:6px; }
+.sec-sub { font-size:13px; font-weight:300; color:var(--muted); margin-bottom:28px; line-height:1.65; max-width:580px; }
+.sec-sub strong { color:#fff; font-weight:500; }
+
+/* ── STEP CARDS ── */
+.step-card {
+  background:var(--surf); border:1px solid var(--bdr); border-radius:8px;
+  margin-bottom:16px; overflow:hidden;
+}
+.step-header {
+  display:flex; align-items:center; gap:12px; padding:14px 18px;
+  cursor:pointer; transition:background .15s; user-select:none;
+}
+.step-header:hover { background:var(--surf2); }
+.step-num { width:26px; height:26px; min-width:26px; border-radius:50%; background:var(--surf3); display:flex; align-items:center; justify-content:center; font-family:'Space Mono',monospace; font-size:10px; font-weight:700; flex-shrink:0; transition:all .2s; }
+.step-card.open .step-num { background:var(--coral); color:#fff; }
+.step-card.completed .step-num { background:var(--mint); color:var(--ink); }
+.step-card.completed .step-num::after { content:'✓'; }
+.step-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; letter-spacing:-.01em; flex:1; }
+.step-badge { font-family:'Space Mono',monospace; font-size:7px; letter-spacing:.12em; text-transform:uppercase; padding:3px 8px; border-radius:100px; }
+.badge-free { background:var(--mdim); color:var(--mint); border:1px solid rgba(0,229,160,.2); }
+.badge-req { background:var(--cdim); color:var(--coral); border:1px solid rgba(255,79,59,.2); }
+.badge-min { background:var(--gdim); color:var(--gold); border:1px solid rgba(255,209,102,.2); }
+.badge-opt { background:var(--surf3); color:var(--muted); }
+.step-arrow { color:var(--muted2); font-size:12px; transition:transform .2s; }
+.step-card.open .step-arrow { transform:rotate(90deg); }
+
+.step-body { display:none; padding:0 18px 18px; border-top:1px solid var(--bdr); }
+.step-card.open .step-body { display:block; padding-top:16px; }
+
+/* ── TYPOGRAPHY ── */
+h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; letter-spacing:-.01em; margin:18px 0 8px; }
+h3:first-child { margin-top:0; }
+p { font-size:12px; font-weight:300; color:var(--muted); margin-bottom:10px; line-height:1.7; }
+p strong { color:#fff; font-weight:500; }
+p a { color:var(--violet); }
+
+/* ── CHECKLIST ── */
+.checklist { list-style:none; margin:8px 0 14px; }
+.checklist li {
+  display:flex; align-items:flex-start; gap:10px;
+  padding:8px 12px; border-radius:4px; font-size:12px; font-weight:300;
+  color:var(--muted); cursor:pointer; transition:background .12s;
+  border-bottom:1px solid var(--bdr);
+}
+.checklist li:last-child { border:none; }
+.checklist li:hover { background:var(--surf2); }
+.checklist li.done { color:rgba(255,255,255,.5); text-decoration:line-through; }
+.check-box { width:16px; height:16px; min-width:16px; border-radius:3px; border:1.5px solid var(--bdr2); background:var(--surf2); display:flex; align-items:center; justify-content:center; margin-top:1px; transition:all .15s; flex-shrink:0; }
+.checklist li.done .check-box { background:var(--mint); border-color:var(--mint); }
+.checklist li.done .check-box::after { content:'✓'; font-size:9px; color:var(--ink); font-weight:700; }
+.check-txt { flex:1; line-height:1.5; }
+.check-txt code { font-family:'Space Mono',monospace; font-size:10px; color:var(--mint); background:rgba(0,229,160,.08); padding:1px 5px; border-radius:3px; }
+
+/* ── CODE BLOCKS ── */
+.code { background:#040410; border:1px solid var(--bdr2); border-radius:6px; overflow:hidden; margin:10px 0; }
+.code-hdr { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--surf2); border-bottom:1px solid var(--bdr); }
+.code-fn { font-family:'Space Mono',monospace; font-size:9px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+.code-lang { font-family:'Space Mono',monospace; font-size:7px; letter-spacing:.1em; text-transform:uppercase; padding:2px 6px; border-radius:2px; }
+.l-sh  { background:rgba(94,53,255,.2); color:#a080ff; }
+.l-yml { background:rgba(255,209,102,.12); color:var(--gold); }
+.l-env { background:rgba(255,79,59,.1); color:var(--coral); }
+.l-ts  { background:rgba(0,229,160,.1); color:var(--mint); }
+.l-sql { background:rgba(255,209,102,.12); color:var(--gold); }
+.copy-btn { font-family:'Space Mono',monospace; font-size:7px; letter-spacing:.1em; text-transform:uppercase; background:var(--surf3); border:1px solid var(--bdr); color:var(--muted); padding:3px 9px; border-radius:3px; cursor:pointer; transition:all .15s; }
+.copy-btn:hover { border-color:var(--mint); color:var(--mint); }
+.copy-btn.ok { border-color:var(--mint); color:var(--mint); }
+pre { padding:14px; font-family:'Space Mono',monospace; font-size:10.5px; line-height:1.75; overflow-x:auto; color:rgba(255,255,255,.82); }
+.cm { color:var(--muted2); font-style:italic; }
+.kw { color:#a080ff; }
+.st { color:var(--gold); }
+.cn { color:var(--mint); }
+.op { color:var(--coral); }
+
+/* ── BANNERS ── */
+.banner { display:flex; align-items:flex-start; gap:10px; padding:10px 14px; border-radius:5px; margin:10px 0; font-size:12px; line-height:1.55; border:1px solid transparent; }
+.b-warn { background:rgba(255,209,102,.07); border-color:rgba(255,209,102,.2); color:#ffe598; }
+.b-ok   { background:rgba(0,229,160,.07); border-color:rgba(0,229,160,.2); color:#80f0ce; }
+.b-info { background:rgba(94,53,255,.1); border-color:rgba(94,53,255,.25); color:#b0a0ff; }
+.b-tip  { background:rgba(255,79,59,.07); border-color:rgba(255,79,59,.2); color:#ffb0a8; }
+.bi { font-size:15px; flex-shrink:0; margin-top:1px; }
+
+/* ── FILE TREE ── */
+.tree { background:#040410; border:1px solid var(--bdr2); border-radius:6px; padding:14px 16px; font-family:'Space Mono',monospace; font-size:10.5px; line-height:1.85; margin:10px 0; }
+.td { color:#a080ff; } .tf { color:var(--mint); } .tn { color:var(--coral); font-size:8px; margin-left:6px; letter-spacing:.08em; }
+
+/* ── BUTTONS ── */
+.btn { display:inline-flex; align-items:center; gap:6px; padding:9px 18px; border-radius:5px; border:none; font-family:'Syne',sans-serif; font-weight:700; font-size:12px; cursor:pointer; transition:opacity .15s; }
+.btn:hover { opacity:.84; }
+.btn-c { background:var(--coral); color:#fff; }
+.btn-g { background:var(--surf2); color:var(--muted); border:1px solid var(--bdr2); }
+.btn-g:hover { color:#fff; }
+.nav-btns { display:flex; justify-content:space-between; margin-top:28px; padding-top:16px; border-top:1px solid var(--bdr); }
+
+/* ── RESOURCE CARDS ── */
+.resource-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; margin:12px 0; }
+.resource-card { background:var(--surf2); border:1px solid var(--bdr); border-radius:6px; padding:14px; display:flex; flex-direction:column; gap:6px; }
+.rc-icon { font-size:22px; }
+.rc-name { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; letter-spacing:-.01em; }
+.rc-desc { font-size:11px; color:var(--muted); font-weight:300; line-height:1.5; flex:1; }
+.rc-link { font-family:'Space Mono',monospace; font-size:9px; color:var(--violet); text-decoration:none; letter-spacing:.08em; }
+.rc-link:hover { color:#a080ff; }
+.rc-badge { font-family:'Space Mono',monospace; font-size:7px; letter-spacing:.1em; text-transform:uppercase; padding:2px 7px; border-radius:100px; width:fit-content; }
+
+/* ── SUMMARY TABLE ── */
+.summary-table { width:100%; border-collapse:collapse; font-size:12px; margin:12px 0; }
+.summary-table th { font-family:'Space Mono',monospace; font-size:8px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted2); padding:8px 12px; background:var(--surf2); text-align:left; border-bottom:1px solid var(--bdr); }
+.summary-table td { padding:10px 12px; border-bottom:1px solid var(--bdr); color:var(--muted); font-weight:300; vertical-align:top; }
+.summary-table tr:last-child td { border:none; }
+.summary-table td:first-child { font-family:'Space Mono',monospace; font-size:10px; color:var(--mint); }
+.summary-table td strong { color:#fff; font-weight:500; }
+
+/* ── MOBILE ── */
+@media (max-width:680px) {
+  .sidenav { display:none; }
+  .main { margin-left:0; }
+  .section { padding:24px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══════════════════════════ SIDE NAV ══════════════════════════ -->
+<div class="sidenav">
+  <div class="sidenav-logo">
+    KREY<span class="ac">A</span>.
+    <span class="sub">Integration Guide</span>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-lbl">Getting started</div>
+    <div class="nav-item act" onclick="gotoSection('overview')" id="nav-overview">
+      <div class="nav-num" data-n="0">📋</div> Overview & accounts
+    </div>
+    <div class="nav-item" onclick="gotoSection('nextjs')" id="nav-nextjs">
+      <div class="nav-num" data-n="1">1</div> Create Next.js project
+    </div>
+    <div class="nav-item" onclick="gotoSection('supabase')" id="nav-supabase">
+      <div class="nav-num" data-n="2">2</div> Set up Supabase
+    </div>
+    <div class="nav-item" onclick="gotoSection('envvars')" id="nav-envvars">
+      <div class="nav-num" data-n="3">3</div> Environment variables
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-lbl">Auth & Security</div>
+    <div class="nav-item" onclick="gotoSection('auth')" id="nav-auth">
+      <div class="nav-num" data-n="4">4</div> Auth + MFA setup
+    </div>
+    <div class="nav-item" onclick="gotoSection('database')" id="nav-database">
+      <div class="nav-num" data-n="5">5</div> Database schema
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-lbl">Instagram</div>
+    <div class="nav-item" onclick="gotoSection('meta')" id="nav-meta">
+      <div class="nav-num" data-n="6">6</div> Meta app setup
+    </div>
+    <div class="nav-item" onclick="gotoSection('instagram')" id="nav-instagram">
+      <div class="nav-num" data-n="7">7</div> Drop in IG code
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-lbl">Other services</div>
+    <div class="nav-item" onclick="gotoSection('upstash')" id="nav-upstash">
+      <div class="nav-num" data-n="8">8</div> Upstash Redis + QStash
+    </div>
+    <div class="nav-item" onclick="gotoSection('claude')" id="nav-claude">
+      <div class="nav-num" data-n="9">9</div> Claude AI (WhatsApp)
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-lbl">Deploy</div>
+    <div class="nav-item" onclick="gotoSection('gitlab')" id="nav-gitlab">
+      <div class="nav-num" data-n="10">10</div> GitLab repo setup
+    </div>
+    <div class="nav-item" onclick="gotoSection('cicd')" id="nav-cicd">
+      <div class="nav-num" data-n="11">11</div> CI/CD → Vercel deploy
+    </div>
+    <div class="nav-item" onclick="gotoSection('launch')" id="nav-launch">
+      <div class="nav-num" data-n="12">🚀</div> Launch checklist
+    </div>
+  </div>
+
+  <div class="sidenav-progress">
+    <div class="prog-lbl">
+      <span>Progress</span>
+      <span id="prog-pct">0%</span>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ MAIN ══════════════════════════ -->
+<div class="main">
+
+<!-- ─── OVERVIEW ─── -->
+<div class="section act" id="section-overview">
+  <span class="sec-lbl">Start here</span>
+  <div class="sec-title">What you need to build Kreya</div>
+  <div class="sec-sub">Before writing a single line of code, create accounts on these services. All have <strong>free tiers</strong> that cover you through the entire build phase. Takes about 30 minutes total.</div>
+
+  <div class="resource-grid">
+    <div class="resource-card">
+      <div class="rc-icon">⚡</div>
+      <div class="rc-name">Supabase</div>
+      <div class="rc-badge badge-free">Free · 50K users</div>
+      <div class="rc-desc">Database + Auth + Storage. The backbone of Kreya. Stores users, posts, social accounts, all encrypted tokens.</div>
+      <a class="rc-link" href="https://supabase.com" target="_blank">→ supabase.com</a>
+    </div>
+    <div class="resource-card">
+      <div class="rc-icon">▲</div>
+      <div class="rc-name">Vercel</div>
+      <div class="rc-badge badge-free">Free hobby tier</div>
+      <div class="rc-desc">Hosts the Next.js app. Handles serverless functions, edge deployments, and environment variables.</div>
+      <a class="rc-link" href="https://vercel.com" target="_blank">→ vercel.com</a>
+    </div>
+    <div class="resource-card">
+      <div class="rc-icon">🦊</div>
+      <div class="rc-name">GitLab</div>
+      <div class="rc-badge badge-free">Free</div>
+      <div class="rc-desc">Source code repository + CI/CD pipeline. Code pushes trigger automatic deploy to Vercel.</div>
+      <a class="rc-link" href="https://gitlab.com" target="_blank">→ gitlab.com</a>
+    </div>
+    <div class="resource-card">
+      <div class="rc-icon">📘</div>
+      <div class="rc-name">Meta Developers</div>
+      <div class="rc-badge badge-free">Free API</div>
+      <div class="rc-desc">Instagram Graph API for content publishing. Free forever — no per-post fees, ever.</div>
+      <a class="rc-link" href="https://developers.facebook.com" target="_blank">→ developers.facebook.com</a>
+    </div>
+    <div class="resource-card">
+      <div class="rc-icon">🟢</div>
+      <div class="rc-name">Upstash</div>
+      <div class="rc-badge badge-free">Free · 10K/day</div>
+      <div class="rc-desc">Redis for rate limiting + OAuth state. QStash for cron jobs (nightly token refresh).</div>
+      <a class="rc-link" href="https://upstash.com" target="_blank">→ upstash.com</a>
+    </div>
+    <div class="resource-card">
+      <div class="rc-icon">🤖</div>
+      <div class="rc-name">Anthropic</div>
+      <div class="rc-badge badge-min">Pay per use</div>
+      <div class="rc-desc">Claude API for the WhatsApp AI brain. ~$0.003 per message at Sonnet pricing — negligible cost at early stage.</div>
+      <a class="rc-link" href="https://console.anthropic.com" target="_blank">→ console.anthropic.com</a>
+    </div>
+  </div>
+
+  <h3>What you'll have at the end</h3>
+  <table class="summary-table">
+    <thead><tr><th>Component</th><th>What it does</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Next.js app</td><td><strong>Kreya web portal</strong> — auth, dashboard, compose, connections</td><td>Free (Vercel hobby)</td></tr>
+      <tr><td>Supabase</td><td><strong>Database + Auth</strong> — users, posts, encrypted IG tokens, RLS</td><td>Free up to 50K users</td></tr>
+      <tr><td>Instagram API</td><td><strong>Post to Instagram</strong> directly — images, videos, reels, carousels</td><td>Free forever</td></tr>
+      <tr><td>GitLab + CI/CD</td><td><strong>Auto-deploy</strong> — push to main → live in 2 minutes</td><td>Free</td></tr>
+      <tr><td>Upstash Redis</td><td><strong>Rate limiting + OAuth state</strong> — security layer</td><td>Free up to 10K/day</td></tr>
+      <tr><td>Claude API</td><td><strong>AI content generation</strong> — WhatsApp prompts → posts</td><td>~$5–20/mo at early stage</td></tr>
+    </tbody>
+  </table>
+
+  <div class="nav-btns">
+    <div></div>
+    <button class="btn btn-c" onclick="gotoSection('nextjs')">Start: Create Next.js project →</button>
+  </div>
+</div>
+
+<!-- ─── NEXT.JS ─── -->
+<div class="section" id="section-nextjs">
+  <span class="sec-lbl">Step 1</span>
+  <div class="sec-title">Create the Next.js project</div>
+  <div class="sec-sub">Run this once on your local machine. This creates the entire Kreya folder structure with TypeScript, Tailwind, and the App Router.</div>
+
+  <div class="step-card open" id="sc-1a">
+    <div class="step-header" onclick="toggleStep('sc-1a')">
+      <div class="step-num">1</div>
+      <div class="step-title">Bootstrap the project with the Supabase template</div>
+      <span class="badge-min step-badge">~2 minutes</span>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>This single command creates a Next.js 15 project pre-configured for Supabase SSR auth. It's the officially recommended starting point from both Supabase and Vercel.</p>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div><button class="copy-btn" onclick="cp(this,'npx create-next-app -e with-supabase kreya')">Copy</button></div>
+        <pre>npx create-next-app -e with-supabase kreya
+cd kreya
+npm install</pre>
+      </div>
+      <p>This gives you: <strong>Next.js 15 App Router + TypeScript + Tailwind CSS + Supabase SSR client + middleware + auth utilities</strong> — all pre-wired.</p>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-1b">
+    <div class="step-header" onclick="toggleStep('sc-1b')">
+      <div class="step-num">2</div>
+      <div class="step-title">Install additional Kreya dependencies</div>
+      <span class="badge-min step-badge">~1 minute</span>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div><button class="copy-btn" onclick="cp(this,'npm install @upstash/redis @upstash/ratelimit @upstash/qstash @anthropic-ai/sdk resend')">Copy</button></div>
+        <pre><span class="cm"># Core services</span>
+npm install @upstash/redis @upstash/ratelimit @upstash/qstash
+
+<span class="cm"># AI + email</span>
+npm install @anthropic-ai/sdk resend
+
+<span class="cm"># Verify everything installed</span>
+npm run dev
+<span class="cm"># Should open http://localhost:3000 with Supabase template</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-1c">
+    <div class="step-header" onclick="toggleStep('sc-1c')">
+      <div class="step-num">3</div>
+      <div class="step-title">Project folder structure</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>Here's where everything goes. You'll be creating these folders as you follow this guide.</p>
+      <div class="tree">
+<span class="td">kreya/</span>
+├── <span class="td">app/</span>
+│   ├── <span class="td">api/</span>
+│   │   ├── <span class="td">instagram/</span>         <span class="tn">← NEW: IG OAuth + posting</span>
+│   │   ├── <span class="td">kreya/</span>             <span class="tn">← NEW: AI + content routes</span>
+│   │   └── <span class="td">billing/</span>           <span class="tn">← NEW: Stripe + plan limits</span>
+│   ├── <span class="td">(auth)/</span>
+│   │   ├── <span class="td">login/page.tsx</span>
+│   │   └── <span class="td">signup/page.tsx</span>
+│   ├── <span class="td">dashboard/</span>             <span class="tn">← NEW: all product pages</span>
+│   └── <span class="td">auth/confirm/route.ts</span>  <span class="tn">← handles email confirm links</span>
+├── <span class="td">lib/</span>
+│   ├── <span class="td">supabase/</span>              <span class="tn">← auto-created by template</span>
+│   │   ├── client.ts
+│   │   └── server.ts
+│   └── <span class="td">instagram/</span>             <span class="tn">← NEW: crypto, oauth, publish</span>
+├── <span class="td">types/</span>
+│   └── <span class="tf">instagram.ts</span>           <span class="tn">← NEW: TypeScript types</span>
+├── <span class="td">supabase/migrations/</span>       <span class="tn">← NEW: SQL files to run</span>
+├── <span class="tf">middleware.ts</span>              <span class="tn">← auto-created, protects routes</span>
+├── <span class="tf">.env.local</span>                <span class="tn">← never commit this</span>
+├── <span class="tf">.gitlab-ci.yml</span>            <span class="tn">← NEW: CI/CD pipeline</span>
+└── <span class="tf">.gitignore</span>                <span class="tn">← auto-created, .env.local excluded</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('overview')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('supabase')">Next: Supabase setup →</button>
+  </div>
+</div>
+
+<!-- ─── SUPABASE ─── -->
+<div class="section" id="section-supabase">
+  <span class="sec-lbl">Step 2</span>
+  <div class="sec-title">Set up Supabase</div>
+  <div class="sec-sub">Create your Supabase project, configure email sending, and get your API keys. <strong>Free tier covers 50,000 monthly active users.</strong></div>
+
+  <div class="step-card open" id="sc-2a">
+    <div class="step-header" onclick="toggleStep('sc-2a')">
+      <div class="step-num">1</div><div class="step-title">Create the project</div>
+      <span class="badge-free step-badge">Free</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Go to <strong>supabase.com</strong> → Sign up → <strong>New project</strong></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Name: <code>kreya</code> · Region: pick closest to your users · Password: generate a strong one, save in 1Password</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Wait ~2 minutes for project to spin up</div></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-2b">
+    <div class="step-header" onclick="toggleStep('sc-2b')">
+      <div class="step-num">2</div><div class="step-title">Get your API keys</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Dashboard → <strong>Settings → API</strong></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <strong>Project URL</strong> → paste as <code>NEXT_PUBLIC_SUPABASE_URL</code></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <strong>anon / publishable key</strong> → paste as <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <strong>service_role key</strong> → paste as <code>SUPABASE_SERVICE_ROLE_KEY</code> (server-side only, never expose to client)</div></li>
+      </ul>
+      <div class="banner b-info"><span class="bi">ℹ</span><div>Supabase recently renamed the anon key to "publishable key". Both names work. Use whichever one your dashboard shows.</div></div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-2c">
+    <div class="step-header" onclick="toggleStep('sc-2c')">
+      <div class="step-num">3</div><div class="step-title">Configure email (SMTP via Resend)</div>
+      <span class="badge-req step-badge">Required for real emails</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>Without custom SMTP, Supabase only sends 3 confirmation emails per hour. Set up Resend so every user gets a real email immediately.</p>
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Sign up at <strong>resend.com</strong> → API Keys → Create key → copy it</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Supabase → <strong>Authentication → SMTP Settings → Enable custom SMTP</strong></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Host: <code>smtp.resend.com</code> · Port: <code>465</code> · Username: <code>resend</code> · Password: your Resend API key</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Sender email: <code>noreply@kreya.ai</code> · Sender name: <code>Kreya</code></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Save and test by signing up with a real email address</div></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-2d">
+    <div class="step-header" onclick="toggleStep('sc-2d')">
+      <div class="step-num">4</div><div class="step-title">Configure email templates + redirect URLs</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>Supabase → <strong>Authentication → Email Templates → Confirm Signup</strong>. Replace the link with:</p>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>Supabase email template</span></div><button class="copy-btn" onclick="cp(this,'<a href=\"{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email\">Confirm your Kreya account</a>')">Copy</button></div>
+        <pre>&lt;a href=<span class="st">"{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email"</span>&gt;
+  Confirm your Kreya account
+&lt;/a&gt;</pre>
+      </div>
+      <p>Then: <strong>Authentication → URL Configuration</strong></p>
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Site URL: <code>https://kreya.ai</code> (or localhost:3000 for now)</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Redirect URLs: add <code>http://localhost:3000/**</code> and <code>https://kreya.ai/**</code></div></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('nextjs')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('envvars')">Next: Environment variables →</button>
+  </div>
+</div>
+
+<!-- ─── ENV VARS ─── -->
+<div class="section" id="section-envvars">
+  <span class="sec-lbl">Step 3</span>
+  <div class="sec-title">Environment variables</div>
+  <div class="sec-sub">Create <code style="font-family:'Space Mono',monospace;font-size:12px;color:var(--mint)">.env.local</code> in your project root. This file is in <code style="font-family:'Space Mono',monospace;font-size:12px;color:var(--mint)">.gitignore</code> — <strong>never committed to GitLab</strong>. Production values go in Vercel dashboard.</div>
+
+  <div class="banner b-warn"><span class="bi">⚠</span><div><strong>Fill these in as you complete each step.</strong> You don't need all values right now — add them as you create each service account. Start with just the Supabase ones.</div></div>
+
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>.env.local</span><span class="code-lang l-env">ENV</span></div><button class="copy-btn" onclick="cp(this,document.getElementById('envblock').innerText)">Copy all</button></div>
+    <pre id="envblock"><span class="cm"># ── SUPABASE ─────────────────────────────────────────────────────
+# From: supabase.com → Your Project → Settings → API</span>
+<span class="cn">NEXT_PUBLIC_SUPABASE_URL</span>=https://xxxx.supabase.co
+<span class="cn">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</span>=eyJhbGci...
+<span class="cn">SUPABASE_SERVICE_ROLE_KEY</span>=eyJhbGci...     <span class="cm"># server-side ONLY</span>
+
+<span class="cm"># ── INSTAGRAM / META ─────────────────────────────────────────────
+# From: developers.facebook.com → App → Instagram → API Setup with Instagram Login
+# Important: Use the INSTAGRAM app credentials — NOT the Facebook app credentials</span>
+<span class="cn">INSTAGRAM_APP_ID</span>=your_instagram_app_id
+<span class="cn">INSTAGRAM_APP_SECRET</span>=your_instagram_app_secret
+<span class="cn">INSTAGRAM_GRAPH_API_VERSION</span>=v24.0
+<span class="cn">INSTAGRAM_REDIRECT_URI</span>=http://localhost:3000/api/instagram/callback
+
+<span class="cm"># ── TOKEN ENCRYPTION ─────────────────────────────────────────────
+# Generate: openssl rand -base64 32
+# WARNING: Never change this after users have connected accounts</span>
+<span class="cn">TOKEN_ENCRYPTION_KEY</span>=your-32-plus-char-random-string
+
+<span class="cm"># ── UPSTASH REDIS ─────────────────────────────────────────────────
+# From: upstash.com → Create Database → REST API tab</span>
+<span class="cn">UPSTASH_REDIS_REST_URL</span>=https://your-db.upstash.io
+<span class="cn">UPSTASH_REDIS_REST_TOKEN</span>=AX...
+
+<span class="cm"># ── UPSTASH QSTASH (for cron jobs) ────────────────────────────────
+# From: upstash.com → QStash → API Keys</span>
+<span class="cn">QSTASH_TOKEN</span>=eyJV...
+<span class="cn">QSTASH_CURRENT_SIGNING_KEY</span>=sig_xxx
+<span class="cn">QSTASH_NEXT_SIGNING_KEY</span>=sig_xxx
+
+<span class="cm"># ── CLAUDE AI ─────────────────────────────────────────────────────
+# From: console.anthropic.com → API Keys</span>
+<span class="cn">ANTHROPIC_API_KEY</span>=sk-ant-...
+
+<span class="cm"># ── RESEND (email delivery) ───────────────────────────────────────
+# From: resend.com → API Keys</span>
+<span class="cn">RESEND_API_KEY</span>=re_...
+<span class="cn">EMAIL_FROM</span>=noreply@kreya.ai
+
+<span class="cm"># ── APP ───────────────────────────────────────────────────────────</span>
+<span class="cn">NEXT_PUBLIC_APP_URL</span>=http://localhost:3000</pre>
+  </div>
+
+  <div class="banner b-ok"><span class="bi">✓</span><div>When you deploy to Vercel later, you add all these values in <strong>Vercel → Project → Settings → Environment Variables</strong>. Change INSTAGRAM_REDIRECT_URI and NEXT_PUBLIC_APP_URL to your production domain.</div></div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('supabase')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('auth')">Next: Auth setup →</button>
+  </div>
+</div>
+
+<!-- ─── AUTH ─── -->
+<div class="section" id="section-auth">
+  <span class="sec-lbl">Step 4</span>
+  <div class="sec-title">Auth + MFA setup</div>
+  <div class="sec-sub">The Supabase template already created <code style="font-family:'Space Mono',monospace;font-size:12px;color:var(--mint)">lib/supabase/client.ts</code> and <code style="font-family:'Space Mono',monospace;font-size:12px;color:var(--mint)">lib/supabase/server.ts</code>. You need to add the email confirmation route and wire the Kreya auth UI to it.</div>
+
+  <div class="step-card open" id="sc-4a">
+    <div class="step-header" onclick="toggleStep('sc-4a')">
+      <div class="step-num">1</div><div class="step-title">Create the email confirmation route handler</div>
+      <span class="badge-req step-badge">Required</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>Create this file — it handles the link users click in their confirmation email:</p>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>app/auth/confirm/route.ts</span><span class="code-lang l-ts">TypeScript</span></div><button class="copy-btn" onclick="cp(this,`import { type EmailOtpType } from '@supabase/supabase-js'\nimport { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\n\nexport async function GET(request: NextRequest) {\n  const { searchParams } = new URL(request.url)\n  const token_hash = searchParams.get('token_hash')\n  const type = searchParams.get('type') as EmailOtpType | null\n  const next = searchParams.get('next') ?? '/dashboard'\n\n  if (token_hash && type) {\n    const supabase = await createClient()\n    const { error } = await supabase.auth.verifyOtp({ type, token_hash })\n    if (!error) {\n      return NextResponse.redirect(new URL(\n        type === 'email' ? '/setup' : next, request.url\n      ))\n    }\n    return NextResponse.redirect(new URL('/auth/error?reason=token_expired', request.url))\n  }\n  return NextResponse.redirect(new URL('/auth/error?reason=missing_token', request.url))\n}`)">Copy</button></div>
+        <pre><span class="kw">import</span> { type EmailOtpType } from <span class="st">'@supabase/supabase-js'</span>
+<span class="kw">import</span> { NextRequest, NextResponse } from <span class="st">'next/server'</span>
+<span class="kw">import</span> { createClient } from <span class="st">'@/lib/supabase/server'</span>
+
+<span class="kw">export async function</span> GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const token_hash = searchParams.get(<span class="st">'token_hash'</span>)
+  const type = searchParams.get(<span class="st">'type'</span>) as EmailOtpType | null
+  const next = searchParams.get(<span class="st">'next'</span>) ?? <span class="st">'/dashboard'</span>
+
+  if (token_hash && type) {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.verifyOtp({ type, token_hash })
+    if (!error) {
+      return NextResponse.redirect(new URL(
+        type === <span class="st">'email'</span> ? <span class="st">'/setup'</span> : next, request.url
+      ))
+    }
+    return NextResponse.redirect(new URL(<span class="st">'/auth/error?reason=token_expired'</span>, request.url))
+  }
+  return NextResponse.redirect(new URL(<span class="st">'/auth/error?reason=missing_token'</span>, request.url))
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-4b">
+    <div class="step-header" onclick="toggleStep('sc-4b')">
+      <div class="step-num">2</div><div class="step-title">Copy the Kreya auth UI into your project</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>The full auth system (sign in, sign up, MFA, password reset, email confirm) is already built in <strong>kreya-app.html</strong>. To use it in Next.js:</p>
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Create <code>app/(auth)/login/page.tsx</code> — put the SignIn component here</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Create <code>app/(auth)/signup/page.tsx</code> — put the SignUp component here</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Create <code>app/setup/page.tsx</code> — SetupProfile wizard (brand name, WhatsApp, plan)</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Replace <code>window.__SUPABASE_URL__</code> references with the real <code>createClient()</code> calls from <code>@/lib/supabase/client</code></div></li>
+      </ul>
+      <div class="banner b-info"><span class="bi">ℹ</span><div>In Next.js, client components that use React state need the <code style="font-family:Space Mono,monospace;font-size:10px">'use client'</code> directive at the top of the file. Server components (page.tsx) can call <code style="font-family:Space Mono,monospace;font-size:10px">createClient()</code> from <code style="font-family:Space Mono,monospace;font-size:10px">@/lib/supabase/server</code> directly.</div></div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-4c">
+    <div class="step-header" onclick="toggleStep('sc-4c')">
+      <div class="step-num">3</div><div class="step-title">Enable MFA in Supabase</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Supabase → <strong>Authentication → Sign In / Sign Up → MFA</strong></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Enable <strong>TOTP (Time-based One-Time Password)</strong></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Set: Require MFA for new sign-ups → <strong>Optional</strong> for now (enforce when you go to production)</div></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('envvars')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('database')">Next: Database schema →</button>
+  </div>
+</div>
+
+<!-- ─── DATABASE ─── -->
+<div class="section" id="section-database">
+  <span class="sec-lbl">Step 5</span>
+  <div class="sec-title">Run the database schema</div>
+  <div class="sec-sub">Open <strong>Supabase → SQL Editor → New query</strong>. Run these migrations in order. Each adds the tables Kreya needs.</div>
+
+  <div class="step-card open" id="sc-5a">
+    <div class="step-header" onclick="toggleStep('sc-5a')">
+      <div class="step-num">1</div><div class="step-title">Migration 001 — Core tables</div>
+      <span class="badge-req step-badge">Run first</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>Supabase SQL Editor</span><span class="code-lang l-sql">SQL</span></div><button class="copy-btn" onclick="cp(this,document.getElementById('sql1').innerText)">Copy</button></div>
+        <pre id="sql1">-- Organizations (one per Kreya user/brand)
+CREATE TABLE organizations (
+  id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  owner_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  brand_kit    JSONB DEFAULT '{}',
+  timezone     TEXT DEFAULT 'UTC',
+  plan         TEXT NOT NULL DEFAULT 'free'
+               CHECK (plan IN ('free','pro','agency')),
+  monthly_ai_posts_used INT DEFAULT 0,
+  monthly_reset_at      TIMESTAMPTZ DEFAULT NOW(),
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(owner_id)
+);
+
+-- RLS: users see only their own organization
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own org"
+  ON organizations FOR ALL USING (owner_id = auth.uid());
+
+-- Auto-create org when user signs up
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO organizations (owner_id, name)
+  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email));
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-5b">
+    <div class="step-header" onclick="toggleStep('sc-5b')">
+      <div class="step-num">2</div><div class="step-title">Migration 002 — Social accounts + audit log</div>
+      <span class="badge-req step-badge">Run second</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>Supabase SQL Editor</span><span class="code-lang l-sql">SQL</span></div><button class="copy-btn" onclick="cp(this,document.getElementById('sql2').innerText)">Copy</button></div>
+        <pre id="sql2">-- Instagram accounts (one row per connected IG account)
+CREATE TABLE instagram_accounts (
+  id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id              UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  instagram_user_id   TEXT NOT NULL,
+  username            TEXT NOT NULL,
+  name                TEXT,
+  profile_picture_url TEXT,
+  followers_count     INT DEFAULT 0,
+  account_type        TEXT CHECK (account_type IN ('BUSINESS','CREATOR','PERSONAL')),
+  is_active           BOOLEAN DEFAULT TRUE,
+  encrypted_token     TEXT NOT NULL,  -- AES-256 encrypted, never plaintext
+  token_iv            TEXT NOT NULL,
+  token_expires_at    TIMESTAMPTZ NOT NULL,
+  connected_at        TIMESTAMPTZ DEFAULT NOW(),
+  disconnected_at     TIMESTAMPTZ,
+  UNIQUE (org_id, instagram_user_id)
+);
+
+-- Posts history
+CREATE TABLE instagram_posts (
+  id                   UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id               UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  instagram_account_id UUID NOT NULL REFERENCES instagram_accounts(id),
+  caption              TEXT NOT NULL,
+  media_type           TEXT NOT NULL CHECK (media_type IN ('IMAGE','VIDEO','REEL','CAROUSEL')),
+  media_urls           TEXT[] NOT NULL,
+  status               TEXT NOT NULL DEFAULT 'pending'
+                       CHECK (status IN ('pending','published','failed','scheduled')),
+  instagram_media_id   TEXT,
+  instagram_permalink  TEXT,
+  scheduled_for        TIMESTAMPTZ,
+  published_at         TIMESTAMPTZ,
+  error_message        TEXT,
+  retry_count          INT DEFAULT 0,
+  created_at           TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Audit log (GDPR compliance + security)
+CREATE TABLE social_audit_log (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  org_id     UUID REFERENCES organizations(id),
+  user_id    UUID REFERENCES auth.users(id),
+  action     TEXT NOT NULL,
+  platform   TEXT,
+  post_id    TEXT,
+  ip_address INET,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_ig_expires ON instagram_accounts (token_expires_at) WHERE is_active = TRUE;
+CREATE INDEX idx_ig_active  ON instagram_accounts (org_id, is_active);
+CREATE INDEX idx_posts_org  ON instagram_posts (org_id, created_at DESC);
+CREATE INDEX idx_audit_user ON social_audit_log (user_id, created_at DESC);
+
+-- RLS
+ALTER TABLE instagram_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE instagram_posts    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE social_audit_log   ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see own IG accounts" ON instagram_accounts FOR SELECT USING (org_id = auth.uid());
+CREATE POLICY "Users see own posts"        ON instagram_posts    FOR SELECT USING (org_id = auth.uid());
+CREATE POLICY "Users see own audit log"    ON social_audit_log   FOR SELECT USING (user_id = auth.uid());</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('auth')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('meta')">Next: Meta app setup →</button>
+  </div>
+</div>
+
+<!-- ─── META ─── -->
+<div class="section" id="section-meta">
+  <span class="sec-lbl">Step 6</span>
+  <div class="sec-title">Create the Meta Developer app</div>
+  <div class="sec-sub">This is the one-time setup on Meta's portal. The API is <strong>free forever</strong>. You need to do this before any Instagram connection will work.</div>
+
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Go to <strong>developers.facebook.com</strong> → log in with Facebook</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Click <strong>Create App</strong> → choose <strong>Business</strong> → fill name (<code>Kreya</code>) + email → Create</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">In app dashboard → <strong>Add Product</strong> → find <strong>Instagram Platform</strong> → Set Up</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Choose <strong>"Instagram API with Instagram Login"</strong> (NOT the old Graph API — this is the July 2024 direct login, no Facebook Page required)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">OAuth Redirect URIs → add <code>http://localhost:3000/api/instagram/callback</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">OAuth Redirect URIs → also add <code>https://kreya.ai/api/instagram/callback</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Permissions → request <code>instagram_business_basic</code> and <code>instagram_business_content_publish</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Go to <strong>Instagram → API Setup with Instagram Login</strong> → copy <strong>Instagram App ID</strong> and <strong>Instagram App Secret</strong> into <code>.env.local</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Roles → Test Users → add your own Instagram account as a test user (this lets you test before App Review approval)</div></li>
+  </ul>
+
+  <div class="banner b-tip"><span class="bi">⚠</span><div><strong>The Instagram App ID is different from the Facebook App ID.</strong> Make sure you copy from the Instagram product section, not the main App Settings page.</div></div>
+  <div class="banner b-info"><span class="bi">ℹ</span><div>During development you test with your own IG account as a test user — no approval needed. Submit for App Review when you want real users to connect. Review takes 1–4 weeks but you can build the whole product while it's under review.</div></div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('database')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('instagram')">Next: Drop in IG code →</button>
+  </div>
+</div>
+
+<!-- ─── INSTAGRAM CODE ─── -->
+<div class="section" id="section-instagram">
+  <span class="sec-lbl">Step 7</span>
+  <div class="sec-title">Drop the Instagram code into Next.js</div>
+  <div class="sec-sub">Copy the files from <strong>kreya-instagram-code.zip</strong> into your project at exactly these paths. Then run the test.</div>
+
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>types/instagram.ts</code> → into <code>kreya/types/instagram.ts</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>lib/instagram/crypto.ts</code> → into <code>kreya/lib/instagram/crypto.ts</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>lib/instagram/oauth.ts</code> → into <code>kreya/lib/instagram/oauth.ts</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>lib/instagram/publish.ts</code> → into <code>kreya/lib/instagram/publish.ts</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>app/api/instagram/oauth/route.ts</code> → into project (create folders)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>app/api/instagram/callback/route.ts</code> → into project</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>app/api/instagram/post/route.ts</code> → into project</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>app/api/instagram/refresh/route.ts</code> → into project</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>app/api/instagram/disconnect/route.ts</code> → into project</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Copy <code>app/api/instagram/status/route.ts</code> → into project</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Test: <code>npm run dev</code> → open <code>http://localhost:3000/api/instagram/oauth</code> while logged in → should redirect to Instagram</div></li>
+  </ul>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('meta')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('upstash')">Next: Upstash setup →</button>
+  </div>
+</div>
+
+<!-- ─── UPSTASH ─── -->
+<div class="section" id="section-upstash">
+  <span class="sec-lbl">Step 8</span>
+  <div class="sec-title">Upstash Redis + QStash</div>
+  <div class="sec-sub">Redis handles rate limiting and OAuth state storage. QStash runs the nightly token refresh cron. <strong>Both are free tier for early stage.</strong></div>
+
+  <div class="step-card open" id="sc-8a">
+    <div class="step-header" onclick="toggleStep('sc-8a')">
+      <div class="step-num">1</div><div class="step-title">Create Redis database</div>
+      <span class="badge-free step-badge">Free · 10K/day</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Sign up at <strong>upstash.com</strong> → Create Database → Global (best latency everywhere)</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Click the database → REST API tab → copy <strong>UPSTASH_REDIS_REST_URL</strong> and <strong>UPSTASH_REDIS_REST_TOKEN</strong> into <code>.env.local</code></div></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-8b">
+    <div class="step-header" onclick="toggleStep('sc-8b')">
+      <div class="step-num">2</div><div class="step-title">Create QStash queue + nightly cron</div>
+      <span class="badge-free step-badge">Free · 500 msg/day</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Upstash dashboard → <strong>QStash → API Keys</strong> → copy all three keys into <code>.env.local</code></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">QStash → Schedules → Create → URL: <code>https://kreya.ai/api/instagram/refresh</code> · Method: POST · Cron: <code>0 3 * * *</code> (3am daily)</div></li>
+      </ul>
+      <div class="banner b-ok"><span class="bi">✓</span><div>This cron runs every night and refreshes any Instagram tokens expiring within 7 days. If it can't refresh (user revoked access from Instagram settings), it marks the account inactive and you can notify the user to reconnect.</div></div>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('instagram')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('claude')">Next: Claude AI →</button>
+  </div>
+</div>
+
+<!-- ─── CLAUDE ─── -->
+<div class="section" id="section-claude">
+  <span class="sec-lbl">Step 9</span>
+  <div class="sec-title">Claude AI — the WhatsApp brain</div>
+  <div class="sec-sub">Claude powers the AI content generation in Kreya. When a user sends a WhatsApp prompt, Claude writes the post. Pay-per-use — no monthly fee.</div>
+
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Sign up at <strong>console.anthropic.com</strong> → API Keys → Create Key → copy into <code>.env.local</code> as <code>ANTHROPIC_API_KEY</code></div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Add billing: Settings → Billing → Add payment method. Start with $20 credit — lasts months at early stage</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Create <code>app/api/kreya/ai/route.ts</code> — this is the route called by the WhatsApp webhook and Compose screen</div></li>
+  </ul>
+
+  <div class="code">
+    <div class="code-hdr"><div class="code-fn"><span>app/api/kreya/ai/route.ts — minimal starter</span><span class="code-lang l-ts">TypeScript</span></div><button class="copy-btn" onclick="cp(this,`import Anthropic from '@anthropic-ai/sdk'\nimport { NextRequest, NextResponse } from 'next/server'\nimport { createClient } from '@/lib/supabase/server'\n\nconst anthropic = new Anthropic()\n\nexport async function POST(req: NextRequest) {\n  const supabase = await createClient()\n  const { data: { user } } = await supabase.auth.getUser()\n  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })\n\n  const { prompt, platforms, tone } = await req.json()\n\n  const message = await anthropic.messages.create({\n    model: 'claude-sonnet-4-20250514',\n    max_tokens: 1024,\n    system: 'You are Kreya, a creative AI for social media. Write punchy, authentic captions.',\n    messages: [{ role: 'user', content: prompt }]\n  })\n\n  return NextResponse.json({ content: message.content[0].text })\n}`)">Copy</button></div>
+    <pre><span class="kw">import</span> Anthropic from <span class="st">'@anthropic-ai/sdk'</span>
+<span class="kw">import</span> { NextRequest, NextResponse } from <span class="st">'next/server'</span>
+<span class="kw">import</span> { createClient } from <span class="st">'@/lib/supabase/server'</span>
+
+const anthropic = new Anthropic() <span class="cm">// reads ANTHROPIC_API_KEY automatically</span>
+
+<span class="kw">export async function</span> POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: <span class="st">'Unauthorized'</span> }, { status: 401 })
+
+  const { prompt, platforms, tone } = await req.json()
+
+  const message = await anthropic.messages.create({
+    model: <span class="st">'claude-sonnet-4-20250514'</span>,
+    max_tokens: 1024,
+    system: <span class="st">'You are Kreya, a creative AI for social media. Write punchy, authentic captions.'</span>,
+    messages: [{ role: <span class="st">'user'</span>, content: prompt }]
+  })
+
+  return NextResponse.json({ content: message.content[0].text })
+}</pre>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('upstash')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('gitlab')">Next: GitLab setup →</button>
+  </div>
+</div>
+
+<!-- ─── GITLAB ─── -->
+<div class="section" id="section-gitlab">
+  <span class="sec-lbl">Step 10</span>
+  <div class="sec-title">Create the GitLab repository</div>
+  <div class="sec-sub">Your code lives on GitLab. Every push to <code style="font-family:'Space Mono',monospace;font-size:12px;color:var(--mint)">main</code> automatically deploys to Vercel production. Every other branch gets a preview URL.</div>
+
+  <div class="step-card open" id="sc-10a">
+    <div class="step-header" onclick="toggleStep('sc-10a')">
+      <div class="step-num">1</div><div class="step-title">Create GitLab repo + push your code</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>terminal — run inside your kreya/ folder</span><span class="code-lang l-sh">Shell</span></div><button class="copy-btn" onclick="cp(this,'git init\ngit add .\ngit commit -m \"feat: initial Kreya setup\"\ngit remote add origin https://gitlab.com/YOUR_USERNAME/kreya.git\ngit push -u origin main')">Copy</button></div>
+        <pre>git init
+git add .
+git commit -m <span class="st">"feat: initial Kreya setup"</span>
+
+<span class="cm"># Create the repo on GitLab first (gitlab.com → New project → Create blank project)
+# Then connect it:</span>
+git remote add origin https://gitlab.com/YOUR_USERNAME/kreya.git
+git push -u origin main</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-10b">
+    <div class="step-header" onclick="toggleStep('sc-10b')">
+      <div class="step-num">2</div><div class="step-title">Create the .gitignore (if not already present)</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>The Next.js template creates this automatically. Verify these lines are in it:</p>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>.gitignore — critical entries</span></div></div>
+        <pre>.env.local          <span class="cm"># ← NEVER commit — contains all secrets</span>
+.env*.local
+.next/
+node_modules/
+.vercel/</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-10c">
+    <div class="step-header" onclick="toggleStep('sc-10c')">
+      <div class="step-num">3</div><div class="step-title">Branching strategy</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt"><strong>main</strong> → always deployable, auto-deploys to production (kreya.ai)</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt"><strong>develop</strong> → integration branch, auto-deploys to staging URL</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt"><strong>feature/xxx</strong> → your daily work branches, merge to develop first</div></li>
+      </ul>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>terminal — recommended setup</span><span class="code-lang l-sh">Shell</span></div><button class="copy-btn" onclick="cp(this,'git checkout -b develop\ngit push -u origin develop')">Copy</button></div>
+        <pre>git checkout -b develop
+git push -u origin develop
+<span class="cm"># Now work in feature branches, merge to develop, then develop → main for releases</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('claude')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('cicd')">Next: CI/CD pipeline →</button>
+  </div>
+</div>
+
+<!-- ─── CI/CD ─── -->
+<div class="section" id="section-cicd">
+  <span class="sec-lbl">Step 11</span>
+  <div class="sec-title">GitLab CI/CD → auto-deploy to Vercel</div>
+  <div class="sec-sub">Every push to GitLab automatically builds and deploys via Vercel CLI. Push to <code style="font-family:'Space Mono',monospace;font-size:12px;color:var(--mint)">main</code> → production. Any other branch → preview URL.</div>
+
+  <div class="step-card open" id="sc-11a">
+    <div class="step-header" onclick="toggleStep('sc-11a')">
+      <div class="step-num">1</div><div class="step-title">Get your Vercel tokens</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Sign up at <strong>vercel.com</strong> → import GitLab repository → deploy once manually</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Vercel → <strong>Account Settings → Tokens → Create</strong> → copy as <code>VERCEL_TOKEN</code></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">In your Kreya project on Vercel → Settings → copy <strong>Project ID</strong> as <code>VERCEL_PROJECT_ID</code></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Vercel Account Settings → copy <strong>Team/Org ID</strong> as <code>VERCEL_ORG_ID</code></div></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-11b">
+    <div class="step-header" onclick="toggleStep('sc-11b')">
+      <div class="step-num">2</div><div class="step-title">Add CI/CD variables to GitLab</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <ul class="checklist">
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">GitLab → Your project → <strong>Settings → CI/CD → Variables → Expand</strong></div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Add <code>VERCEL_TOKEN</code> → mark as <strong>Masked</strong> (hides from logs)</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Add <code>VERCEL_ORG_ID</code> → mark as Masked</div></li>
+        <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Add <code>VERCEL_PROJECT_ID</code> → mark as Masked</div></li>
+      </ul>
+      <div class="banner b-warn"><span class="bi">⚠</span><div>Do NOT add your .env.local secrets here. Environment variables for the app (Supabase keys, Instagram keys etc.) are managed in <strong>Vercel → Project → Settings → Environment Variables</strong> — not in GitLab.</div></div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-11c">
+    <div class="step-header" onclick="toggleStep('sc-11c')">
+      <div class="step-num">3</div><div class="step-title">Create .gitlab-ci.yml in project root</div>
+      <span class="badge-req step-badge">Key file</span><span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>Create this file in the root of your project. This is the entire CI/CD pipeline:</p>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>.gitlab-ci.yml</span><span class="code-lang l-yml">YAML</span></div><button class="copy-btn" onclick="cp(this,document.getElementById('ciblock').innerText)">Copy</button></div>
+        <pre id="ciblock">image: node:20
+
+stages:
+  - test
+  - deploy
+
+# Cache node_modules between jobs to speed up builds
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+    - .next/cache/
+
+# Run on every push — type check + lint
+test:
+  stage: test
+  script:
+    - npm ci
+    - npm run type-check || true   # won't block deploy during development
+    - npm run lint || true
+  except:
+    - tags
+
+# Deploy preview for every branch except main
+deploy_preview:
+  stage: deploy
+  except:
+    - main
+  script:
+    - npm install --global vercel
+    - vercel pull --yes --environment=preview --token=$VERCEL_TOKEN
+    - vercel build --token=$VERCEL_TOKEN
+    - vercel deploy --prebuilt --token=$VERCEL_TOKEN
+  environment:
+    name: preview/$CI_COMMIT_REF_SLUG
+
+# Deploy to production only when main branch changes
+deploy_production:
+  stage: deploy
+  only:
+    - main
+  script:
+    - npm install --global vercel
+    - vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+    - vercel build --prod --token=$VERCEL_TOKEN
+    - vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+  environment:
+    name: production
+    url: https://kreya.ai</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-11d">
+    <div class="step-header" onclick="toggleStep('sc-11d')">
+      <div class="step-num">4</div><div class="step-title">Add env vars to Vercel (production secrets)</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <p>All your <code>.env.local</code> values need to be in Vercel for production to work:</p>
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>terminal — push all vars to Vercel at once</span><span class="code-lang l-sh">Shell</span></div><button class="copy-btn" onclick="cp(this,'npm install -g vercel\nvercel login\nvercel link  # connects local folder to Vercel project\nvercel env pull  # downloads existing vars\n# Or add them manually in Vercel dashboard → Settings → Environment Variables')">Copy</button></div>
+        <pre><span class="cm"># Option A: Vercel dashboard (easiest)
+# Vercel → Your project → Settings → Environment Variables
+# Add each key from your .env.local — set for Production + Preview + Development</span>
+
+<span class="cm"># Option B: Vercel CLI</span>
+npm install -g vercel
+vercel login
+vercel link              <span class="cm"># connects this folder to your Vercel project</span>
+<span class="cm"># Then add each variable interactively:</span>
+vercel env add NEXT_PUBLIC_SUPABASE_URL
+vercel env add INSTAGRAM_APP_SECRET     <span class="cm"># sensitive — will be hidden</span>
+vercel env add TOKEN_ENCRYPTION_KEY     <span class="cm"># critical — never change after launch</span></pre>
+      </div>
+      <div class="banner b-ok"><span class="bi">✓</span><div>Remember to set INSTAGRAM_REDIRECT_URI to <code>https://kreya.ai/api/instagram/callback</code> (not localhost) and NEXT_PUBLIC_APP_URL to <code>https://kreya.ai</code> in Vercel's production environment.</div></div>
+    </div>
+  </div>
+
+  <div class="step-card" id="sc-11e">
+    <div class="step-header" onclick="toggleStep('sc-11e')">
+      <div class="step-num">5</div><div class="step-title">Test the pipeline</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step-body">
+      <div class="code">
+        <div class="code-hdr"><div class="code-fn"><span>terminal</span><span class="code-lang l-sh">Shell</span></div><button class="copy-btn" onclick="cp(this,'git add .gitlab-ci.yml\ngit commit -m \"ci: add GitLab CI/CD pipeline\"\ngit push')">Copy</button></div>
+        <pre>git add .gitlab-ci.yml
+git commit -m <span class="st">"ci: add GitLab CI/CD pipeline"</span>
+git push
+
+<span class="cm"># Watch the pipeline:
+# GitLab → Your project → CI/CD → Pipelines
+# Should show: test → deploy_preview running
+# Takes ~2-3 minutes
+# After merge to main: deploy_production runs → kreya.ai goes live</span></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('gitlab')">← Back</button>
+    <button class="btn btn-c" onclick="gotoSection('launch')">Final: Launch checklist →</button>
+  </div>
+</div>
+
+<!-- ─── LAUNCH ─── -->
+<div class="section" id="section-launch">
+  <span class="sec-lbl">Final step</span>
+  <div class="sec-title">Launch checklist 🚀</div>
+  <div class="sec-sub">Tick everything before going live. This is your pre-launch security and functionality audit.</div>
+
+  <h3>Auth + Security</h3>
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Sign up with a real email → confirmation email arrives within 30 seconds</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Click confirmation link → redirected to /setup → completes profile → lands on dashboard</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Wrong password → shows error (not a generic 500)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Visit /dashboard while logged out → redirected to /login by middleware</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Supabase → Authentication → users table shows your test user with email_confirmed_at set</div></li>
+  </ul>
+
+  <h3>Instagram</h3>
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Click Connect Instagram → redirected to Instagram login → authorizes → back to /dashboard/connections with success message</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Supabase → instagram_accounts table → row exists with encrypted_token (not plaintext)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">POST to /api/instagram/post with a test image URL → post appears on Instagram</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">GET /api/instagram/status → returns tokenHealthy: true, tokenDaysRemaining: 58</div></li>
+  </ul>
+
+  <h3>CI/CD + Deploy</h3>
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Push to a feature branch → GitLab pipeline runs → Vercel preview URL created</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Merge to main → production deploy completes in &lt; 3 minutes</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">kreya.ai loads correctly (no missing env var errors in Vercel logs)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">kreya.ai/api/instagram/status returns 401 (not 500) when called without auth — proves middleware is working</div></li>
+  </ul>
+
+  <h3>Before accepting real users</h3>
+  <ul class="checklist">
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Submit Meta app for App Review (developers.facebook.com → Your App → App Review → Submit)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Add Privacy Policy page at kreya.ai/privacy (required for Meta App Review)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Add Terms of Service page at kreya.ai/terms</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">Test full flow with a second test Instagram account (not your own)</div></li>
+    <li onclick="tick(this)"><div class="check-box"></div><div class="check-txt">QStash cron job scheduled and visible at upstash.com → QStash → Schedules</div></li>
+  </ul>
+
+  <div class="banner b-ok"><span class="bi">🎉</span><div><strong>You're live.</strong> Kreya is running on GitLab → Vercel, connected to Supabase, posting to Instagram for free, with full CI/CD. Every push to main is in production in under 3 minutes.</div></div>
+
+  <div class="nav-btns">
+    <button class="btn btn-g" onclick="gotoSection('cicd')">← Back</button>
+    <div></div>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const SECTIONS = ['overview','nextjs','supabase','envvars','auth','database','meta','instagram','upstash','claude','gitlab','cicd','launch'];
+let current = 'overview';
+const completed = new Set();
+
+function gotoSection(id) {
+  document.getElementById('section-' + current).classList.remove('act');
+  document.getElementById('nav-' + current).classList.remove('act');
+  current = id;
+  document.getElementById('section-' + id).classList.add('act');
+  document.getElementById('nav-' + id).classList.add('act');
+  window.scrollTo(0, 0);
+  updateProgress();
+}
+
+function toggleStep(id) {
+  const card = document.getElementById(id);
+  card.classList.toggle('open');
+}
+
+function tick(li) {
+  li.classList.toggle('done');
+  updateProgress();
+}
+
+function updateProgress() {
+  const total = document.querySelectorAll('.checklist li').length;
+  const done = document.querySelectorAll('.checklist li.done').length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  document.getElementById('prog-pct').textContent = pct + '%';
+  document.getElementById('prog-fill').style.width = pct + '%';
+}
+
+function cp(btn, text) {
+  navigator.clipboard?.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('ok'); }, 1800);
+  });
+}
+</script>
+</body>
+</html>

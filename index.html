@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Kreya — Your Creative AI. Tell Kreya what you need. Consider it done. AI-powered social media management via WhatsApp.">
+<meta property="og:title" content="Kreya — Your Creative AI">
+<meta property="og:description" content="Tell Kreya what you need. Consider it done.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<title>Kreya — Your Creative AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════
+   TOKENS
+═══════════════════════════════════ */
+:root {
+  --ink: #07070D;
+  --dark: #0B0918;
+  --surf: #100E22;
+  --surf2: #171430;
+  --surf3: #201D3C;
+  --bdr: rgba(255,255,255,.07);
+  --bdr2: rgba(255,255,255,.13);
+  --coral: #FF4F3B;
+  --coral2: #FF6B59;
+  --violet: #5E35FF;
+  --mint: #00E5A0;
+  --gold: #FFD166;
+  --rose: #FF6B8A;
+  --white: #FFFFFF;
+  --muted: rgba(255,255,255,.5);
+  --muted2: rgba(255,255,255,.25);
+}
+
+/* ═══════════════════════════════════
+   RESET
+═══════════════════════════════════ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  background: var(--ink);
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img { display:block; max-width:100%; }
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; border: none; font-family: inherit; }
+
+/* ═══════════════════════════════════
+   NOISE TEXTURE
+═══════════════════════════════════ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  opacity: .022;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 200px;
+}
+
+/* ═══════════════════════════════════
+   NAV
+═══════════════════════════════════ */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 0 40px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(7,7,13,.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--bdr);
+  transition: background .3s;
+}
+.nav-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -.04em;
+  color: var(--white);
+}
+.nav-logo .ac { color: var(--coral); }
+.nav-sp { flex: 1; }
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.nav-link {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  transition: color .15s;
+}
+.nav-link:hover { color: var(--white); }
+.nav-cta {
+  background: var(--coral);
+  color: #fff;
+  padding: 9px 20px;
+  border-radius: 5px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -.01em;
+  transition: opacity .15s, transform .1s;
+}
+.nav-cta:hover { opacity: .88; transform: translateY(-1px); }
+.nav-mobile-toggle {
+  display: none;
+  background: none;
+  color: var(--white);
+  font-size: 22px;
+  padding: 4px;
+}
+@media (max-width: 680px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .nav-mobile-toggle { display: block; }
+  nav.open .nav-links {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 64px; left: 0; right: 0;
+    background: var(--dark);
+    border-bottom: 1px solid var(--bdr);
+    padding: 20px;
+    gap: 16px;
+    align-items: flex-start;
+  }
+}
+
+/* ═══════════════════════════════════
+   HERO
+═══════════════════════════════════ */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 24px 80px;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 70% at 20% 20%, rgba(94,53,255,.28) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 60% at 80% 80%, rgba(255,79,59,.22) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0,229,160,.06) 0%, transparent 70%);
+}
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 80%);
+}
+.hero-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,229,160,.1);
+  border: 1px solid rgba(0,229,160,.25);
+  border-radius: 100px;
+  padding: 6px 16px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--mint);
+  margin-bottom: 28px;
+  animation: fadeUp .6s ease both;
+}
+.hero-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 8px var(--mint);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+.hero-title {
+  position: relative;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(48px, 9vw, 96px);
+  letter-spacing: -.05em;
+  line-height: 1.0;
+  margin-bottom: 14px;
+  animation: fadeUp .6s .1s ease both;
+}
+.hero-title .line2 { display: block; }
+.hero-title .ac { color: var(--coral); }
+.hero-title .ao {
+  color: transparent;
+  -webkit-text-stroke: 2px rgba(255,255,255,.3);
+}
+
+.hero-sub {
+  position: relative;
+  font-size: clamp(16px, 2.5vw, 20px);
+  font-weight: 300;
+  color: var(--muted);
+  max-width: 520px;
+  margin: 0 auto 40px;
+  line-height: 1.65;
+  animation: fadeUp .6s .2s ease both;
+}
+.hero-sub strong { color: var(--white); font-weight: 500; }
+
+.hero-actions {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 64px;
+  animation: fadeUp .6s .3s ease both;
+}
+.btn-primary {
+  background: var(--coral);
+  color: #fff;
+  padding: 14px 28px;
+  border-radius: 6px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity .15s, transform .1s;
+}
+.btn-primary:hover { opacity: .88; transform: translateY(-2px); }
+.btn-secondary {
+  background: var(--surf);
+  color: var(--muted);
+  border: 1px solid var(--bdr2);
+  padding: 14px 28px;
+  border-radius: 6px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all .15s;
+}
+.btn-secondary:hover { border-color: var(--bdr2); color: var(--white); background: var(--surf2); transform: translateY(-2px); }
+
+/* WhatsApp mockup */
+.hero-mockup {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  animation: fadeUp .6s .4s ease both;
+}
+.wa-phone {
+  background: var(--surf);
+  border: 1px solid var(--bdr2);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 40px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
+}
+.wa-header {
+  background: var(--surf2);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--bdr);
+}
+.wa-av {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--coral), var(--violet));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+}
+.wa-name { font-size: 13px; font-weight: 600; }
+.wa-status { font-size: 10px; color: var(--mint); font-family: 'Space Mono', monospace; }
+.wa-body { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.wa-msg {
+  padding: 9px 13px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 82%;
+}
+.wa-msg.user {
+  align-self: flex-end;
+  background: var(--coral);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+.wa-msg.kreya {
+  align-self: flex-start;
+  background: var(--surf3);
+  border: 1px solid var(--bdr);
+  border-bottom-left-radius: 2px;
+}
+.wa-msg-time { font-size: 9px; opacity: .5; margin-top: 3px; text-align: right; }
+.wa-preview-card {
+  align-self: flex-start;
+  background: rgba(0,229,160,.08);
+  border: 1px solid rgba(0,229,160,.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  max-width: 88%;
+}
+.wa-preview-lbl {
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--mint);
+  margin-bottom: 6px;
+}
+.wa-preview-text { font-size: 11px; line-height: 1.55; color: rgba(255,255,255,.85); }
+.wa-actions { display: flex; gap: 6px; margin-top: 8px; }
+.wa-action {
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.wa-action:hover { opacity: .8; }
+.wa-action.yes { background: var(--mint); color: var(--ink); font-weight: 700; }
+.wa-action.edit { background: var(--surf3); color: var(--white); border: 1px solid var(--bdr2); }
+.wa-input-row {
+  padding: 10px 14px;
+  border-top: 1px solid var(--bdr);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.wa-input {
+  flex: 1;
+  background: var(--surf2);
+  border: 1px solid var(--bdr);
+  border-radius: 20px;
+  padding: 7px 12px;
+  font-size: 11px;
+  color: rgba(255,255,255,.4);
+  font-style: italic;
+}
+.wa-send-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--coral);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surf3);
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  border-bottom-left-radius: 2px;
+  width: fit-content;
+}
+.t-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: tdot 1.2s ease-in-out infinite;
+}
+.t-dot:nth-child(2) { animation-delay: .2s; }
+.t-dot:nth-child(3) { animation-delay: .4s; }
+@keyframes tdot { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+/* ═══════════════════════════════════
+   LOGOS STRIP
+═══════════════════════════════════ */
+.logos-strip {
+  padding: 24px 40px;
+  border-top: 1px solid var(--bdr);
+  border-bottom: 1px solid var(--bdr);
+  background: var(--dark);
+  overflow: hidden;
+}
+.logos-lbl {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--muted2);
+  text-align: center;
+  margin-bottom: 16px;
+}
+.logos-row {
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.logo-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.3);
+  transition: color .2s;
+}
+.logo-item:hover { color: rgba(255,255,255,.6); }
+.logo-item span { font-size: 18px; }
+
+/* ═══════════════════════════════════
+   SECTIONS
+═══════════════════════════════════ */
+section { padding: 100px 24px; }
+.section-inner { max-width: 1080px; margin: 0 auto; }
+.section-lbl {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--coral);
+  margin-bottom: 12px;
+  display: block;
+}
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: -.035em;
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+.section-sub {
+  font-size: 16px;
+  font-weight: 300;
+  color: var(--muted);
+  max-width: 540px;
+  line-height: 1.7;
+  margin-bottom: 52px;
+}
+
+/* ═══════════════════════════════════
+   HOW IT WORKS
+═══════════════════════════════════ */
+#how { background: var(--dark); }
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+}
+@media (max-width: 800px) { .steps-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 480px) { .steps-grid { grid-template-columns: 1fr; } }
+.step-card {
+  background: var(--surf);
+  padding: 32px 28px;
+  position: relative;
+  overflow: hidden;
+  transition: background .2s;
+}
+.step-card:hover { background: var(--surf2); }
+.step-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.step-card:nth-child(1)::before { background: var(--coral); }
+.step-card:nth-child(2)::before { background: var(--violet); }
+.step-card:nth-child(3)::before { background: var(--mint); }
+.step-card:nth-child(4)::before { background: var(--gold); }
+.step-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .2em;
+  color: var(--muted2);
+  margin-bottom: 16px;
+}
+.step-ico { font-size: 28px; margin-bottom: 14px; }
+.step-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -.01em;
+  margin-bottom: 8px;
+}
+.step-desc { font-size: 13px; font-weight: 300; color: var(--muted); line-height: 1.65; }
+
+/* ═══════════════════════════════════
+   FEATURES
+═══════════════════════════════════ */
+#features { background: var(--ink); }
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 860px) { .features-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 540px) { .features-grid { grid-template-columns: 1fr; } }
+.feature-card {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  padding: 28px;
+  transition: border-color .2s, transform .2s;
+}
+.feature-card:hover { border-color: var(--bdr2); transform: translateY(-3px); }
+.feature-card.highlight {
+  background: linear-gradient(135deg, rgba(255,79,59,.1), rgba(94,53,255,.1));
+  border-color: rgba(255,79,59,.2);
+  grid-column: span 1;
+}
+.feature-ico {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+.feature-ico.c { background: rgba(255,79,59,.12); }
+.feature-ico.v { background: rgba(94,53,255,.12); }
+.feature-ico.m { background: rgba(0,229,160,.1); }
+.feature-ico.g { background: rgba(255,209,102,.1); }
+.feature-ico.r { background: rgba(255,107,138,.1); }
+.feature-ico.s { background: rgba(184,236,255,.08); }
+.feature-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -.01em;
+  margin-bottom: 6px;
+}
+.feature-desc { font-size: 13px; font-weight: 300; color: var(--muted); line-height: 1.65; }
+
+/* ═══════════════════════════════════
+   PLATFORMS
+═══════════════════════════════════ */
+#platforms { background: var(--dark); }
+.platforms-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.platform-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: 100px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .2s;
+}
+.platform-pill:hover { border-color: var(--bdr2); transform: translateY(-2px); }
+.pp-ico { font-size: 18px; }
+.pp-status {
+  font-family: 'Space Mono', monospace;
+  font-size: 7px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 100px;
+}
+.pp-live { background: rgba(0,229,160,.12); color: var(--mint); }
+.pp-soon { background: rgba(255,209,102,.1); color: var(--gold); }
+
+/* ═══════════════════════════════════
+   PRICING
+═══════════════════════════════════ */
+#pricing { background: var(--ink); }
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+@media (max-width: 700px) { .pricing-grid { grid-template-columns: 1fr; } }
+.price-card {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  padding: 28px;
+  position: relative;
+  transition: transform .2s;
+}
+.price-card:hover { transform: translateY(-4px); }
+.price-card.popular {
+  border-color: var(--coral);
+  background: linear-gradient(160deg, rgba(255,79,59,.08), var(--surf));
+}
+.popular-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--coral);
+  color: #fff;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 100px;
+}
+.price-name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -.02em;
+  margin-bottom: 6px;
+}
+.price-card.popular .price-name { color: var(--coral); }
+.price-amount {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 36px;
+  letter-spacing: -.04em;
+  margin-bottom: 4px;
+}
+.price-amount span { font-size: 14px; font-weight: 300; color: var(--muted); }
+.price-period { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+.price-divider { height: 1px; background: var(--bdr); margin-bottom: 18px; }
+.price-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--muted);
+  padding: 5px 0;
+}
+.price-feature::before { content: '✓'; color: var(--mint); font-size: 11px; margin-top: 2px; flex-shrink: 0; }
+.price-cta {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  margin-top: 22px;
+  transition: opacity .15s, transform .1s;
+}
+.price-cta:hover { opacity: .85; transform: translateY(-1px); }
+.price-cta.primary { background: var(--coral); color: #fff; }
+.price-cta.outline { background: transparent; color: var(--muted); border: 1px solid var(--bdr2); }
+.price-cta.outline:hover { color: var(--white); border-color: var(--bdr2); }
+
+/* ═══════════════════════════════════
+   TESTIMONIALS
+═══════════════════════════════════ */
+#testimonials { background: var(--dark); }
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 14px;
+}
+@media (max-width: 800px) { .testimonials-grid { grid-template-columns: 1fr; } }
+.testimonial-card {
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  padding: 24px;
+}
+.t-stars { color: var(--gold); font-size: 13px; margin-bottom: 12px; letter-spacing: 2px; }
+.t-quote { font-size: 14px; font-weight: 300; color: rgba(255,255,255,.82); line-height: 1.7; margin-bottom: 16px; font-style: italic; }
+.t-author { display: flex; align-items: center; gap: 10px; }
+.t-av {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+}
+.t-name { font-size: 13px; font-weight: 600; }
+.t-role { font-size: 11px; color: var(--muted); font-weight: 300; }
+
+/* ═══════════════════════════════════
+   CTA SECTION
+═══════════════════════════════════ */
+#cta {
+  background: var(--ink);
+  padding: 100px 24px;
+}
+.cta-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(255,79,59,.1), rgba(94,53,255,.1));
+  border: 1px solid rgba(255,79,59,.2);
+  border-radius: 16px;
+  padding: 60px 40px;
+  position: relative;
+  overflow: hidden;
+}
+.cta-inner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 60% at 50% 0%, rgba(255,79,59,.15), transparent 70%);
+}
+.cta-lbl {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: var(--mint);
+  margin-bottom: 16px;
+  position: relative;
+}
+.cta-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: clamp(28px, 5vw, 42px);
+  letter-spacing: -.04em;
+  line-height: 1.1;
+  margin-bottom: 14px;
+  position: relative;
+}
+.cta-title .ac { color: var(--coral); }
+.cta-sub {
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--muted);
+  margin-bottom: 32px;
+  position: relative;
+  line-height: 1.65;
+}
+.cta-form {
+  display: flex;
+  gap: 8px;
+  max-width: 380px;
+  margin: 0 auto;
+  position: relative;
+}
+@media (max-width: 480px) { .cta-form { flex-direction: column; } }
+.cta-input {
+  flex: 1;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--white);
+  outline: none;
+  transition: border-color .2s;
+}
+.cta-input:focus { border-color: var(--coral); }
+.cta-input::placeholder { color: rgba(255,255,255,.3); }
+.cta-btn {
+  background: var(--coral);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: opacity .15s;
+}
+.cta-btn:hover { opacity: .88; }
+.cta-note { font-size: 11px; color: var(--muted2); margin-top: 12px; position: relative; }
+
+/* ═══════════════════════════════════
+   FOOTER
+═══════════════════════════════════ */
+footer {
+  background: var(--dark);
+  border-top: 1px solid var(--bdr);
+  padding: 48px 40px 32px;
+}
+.footer-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.footer-top {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 40px;
+}
+@media (max-width: 700px) { .footer-top { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 400px) { .footer-top { grid-template-columns: 1fr; } }
+.footer-logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -.04em;
+  margin-bottom: 10px;
+}
+.footer-logo .ac { color: var(--coral); }
+.footer-tagline { font-size: 13px; font-weight: 300; color: var(--muted); line-height: 1.6; max-width: 200px; }
+.footer-col-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: -.01em;
+  margin-bottom: 14px;
+}
+.footer-link {
+  display: block;
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--muted);
+  padding: 4px 0;
+  transition: color .15s;
+}
+.footer-link:hover { color: var(--white); }
+.footer-bottom {
+  border-top: 1px solid var(--bdr);
+  padding-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.footer-copy { font-size: 12px; font-weight: 300; color: var(--muted2); }
+.footer-socials { display: flex; gap: 12px; }
+.footer-social {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--surf);
+  border: 1px solid var(--bdr);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: border-color .15s;
+}
+.footer-social:hover { border-color: var(--bdr2); }
+
+/* ═══════════════════════════════════
+   SCROLL REVEAL
+═══════════════════════════════════ */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .6s ease, transform .6s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ═══════════════════════════════════
+   TOAST
+═══════════════════════════════════ */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9000;
+  background: var(--surf2);
+  border: 1px solid var(--bdr2);
+  border-radius: 8px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  border-left: 3px solid var(--mint);
+  transform: translateY(60px);
+  opacity: 0;
+  transition: all .3s ease;
+  pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ NAV ═══════ -->
+<nav id="navbar">
+  <div class="nav-logo">KREY<span class="ac">A</span>.</div>
+  <div class="nav-sp"></div>
+  <div class="nav-links" id="nav-links">
+    <a href="#how" class="nav-link">How it works</a>
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#platforms" class="nav-link">Platforms</a>
+    <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="#" class="nav-link">Sign in</a>
+    <a href="#cta" class="nav-cta">Get started free →</a>
+  </div>
+  <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Menu">☰</button>
+</nav>
+
+<!-- ═══════ HERO ═══════ -->
+<section class="hero" id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+
+  <div class="hero-badge">✦ Your Creative AI is live</div>
+
+  <h1 class="hero-title">
+    Tell Kreya<br>
+    <span class="line2">what you need.<span class="ac">.</span></span>
+  </h1>
+
+  <p class="hero-sub">
+    Send a <strong>WhatsApp voice note</strong>. Kreya writes the caption, designs the post, and publishes to Instagram, TikTok, Twitter and more — automatically.
+  </p>
+
+  <div class="hero-actions">
+    <a href="#cta" class="btn-primary">Start free — no card needed →</a>
+    <a href="#how" class="btn-secondary">See how it works</a>
+  </div>
+
+  <!-- WhatsApp mockup -->
+  <div class="hero-mockup">
+    <div class="wa-phone">
+      <div class="wa-header">
+        <div class="wa-av">K</div>
+        <div>
+          <div class="wa-name">Kreya AI</div>
+          <div class="wa-status">● Online · Your Creative AI</div>
+        </div>
+      </div>
+      <div class="wa-body">
+        <div class="wa-msg user">
+          Post a BTS reel from our studio session on Instagram and TikTok — 6pm today, casual vibe 🎸
+          <div class="wa-msg-time">Now</div>
+        </div>
+        <div class="typing-indicator">
+          <div class="t-dot"></div>
+          <div class="t-dot"></div>
+          <div class="t-dot"></div>
+        </div>
+        <div class="wa-preview-card">
+          <div class="wa-preview-lbl">✦ Kreya Draft — Instagram + TikTok · 6:00 PM</div>
+          <div class="wa-preview-text">
+            Behind the scenes from yesterday's session 🎸✨<br><br>
+            The energy in the room was different. When the take just <em>clicks</em> — you feel it before you hear it.<br><br>
+            Something special is coming. Stay tuned. 🔥<br><br>
+            #StudioLife #BehindTheScenes #NewMusic
+          </div>
+          <div class="wa-actions">
+            <button class="wa-action yes">✓ Approve</button>
+            <button class="wa-action edit">✏️ Edit</button>
+          </div>
+        </div>
+      </div>
+      <div class="wa-input-row">
+        <div class="wa-input">Message Kreya…</div>
+        <div class="wa-send-btn">➤</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ LOGOS ═══════ -->
+<div class="logos-strip">
+  <div class="logos-lbl">Posts to all your platforms</div>
+  <div class="logos-row">
+    <div class="logo-item"><span>📸</span> Instagram</div>
+    <div class="logo-item"><span>🎵</span> TikTok</div>
+    <div class="logo-item"><span>𝕏</span> Twitter / X</div>
+    <div class="logo-item"><span>📘</span> Facebook</div>
+    <div class="logo-item"><span>💼</span> LinkedIn</div>
+    <div class="logo-item"><span>▶️</span> YouTube</div>
+  </div>
+</div>
+
+<!-- ═══════ HOW IT WORKS ═══════ -->
+<section id="how">
+  <div class="section-inner">
+    <span class="section-lbl reveal">How it works</span>
+    <h2 class="section-title reveal">Four steps.<br>Zero agency needed.</h2>
+    <p class="section-sub reveal">Non-technical creators run their entire content operation from WhatsApp. Kreya handles everything in between.</p>
+
+    <div class="steps-grid reveal">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <div class="step-ico">💬</div>
+        <div class="step-title">Send a prompt</div>
+        <div class="step-desc">Text or voice note on WhatsApp. "Post a motivational reel on Instagram tomorrow 9am" — that's all you need.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <div class="step-ico">🤖</div>
+        <div class="step-title">Kreya AI generates</div>
+        <div class="step-desc">Claude AI writes the caption, selects hashtags, optimises format for each platform — in seconds.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <div class="step-ico">✓</div>
+        <div class="step-title">You approve</div>
+        <div class="step-desc">Kreya sends you a preview on WhatsApp. Reply "yes" to approve, or give feedback to refine it.</div>
+      </div>
+      <div class="step-card">
+        <div class="step-num">04</div>
+        <div class="step-ico">🚀</div>
+        <div class="step-title">Posts go live</div>
+        <div class="step-desc">Kreya publishes to every selected platform at the exact scheduled time. You get a notification when it's live.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ FEATURES ═══════ -->
+<section id="features">
+  <div class="section-inner">
+    <span class="section-lbl reveal">Features</span>
+    <h2 class="section-title reveal">Everything a digital<br>agency does. In your pocket.</h2>
+    <p class="section-sub reveal">Kreya replaces your social media manager, copywriter, and scheduler — for the price of a coffee subscription.</p>
+
+    <div class="features-grid reveal">
+      <div class="feature-card highlight">
+        <div class="feature-ico c">💬</div>
+        <div class="feature-title">WhatsApp-native control</div>
+        <div class="feature-desc">Your entire content operation from one WhatsApp conversation. No apps to learn, no dashboards to navigate. If you can send a message, you can run Kreya.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-ico v">🤖</div>
+        <div class="feature-title">Real AI — Claude + GPT</div>
+        <div class="feature-desc">Powered by Claude Sonnet and GPT-4o. Understands your brand voice, tone, and audience. Gets better the more you use it.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-ico m">📅</div>
+        <div class="feature-title">Smart scheduling</div>
+        <div class="feature-desc">Schedule up to 90 days in advance. Recurring posts, best-time suggestions, platform-specific windows. Never miss a post.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-ico g">♻️</div>
+        <div class="feature-title">Content repurposing</div>
+        <div class="feature-desc">One idea → six platform formats. Kreya adapts captions for Instagram, TikTok, Twitter, LinkedIn automatically.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-ico r">🎨</div>
+        <div class="feature-title">Brand kit</div>
+        <div class="feature-desc">Upload your logo, colours, and tone of voice. Kreya uses them in every piece of content it generates.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-ico s">📊</div>
+        <div class="feature-title">Analytics that matter</div>
+        <div class="feature-desc">Reach, engagement, top posts, follower growth — pulled from all platforms into one clean dashboard.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ PLATFORMS ═══════ -->
+<section id="platforms">
+  <div class="section-inner">
+    <span class="section-lbl reveal">Platforms</span>
+    <h2 class="section-title reveal">One prompt.<br>Every platform.</h2>
+    <p class="section-sub reveal">Kreya connects directly to all major social networks via official APIs. No third-party tools, no extra cost.</p>
+
+    <div class="platforms-row reveal">
+      <div class="platform-pill"><span class="pp-ico">📸</span> Instagram <span class="pp-status pp-live">Live</span></div>
+      <div class="platform-pill"><span class="pp-ico">🎵</span> TikTok <span class="pp-status pp-live">Live</span></div>
+      <div class="platform-pill"><span class="pp-ico">𝕏</span> Twitter / X <span class="pp-status pp-live">Live</span></div>
+      <div class="platform-pill"><span class="pp-ico">📘</span> Facebook <span class="pp-status pp-live">Live</span></div>
+      <div class="platform-pill"><span class="pp-ico">💼</span> LinkedIn <span class="pp-status pp-soon">Coming</span></div>
+      <div class="platform-pill"><span class="pp-ico">▶️</span> YouTube Shorts <span class="pp-status pp-soon">Coming</span></div>
+      <div class="platform-pill"><span class="pp-ico">📌</span> Pinterest <span class="pp-status pp-soon">Coming</span></div>
+      <div class="platform-pill"><span class="pp-ico">🧵</span> Threads <span class="pp-status pp-soon">Coming</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ PRICING ═══════ -->
+<section id="pricing">
+  <div class="section-inner">
+    <span class="section-lbl reveal">Pricing</span>
+    <h2 class="section-title reveal" style="text-align:center">Start free.<br>Scale when ready.</h2>
+    <p class="section-sub reveal" style="text-align:center;margin:0 auto 52px">No credit card needed to start. Cancel anytime. All plans include WhatsApp control.</p>
+
+    <div class="pricing-grid reveal">
+      <div class="price-card">
+        <div class="price-name">Free</div>
+        <div class="price-amount">$0<span>/mo</span></div>
+        <div class="price-period">Forever free</div>
+        <div class="price-divider"></div>
+        <div class="price-feature">3 social accounts</div>
+        <div class="price-feature">10 AI posts per month</div>
+        <div class="price-feature">WhatsApp control</div>
+        <div class="price-feature">Content calendar</div>
+        <div class="price-feature">1 user</div>
+        <button class="price-cta outline" onclick="showToast('✦','Free plan','Create your account to get started')">Get started free</button>
+      </div>
+
+      <div class="price-card popular">
+        <div class="popular-badge">Most popular</div>
+        <div class="price-name">Pro</div>
+        <div class="price-amount">$19<span>/mo</span></div>
+        <div class="price-period">Billed monthly · cancel anytime</div>
+        <div class="price-divider"></div>
+        <div class="price-feature">Unlimited social accounts</div>
+        <div class="price-feature">200 AI posts per month</div>
+        <div class="price-feature">WhatsApp + voice notes</div>
+        <div class="price-feature">Analytics dashboard</div>
+        <div class="price-feature">Content repurposing</div>
+        <div class="price-feature">3 users</div>
+        <button class="price-cta primary" onclick="showToast('🚀','Pro plan','Starting at $19/mo — launching soon!')">Start Pro →</button>
+      </div>
+
+      <div class="price-card">
+        <div class="price-name">Agency</div>
+        <div class="price-amount">$79<span>/mo</span></div>
+        <div class="price-period">For teams and agencies</div>
+        <div class="price-divider"></div>
+        <div class="price-feature">10 brands / organisations</div>
+        <div class="price-feature">Unlimited AI posts</div>
+        <div class="price-feature">Team seats</div>
+        <div class="price-feature">White label</div>
+        <div class="price-feature">Priority AI models</div>
+        <div class="price-feature">API access</div>
+        <button class="price-cta outline" onclick="showToast('💼','Agency plan','Get in touch for early access')">Contact us</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ TESTIMONIALS ═══════ -->
+<section id="testimonials">
+  <div class="section-inner">
+    <span class="section-lbl reveal">Early users</span>
+    <h2 class="section-title reveal">Creators love Kreya.</h2>
+    <p class="section-sub reveal">Join creators and small businesses already using Kreya to manage their social presence.</p>
+
+    <div class="testimonials-grid reveal">
+      <div class="testimonial-card">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">"I used to spend 3 hours every Sunday scheduling content. Now I send a voice note on Monday morning and it's done. Kreya genuinely changed how I work."</div>
+        <div class="t-author">
+          <div class="t-av" style="background:linear-gradient(135deg,#FF4F3B,#FF8C7A)">M</div>
+          <div>
+            <div class="t-name">Martina K.</div>
+            <div class="t-role">Fitness creator · 42K followers</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">"We were paying an agency €800/month for social media. Switched to Kreya at $19 and honestly the content quality is better. The AI understands our brand voice."</div>
+        <div class="t-author">
+          <div class="t-av" style="background:linear-gradient(135deg,#5E35FF,#9070FF)">T</div>
+          <div>
+            <div class="t-name">Tomáš H.</div>
+            <div class="t-role">Restaurant owner · Prague</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-quote">"The WhatsApp interface is genius. I'm not a tech person at all. I just talk to Kreya like I'd talk to a team member and it handles everything."</div>
+        <div class="t-author">
+          <div class="t-av" style="background:linear-gradient(135deg,#00E5A0,#00B880)">S</div>
+          <div>
+            <div class="t-name">Sofia B.</div>
+            <div class="t-role">Life coach · 18K Instagram</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════ CTA ═══════ -->
+<section id="cta">
+  <div class="cta-inner">
+    <div class="cta-lbl">Get early access</div>
+    <h2 class="cta-title">
+      Fire your agency.<br>
+      Meet <span class="ac">Kreya</span>.
+    </h2>
+    <p class="cta-sub">Join the waitlist. First 100 users get Pro free for 3 months.</p>
+    <div class="cta-form">
+      <input type="email" class="cta-input" placeholder="your@email.com" id="waitlist-email" />
+      <button class="cta-btn" onclick="joinWaitlist()">Join waitlist →</button>
+    </div>
+    <div class="cta-note">No credit card · No spam · Cancel anytime</div>
+  </div>
+</section>
+
+<!-- ═══════ FOOTER ═══════ -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div>
+        <div class="footer-logo">KREY<span class="ac">A</span>.</div>
+        <div class="footer-tagline">Your Creative AI. Tell Kreya what you need. Consider it done.</div>
+      </div>
+      <div>
+        <div class="footer-col-title">Product</div>
+        <a href="#how" class="footer-link">How it works</a>
+        <a href="#features" class="footer-link">Features</a>
+        <a href="#platforms" class="footer-link">Platforms</a>
+        <a href="#pricing" class="footer-link">Pricing</a>
+      </div>
+      <div>
+        <div class="footer-col-title">Company</div>
+        <a href="#" class="footer-link">About</a>
+        <a href="#" class="footer-link">Blog</a>
+        <a href="#" class="footer-link">Careers</a>
+        <a href="#" class="footer-link">Contact</a>
+      </div>
+      <div>
+        <div class="footer-col-title">Legal</div>
+        <a href="#" class="footer-link">Privacy Policy</a>
+        <a href="#" class="footer-link">Terms of Service</a>
+        <a href="#" class="footer-link">Cookie Policy</a>
+        <a href="#" class="footer-link">GDPR</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-copy">© 2025 Kreya Technologies Inc. All rights reserved.</div>
+      <div class="footer-socials">
+        <a href="#" class="footer-social" title="Instagram">📸</a>
+        <a href="#" class="footer-social" title="Twitter">𝕏</a>
+        <a href="#" class="footer-social" title="TikTok">🎵</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span id="toast-icon">✅</span>
+  <div>
+    <div id="toast-text" style="font-weight:500;font-size:13px"></div>
+    <div id="toast-sub" style="font-size:11px;color:var(--muted);margin-top:1px"></div>
+  </div>
+</div>
+
+<script>
+/* ── NAV ── */
+const toggle = document.getElementById('nav-toggle');
+const navbar = document.getElementById('navbar');
+toggle.addEventListener('click', () => navbar.classList.toggle('open'));
+
+/* ── SCROLL NAV ── */
+window.addEventListener('scroll', () => {
+  navbar.style.background = window.scrollY > 40
+    ? 'rgba(7,7,13,.95)'
+    : 'rgba(7,7,13,.8)';
+});
+
+/* ── SMOOTH SCROLL for nav links ── */
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      navbar.classList.remove('open');
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+
+/* ── SCROLL REVEAL ── */
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ── TOAST ── */
+let toastTimer;
+function showToast(icon, text, sub) {
+  clearTimeout(toastTimer);
+  document.getElementById('toast-icon').textContent = icon;
+  document.getElementById('toast-text').textContent = text;
+  document.getElementById('toast-sub').textContent = sub || '';
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+/* ── WAITLIST ── */
+function joinWaitlist() {
+  const email = document.getElementById('waitlist-email').value.trim();
+  if (!email || !email.includes('@')) {
+    showToast('⚠', 'Enter a valid email', 'We need your email to add you to the list');
+    return;
+  }
+  showToast('🎉', 'You\'re on the list!', 'We\'ll email you when Kreya launches. First 100 get Pro free.');
+  document.getElementById('waitlist-email').value = '';
+}
+
+/* ── ENTER KEY on waitlist ── */
+document.getElementById('waitlist-email')
+  .addEventListener('keydown', e => { if (e.key === 'Enter') joinWaitlist(); });
+</script>
+</body>
+</html>
