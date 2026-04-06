@@ -26,7 +26,10 @@
       "version": "v24.0",
       "type": "Direct integration",
       "requires_facebook_page": false,
-      "cost": "Free"
+      "cost": "Free",
+      "app_name": "Kreya-IG",
+      "app_id": "761297643580425",
+      "status": "Live and tested — real post published successfully"
     },
     "other_platforms": {
       "service": "Late",
@@ -64,11 +67,13 @@
     "tables": [
       {
         "name": "organizations",
-        "purpose": "Store organization/user account data"
+        "purpose": "Store organization/user account data",
+        "status": "Has test record — org_id: bc8e2a66-48b1-4e3a-96bb-847131075ede"
       },
       {
         "name": "instagram_accounts",
-        "purpose": "Store linked Instagram account credentials and metadata"
+        "purpose": "Store linked Instagram account credentials and metadata",
+        "status": "Has live record — instagram_account_id: 477d5bc3-278a-403d-9e20-290eeb66d76f"
       },
       {
         "name": "instagram_posts",
@@ -79,7 +84,40 @@
         "purpose": "Track all social media publishing actions for compliance and auditing"
       }
     ],
-    "security": "Row-level security (RLS) policies configured on all tables"
+    "security": "Row-level security (RLS) policies configured on all tables",
+    "test_records": {
+      "user_id": "965d8626-d0a7-4c51-9f15-72498eaa4f7d",
+      "org_id": "bc8e2a66-48b1-4e3a-96bb-847131075ede",
+      "instagram_account_id": "477d5bc3-278a-403d-9e20-290eeb66d76f",
+      "instagram_user_id": "26314509864842304",
+      "instagram_username": "nepostnuto",
+      "note": "Test user created directly in auth.users — not a real Supabase Auth user yet"
+    }
+  },
+
+  "instagram_api": {
+    "status": "FULLY WORKING — real post published to Instagram on 2026-04-07",
+    "posting_flow": [
+      "POST /v24.0/{ig_user_id}/media — create media container with image_url and caption",
+      "POST /v24.0/{ig_user_id}/media_publish — publish container using creation_id"
+    ],
+    "test_account": {
+      "username": "nepostnuto",
+      "instagram_user_id": "26314509864842304",
+      "app_scoped_user_id": "26314509864842304"
+    },
+    "token": {
+      "type": "Short-lived (will need refresh)",
+      "expires": "approximately 2026-06-06",
+      "scopes": [
+        "instagram_business_basic",
+        "instagram_business_content_publish",
+        "instagram_business_manage_messages",
+        "instagram_business_manage_insights",
+        "instagram_business_manage_comments"
+      ],
+      "storage": "Plain text in Supabase encrypted_token field — encryption not yet implemented"
+    }
   },
 
   "deployment": {
@@ -151,20 +189,22 @@
   "completed_infrastructure": [
     "Supabase project live with all 4 tables (organizations, instagram_accounts, instagram_posts, social_audit_log)",
     "Row-level security (RLS) policies configured on all tables",
-    "Homepage (index.html) deployed and live on Vercel",
+    "Homepage (index.html) deployed and live on GitHub Pages",
     "GitLab repo created and connected to Vercel CI/CD",
-    "GitHub repo created (yatonebul/kreya)",
-    "Instagram account switched to Creator type"
+    "GitHub repo created (yatonebul/kreya) — primary repo",
+    "Instagram account switched to Creator type",
+    "Meta developer account created (personal FB account used)",
+    "Kreya-IG app created on Meta Developer Portal (App ID: 761297643580425)",
+    "Instagram API with Instagram Login configured",
+    "Access token generated with all 5 business scopes",
+    "Token verified via Meta Token Debugger — valid, ~2 months expiry",
+    "Test user, organization, and instagram_account records inserted into Supabase",
+    "Real Instagram post published via API — core posting flow CONFIRMED WORKING",
+    "QStash credentials saved in Notion (for future token refresh cron)",
+    "Resend, Stripe, OpenAI credentials already saved in Notion"
   ],
 
   "current_blockers": [
-    {
-      "issue": "Meta/Facebook developer account verification",
-      "status": "Stalled",
-      "details": "Verification email not arriving; SMS verification suggested as workaround",
-      "impact": "Blocking Instagram Graph API access configuration",
-      "next_steps": "Attempt SMS verification or contact Meta support"
-    },
     {
       "issue": "Node.js PATH configuration on Windows",
       "status": "In progress",
@@ -177,19 +217,27 @@
 
   "important_caveats": [
     "Auth system currently works in demo mode only (no Supabase keys configured in app)",
-    "Post-login app was a placeholder screen, not the full product dashboard",
-    "Supabase keys (publishable key, service role key) were generated but not captured — need retrieval",
-    "Vercel token, org ID, and project ID were generated but not saved — will need retrieval"
+    "Post-login app (kreya-app.html) is a placeholder screen, not the full product dashboard",
+    "Instagram token stored as plain text in Supabase — AES encryption not yet implemented",
+    "Supabase test user created directly via SQL — not a real Supabase Auth user",
+    "Token auto-refresh not yet set up — token expires ~2026-06-06, set a reminder",
+    "Supabase anon key and service role key saved in Notion"
   ],
 
   "on_the_horizon": [
-    "Resolve Meta developer account verification to unlock Instagram Graph API access",
-    "Fix Node.js PATH issue and get local dev environment fully operational",
-    "Wire real Supabase keys into the app to move auth out of demo mode",
-    "Build out the full post-login product dashboard (currently placeholder)",
+    "Build /api/post Vercel endpoint — wraps Instagram two-step posting flow into one function",
+    "Connect posting endpoint to Kreya dashboard UI",
+    "Wire Claude AI to generate captions automatically",
+    "Build WhatsApp input flow (the core Kreya magic)",
+    "Wire real Supabase Auth — replace test user with real authentication",
+    "Build out full post-login product dashboard (currently placeholder)",
+    "Set up QStash cron for Instagram token auto-refresh (before 2026-06-06)",
+    "Implement AES token encryption in Supabase",
     "Domain purchase decision (getkreya.com recommended over kreya.ai)",
-    "Retrieve or regenerate: Supabase publishable key, service role key, Vercel token, org ID, project ID"
+    "Fix Node.js PATH issue for local development"
   ],
+
+  "next_session_priority": "Build /api/post Vercel endpoint to wrap the Instagram posting flow that was manually tested and confirmed working on 2026-04-07",
 
   "key_principles": {
     "transparency": "Yato values honest audits of what's real vs. placeholder — this should be default communication style",
@@ -239,8 +287,9 @@
   },
 
   "metadata": {
-    "last_updated": "2025-04-06",
+    "last_updated": "2026-04-07",
     "created_for": "Efficient Claude integration and token management",
-    "version": "1.0"
+    "version": "1.1",
+    "changelog": "v1.1 — Added Instagram API live status, Supabase test records, completed posting flow milestone, updated blockers and next steps"
   }
 }
