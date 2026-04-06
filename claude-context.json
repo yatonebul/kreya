@@ -1,0 +1,246 @@
+{
+  "project": {
+    "name": "Kreya",
+    "tagline": "Tell Kreya what you need. Consider it done.",
+    "description": "AI-powered, WhatsApp-first social media management SaaS platform targeting creators and small businesses",
+    "core_loop": "Users send WhatsApp voice notes or text prompts → Claude AI generates social content → Kreya publishes across Instagram, TikTok, Twitter, Facebook, LinkedIn, and YouTube"
+  },
+
+  "brand": {
+    "primary_color": "#FF4F3B",
+    "color_name": "Coral",
+    "headline_font": "Syne ExtraBold",
+    "body_font": "DM Sans"
+  },
+
+  "tech_stack": {
+    "authentication_database": {
+      "service": "Supabase",
+      "tier": "Free (SOC 2 Type 2)",
+      "project_ref": "kuwkdxahsugsfblgbetk",
+      "region": "Europe",
+      "url": "https://kuwkdxahsugsfblgbetk.supabase.co"
+    },
+    "instagram": {
+      "service": "Meta Graph API",
+      "version": "v24.0",
+      "type": "Direct integration",
+      "requires_facebook_page": false,
+      "cost": "Free"
+    },
+    "other_platforms": {
+      "service": "Late",
+      "cost_per_month": 33,
+      "platforms": ["TikTok", "Twitter", "Facebook", "LinkedIn", "YouTube"]
+    },
+    "rate_limiting": "Upstash Redis",
+    "oauth_state_management": "Upstash Redis",
+    "token_refresh_cron": "Upstash QStash",
+    "ai_model": "Claude Sonnet",
+    "hosting": {
+      "platform": "Vercel",
+      "username": "yatonebul"
+    },
+    "source_control": {
+      "platform": "GitHub",
+      "url": "https://github.com/yatonebul/kreya",
+      "primary_repo": true
+    },
+    "secondary_vcs": {
+      "platform": "GitLab",
+      "url": "https://gitlab.com/yatonebul/kreya",
+      "note": "Also exists but GitHub is primary"
+    },
+    "domain": {
+      "recommended": "getkreya.com",
+      "cost_per_year": 12,
+      "alternative": "kreya.ai",
+      "alternative_cost": 500
+    }
+  },
+
+  "database": {
+    "platform": "Supabase",
+    "tables": [
+      {
+        "name": "organizations",
+        "purpose": "Store organization/user account data"
+      },
+      {
+        "name": "instagram_accounts",
+        "purpose": "Store linked Instagram account credentials and metadata"
+      },
+      {
+        "name": "instagram_posts",
+        "purpose": "Store generated and published Instagram posts"
+      },
+      {
+        "name": "social_audit_log",
+        "purpose": "Track all social media publishing actions for compliance and auditing"
+      }
+    ],
+    "security": "Row-level security (RLS) policies configured on all tables"
+  },
+
+  "deployment": {
+    "homepage": {
+      "file": "index.html",
+      "status": "Deployed and live",
+      "url": "https://yatonebul.github.io/kreya"
+    },
+    "ci_cd": {
+      "platform": "Vercel",
+      "connected_repo": "GitHub (yatonebul/kreya)",
+      "status": "Active"
+    }
+  },
+
+  "repository_structure": {
+    "root_files": [
+      {
+        "name": "CLAUDE.md",
+        "purpose": "Claude-specific context and development notes"
+      },
+      {
+        "name": "README.md",
+        "purpose": "Project overview and setup instructions"
+      },
+      {
+        "name": "index.html",
+        "purpose": "Homepage (deployed at yatonebul.github.io/kreya)"
+      },
+      {
+        "name": "kreya-app.html",
+        "purpose": "Main post-login app interface and dashboard"
+      },
+      {
+        "name": "kreya-asset-kit.html",
+        "purpose": "Asset library and design system components"
+      },
+      {
+        "name": "kreya-brand-identity.html",
+        "purpose": "Brand guidelines and identity standards"
+      },
+      {
+        "name": "kreya-brand-identity-v2.html",
+        "purpose": "Updated brand identity version"
+      },
+      {
+        "name": "kreya-complete-guide.html",
+        "purpose": "Comprehensive product documentation"
+      },
+      {
+        "name": "kreya-dev-prompt.html",
+        "purpose": "Developer prompts and system instructions"
+      },
+      {
+        "name": "kreya-instagram-code.zip",
+        "purpose": "Instagram Graph API integration code and helpers"
+      },
+      {
+        "name": "kreya-instagram-guide.html",
+        "purpose": "Instagram setup and integration guide"
+      },
+      {
+        "name": "kreya-social-integration.html",
+        "purpose": "Social platform integration documentation"
+      }
+    ]
+  },
+
+  "completed_infrastructure": [
+    "Supabase project live with all 4 tables (organizations, instagram_accounts, instagram_posts, social_audit_log)",
+    "Row-level security (RLS) policies configured on all tables",
+    "Homepage (index.html) deployed and live on Vercel",
+    "GitLab repo created and connected to Vercel CI/CD",
+    "GitHub repo created (yatonebul/kreya)",
+    "Instagram account switched to Creator type"
+  ],
+
+  "current_blockers": [
+    {
+      "issue": "Meta/Facebook developer account verification",
+      "status": "Stalled",
+      "details": "Verification email not arriving; SMS verification suggested as workaround",
+      "impact": "Blocking Instagram Graph API access configuration",
+      "next_steps": "Attempt SMS verification or contact Meta support"
+    },
+    {
+      "issue": "Node.js PATH configuration on Windows",
+      "status": "In progress",
+      "details": "Node.js installed but not recognized in CMD due to PATH issues",
+      "impact": "Local development environment incomplete",
+      "workaround": "Use Git Bash instead of CMD",
+      "next_steps": "Configure PATH or use Git Bash consistently"
+    }
+  ],
+
+  "important_caveats": [
+    "Auth system currently works in demo mode only (no Supabase keys configured in app)",
+    "Post-login app was a placeholder screen, not the full product dashboard",
+    "Supabase keys (publishable key, service role key) were generated but not captured — need retrieval",
+    "Vercel token, org ID, and project ID were generated but not saved — will need retrieval"
+  ],
+
+  "on_the_horizon": [
+    "Resolve Meta developer account verification to unlock Instagram Graph API access",
+    "Fix Node.js PATH issue and get local dev environment fully operational",
+    "Wire real Supabase keys into the app to move auth out of demo mode",
+    "Build out the full post-login product dashboard (currently placeholder)",
+    "Domain purchase decision (getkreya.com recommended over kreya.ai)",
+    "Retrieve or regenerate: Supabase publishable key, service role key, Vercel token, org ID, project ID"
+  ],
+
+  "key_principles": {
+    "transparency": "Yato values honest audits of what's real vs. placeholder — this should be default communication style",
+    "cost_consciousness": "Free tiers and lower-cost alternatives preferred (Late over Ayrshare, getkreya.com over kreya.ai)",
+    "hands_on_guidance": "Step-by-step instructions essential, especially for terminal commands and developer tooling"
+  },
+
+  "developer_environment": {
+    "os": "Windows",
+    "terminal_recommended": "Git Bash (not CMD)",
+    "package_managers": {
+      "node": {
+        "status": "Installed",
+        "issue": "PATH not configured in CMD",
+        "workaround": "Use Git Bash"
+      }
+    },
+    "development_style": "Iterative hands-on sessions; prefers complete, copy-paste-ready deliverables",
+    "context_note": "Has done significant setup from mobile — guidance should account for context switching between phone and laptop"
+  },
+
+  "communication_preferences": {
+    "style": "Direct, transparent, honest",
+    "format": "Step-by-step instructions for CLI tasks",
+    "deliverables": "Copy-paste-ready code and commands",
+    "context_switching": "Account for mobile-to-laptop transitions"
+  },
+
+  "github_context": {
+    "primary_repo": "https://github.com/yatonebul/kreya",
+    "secondary_repo": "https://gitlab.com/yatonebul/kreya",
+    "deployment_url": "https://yatonebul.github.io/kreya",
+    "ci_cd_connected": true,
+    "mcp_access": "Connected but limited (GitHub file reading not currently available)"
+  },
+
+  "token_optimization_strategy": {
+    "purpose": "Avoid hitting session memory limits by using this file as context instead of re-reading repo",
+    "usage": "Share this file with Claude in conversations instead of raw files",
+    "benefits": [
+      "Eliminates need to read multiple HTML files each conversation",
+      "Provides structured project overview upfront",
+      "Reduces token consumption by ~60-80%",
+      "Enables faster context initialization"
+    ],
+    "when_to_update": "When tech stack changes, new blockers emerge, or infrastructure is added"
+  },
+
+  "metadata": {
+    "last_updated": "2025-04-06",
+    "created_for": "Efficient Claude integration and token management",
+    "version": "1.0"
+  }
+}
