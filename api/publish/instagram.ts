@@ -34,7 +34,7 @@ export default async function handler(req: any, res: any) {
     // 4. Claude AI: Generate Caption
     console.log("Generating caption with Claude...");
     const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022", // Or your preferred model
+      model: "claude-3-5-sonnet-latest",
       max_tokens: 300,
       messages: [{ 
         role: "user", 
