@@ -31,10 +31,24 @@ export default async function handler(req: any, res: any) {
       throw new Error("Could not retrieve secure token from vault");
     }
 
-    // 4. BYPASS CLAUDE (Temporary for testing)
-    const caption = "Testing the Kreya AI automation engine! It works! 🚀 #automation #buildinpublic #nepostnuto";
+    // 4. Claude AI: Generate Caption
+    console.log("Generating caption with Claude...");
+    const msg = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-20241022", // Or your preferred model
+      max_tokens: 300,
+      messages: [{ 
+        role: "user", 
+        content: `Write a short, engaging Instagram caption for an image based on this prompt: "${prompt}". 
+                  Keep it under 2000 characters. Include 3-5 relevant hashtags. 
+                  Do not include quotes around the caption.` 
+      }],
+    });
 
-// 5. Meta API: Create Media Container
+    // Extract the text from Claude's response
+    const caption = msg.content[0].type === 'text' ? msg.content[0].text : "Default caption if AI fails";
+    console.log("Generated Caption:", caption);
+
+    // 5. Meta API: Create Media Container
     console.log("Creating container...");
     const containerRes = await fetch(
       `https://graph.facebook.com/v24.0/17841441407068598/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
