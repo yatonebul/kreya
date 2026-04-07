@@ -34,21 +34,39 @@ export default async function handler(req: any, res: any) {
     // 4. BYPASS CLAUDE (Temporary for testing)
     const caption = "Testing the Kreya AI automation engine! It works! 🚀 #automation #buildinpublic #nepostnuto";
 
-    // 5. Meta API: Create Media Container
+// 5. Meta API: Create Media Container
+    console.log("Creating container...");
     const containerRes = await fetch(
-      `https://graph.facebook.com/v24.0/26314509864842304/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
+      `https://graph.facebook.com/v24.0/17841441407068598/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
       { method: 'POST' }
     );
     const containerData = await containerRes.json();
 
-    if (!containerData.id) throw new Error(`Meta Container Error: ${JSON.stringify(containerData)}`);
+    if (!containerData.id) {
+      console.error("CONTAINER FAILURE:", containerData);
+      throw new Error(`Meta Container Error: ${JSON.stringify(containerData)}`);
+    }
+
+    // --- NEW: WAIT FOR PROCESSING ---
+    // We wait 5 seconds to ensure Meta has actually downloaded and processed the image
+    console.log("Container created. Waiting 5s for Meta to process media...");
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     // 6. Meta API: Publish Media
+    console.log("Publishing media...");
     const publishRes = await fetch(
-      `https://graph.facebook.com/v24.0/26314509864842304/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
+      `https://graph.facebook.com/v24.0/17841441407068598/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
       { method: 'POST' }
     );
     const publishData = await publishRes.json();
+
+    // FINAL CHECK
+    if (!publishData.id) {
+      console.error("PUBLISH FAILURE DETAILS:", JSON.stringify(publishData));
+      throw new Error(`Meta Publish Error: ${JSON.stringify(publishData)}`);
+    }
+
+    console.log("SUCCESSFULLY PUBLISHED ID:", publishData.id);
 
     // 7. Log to Audit Table
     await supabaseAdmin.from('social_audit_log').insert({
