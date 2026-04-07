@@ -31,15 +31,8 @@ export default async function handler(req: any, res: any) {
       throw new Error("Could not retrieve secure token from vault");
     }
 
-    // 4. Generate Caption using Claude Sonnet
-    const msg = await anthropic.messages.create({
-      model: "claude-3-sonnet-20240229",
-      max_tokens: 1000,
-      messages: [{ role: "user", content: `Write a short, engaging Instagram caption with 3 hashtags for this post idea: ${prompt}` }],
-    });
-    
-    // Extract the text content safely
-    const caption = (msg.content[0] as any).text || "Default caption";
+    // 4. BYPASS CLAUDE (Temporary for testing)
+    const caption = "Testing the Kreya AI automation engine! It works! 🚀 #automation #buildinpublic #nepostnuto";
 
     // 5. Meta API: Create Media Container
     const containerRes = await fetch(
