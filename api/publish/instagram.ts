@@ -18,9 +18,19 @@ export default async function handler(req: any, res: any) {
   const { prompt, imageUrl, accountName = 'nepostnuto' } = req.body;
 
   try {
-    // 3. Retrieve the SECURE token from your private vault
-    const { data: accessToken, error: vaultError } = await supabaseAdmin
-      .rpc('get_secret', { secret_name: `ig_token_${accountName}` });
+// 3. Retrieve the token from your instagram_accounts table
+    const { data: account, error: dbError } = await supabaseAdmin
+      .from('instagram_accounts')
+      .select('access_token') // Make sure you renamed 'encrypted_token' to 'access_token' in Supabase!
+      .eq('account_name', accountName)
+      .single();
+
+    if (dbError || !account?.access_token) {
+      console.error("DB Error:", dbError);
+      throw new Error("Could not retrieve secure token from vault");
+    }
+
+    const accessToken = account.access_token;
 
     if (vaultError || !accessToken) throw new Error("Could not retrieve secure token from vault");
 
