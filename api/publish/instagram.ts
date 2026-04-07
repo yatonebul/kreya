@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
 
-// 1. Initialize Supabase with Service Role to access the private schema
+// 1. Initialize Supabase with Service Role
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -31,10 +31,28 @@ export default async function handler(req: any, res: any) {
       throw new Error("Could not retrieve secure token from vault");
     }
 
+    // --- DYNAMIC MODEL SELECTION ---
+    console.log("Fetching available Claude models...");
+    let modelToUse = "claude-sonnet-4-6"; // Default fallback
+    
+    try {
+      const modelsPage = await anthropic.models.list();
+      // Find the newest model that contains 'sonnet' and is not a 'legacy' version
+      const bestSonnet = modelsPage.data.find(m => 
+        m.id.includes('sonnet') && !m.id.includes('legacy')
+      );
+      
+      if (bestSonnet) {
+        modelToUse = bestSonnet.id;
+      }
+    } catch (listError) {
+      console.warn("Could not fetch model list, using fallback:", modelToUse);
+    }
+
     // 4. Claude AI: Generate Caption
-    console.log("Generating caption with Claude...");
+    console.log(`Generating caption with ${modelToUse}...`);
     const msg = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: modelToUse,
       max_tokens: 300,
       messages: [{ 
         role: "user", 
@@ -61,8 +79,7 @@ export default async function handler(req: any, res: any) {
       throw new Error(`Meta Container Error: ${JSON.stringify(containerData)}`);
     }
 
-    // --- NEW: WAIT FOR PROCESSING ---
-    // We wait 5 seconds to ensure Meta has actually downloaded and processed the image
+    // --- WAIT FOR PROCESSING ---
     console.log("Container created. Waiting 5s for Meta to process media...");
     await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -82,14 +99,22 @@ export default async function handler(req: any, res: any) {
 
     console.log("SUCCESSFULLY PUBLISHED ID:", publishData.id);
 
-    // 7. Log to Audit Table
+    // 7. Log to Audit Table (including which model was dynamically chosen)
     await supabaseAdmin.from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
-      details: { post_id: publishData.id, caption }
+      details: { 
+        post_id: publishData.id, 
+        caption, 
+        model_used: modelToUse 
+      }
     });
 
-    return res.status(200).json({ success: true, postId: publishData.id });
+    return res.status(200).json({ 
+      success: true, 
+      postId: publishData.id,
+      modelUsed: modelToUse 
+    });
 
   } catch (error: any) {
     console.error("Publishing Failed:", error.message);
