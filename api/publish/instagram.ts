@@ -18,21 +18,18 @@ export default async function handler(req: any, res: any) {
   const { prompt, imageUrl, accountName = 'nepostnuto' } = req.body;
 
   try {
-// 3. Retrieve the token from your instagram_accounts table
+    // 3. Retrieve the token from your instagram_accounts table
     const { data: account, error: dbError } = await supabaseAdmin
       .from('instagram_accounts')
-      .select('access_token') // Make sure you renamed 'encrypted_token' to 'access_token' in Supabase!
+      .select('access_token')
       .eq('account_name', accountName)
       .single();
 
-    if (dbError || !account?.access_token) {
-      console.error("DB Error:", dbError);
+    const accessToken = account?.access_token;
+
+    if (dbError || !accessToken) {
       throw new Error("Could not retrieve secure token from vault");
     }
-
-    const accessToken = account.access_token;
-
-    if (vaultError || !accessToken) throw new Error("Could not retrieve secure token from vault");
 
     // 4. Generate Caption using Claude Sonnet
     const msg = await anthropic.messages.create({
@@ -40,7 +37,9 @@ export default async function handler(req: any, res: any) {
       max_tokens: 1000,
       messages: [{ role: "user", content: `Write a short, engaging Instagram caption with 3 hashtags for this post idea: ${prompt}` }],
     });
-    const caption = msg.content[0].text;
+    
+    // Extract the text content safely
+    const caption = (msg.content[0] as any).text || "Default caption";
 
     // 5. Meta API: Create Media Container
     const containerRes = await fetch(
