@@ -13,5 +13,8 @@
   },
   "attribution": {
     "commit": "https://claude.ai/code/session_01SmEegHwk2SDnZkykBxJ7wL"
+  },
+  "enabledPlugins": {
+    "vercel@claude-plugins-official": true
   }
 }
