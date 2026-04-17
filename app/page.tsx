@@ -1,65 +1,201 @@
-import Image from "next/image";
-
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main
+      className="flex flex-col min-h-screen"
+      style={{ background: "var(--dark)" }}
+    >
+      {/* Nav */}
+      <nav className="flex items-center justify-between px-6 py-5 md:px-12">
+        <span
+          className="text-xl font-bold tracking-tight"
+          style={{ fontFamily: "var(--font-syne)", color: "var(--coral)" }}
+        >
+          Kreya
+        </span>
+        <a
+          href="#waitlist"
+          className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-80"
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            background: "var(--coral)",
+            color: "var(--white)",
+          }}
+        >
+          Join waitlist
+        </a>
+      </nav>
+
+      {/* Hero */}
+      <section className="flex flex-col items-center justify-center flex-1 text-center px-6 pt-16 pb-24 gap-8">
+        <span
+          className="text-xs tracking-widest uppercase px-3 py-1 rounded-full"
+          style={{
+            fontFamily: "var(--font-space-mono)",
+            background: "var(--surf3)",
+            color: "var(--mint)",
+          }}
+        >
+          AI-powered social media
+        </span>
+
+        <h1
+          className="text-5xl md:text-7xl font-extrabold leading-tight max-w-3xl"
+          style={{ fontFamily: "var(--font-syne)" }}
+        >
+          Tell Kreya what you need.{" "}
+          <span style={{ color: "var(--coral)" }}>Consider it done.</span>
+        </h1>
+
+        <p
+          className="text-lg md:text-xl max-w-xl leading-relaxed"
+          style={{ color: "var(--muted)", fontFamily: "var(--font-dm-sans)" }}
+        >
+          Send a WhatsApp voice note or text. Kreya writes the caption, picks
+          the image, and publishes across Instagram, TikTok, Twitter, LinkedIn,
+          and more — automatically.
+        </p>
+
+        {/* Platform badges */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+          {[
+            "Instagram",
+            "TikTok",
+            "Twitter",
+            "LinkedIn",
+            "Facebook",
+            "YouTube",
+          ].map((p) => (
+            <span
+              key={p}
+              className="text-xs px-3 py-1 rounded-full"
+              style={{
+                fontFamily: "var(--font-space-mono)",
+                background: "var(--surf2)",
+                color: "var(--muted)",
+                border: "1px solid var(--surf3)",
+              }}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              {p}
+            </span>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        <a
+          id="waitlist"
+          href="mailto:hello@getkreya.com"
+          className="mt-4 inline-flex items-center gap-2 text-base font-semibold px-8 py-4 rounded-full transition-opacity hover:opacity-90"
+          style={{
+            fontFamily: "var(--font-dm-sans)",
+            background: "var(--coral)",
+            color: "var(--white)",
+          }}
+        >
+          Get early access
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            <path
+              d="M3 8h10M9 4l4 4-4 4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </svg>
+        </a>
+      </section>
+
+      {/* How it works */}
+      <section
+        className="px-6 md:px-12 py-20"
+        style={{ background: "var(--surf)" }}
+      >
+        <p
+          className="text-xs tracking-widest uppercase text-center mb-12"
+          style={{
+            fontFamily: "var(--font-space-mono)",
+            color: "var(--muted2)",
+          }}
+        >
+          How it works
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          {[
+            {
+              step: "01",
+              title: "Send a message",
+              body: "Voice note or text on WhatsApp. Describe what you want to post — no apps to open.",
+              color: "var(--coral)",
+            },
+            {
+              step: "02",
+              title: "Kreya creates",
+              body: "Claude AI writes the perfect caption and selects visuals tailored to your brand.",
+              color: "var(--violet)",
+            },
+            {
+              step: "03",
+              title: "Published everywhere",
+              body: "One message → all your platforms. Scheduled, formatted, and posted for you.",
+              color: "var(--mint)",
+            },
+          ].map(({ step, title, body, color }) => (
+            <div
+              key={step}
+              className="rounded-2xl p-6 flex flex-col gap-4"
+              style={{ background: "var(--surf2)" }}
+            >
+              <span
+                className="text-3xl font-bold"
+                style={{ fontFamily: "var(--font-syne)", color }}
+              >
+                {step}
+              </span>
+              <h3
+                className="text-lg font-semibold"
+                style={{ fontFamily: "var(--font-syne)" }}
+              >
+                {title}
+              </h3>
+              <p
+                className="text-sm leading-relaxed"
+                style={{
+                  color: "var(--muted)",
+                  fontFamily: "var(--font-dm-sans)",
+                }}
+              >
+                {body}
+              </p>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+      </section>
+
+      {/* Footer */}
+      <footer
+        className="px-6 md:px-12 py-8 flex items-center justify-between"
+        style={{ background: "var(--ink)" }}
+      >
+        <span
+          className="text-sm font-bold"
+          style={{ fontFamily: "var(--font-syne)", color: "var(--coral)" }}
+        >
+          Kreya
+        </span>
+        <span
+          className="text-xs"
+          style={{
+            fontFamily: "var(--font-space-mono)",
+            color: "var(--muted2)",
+          }}
+        >
+          © 2026 Kreya
+        </span>
+      </footer>
+    </main>
   );
 }
