@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateCaption } from '@/lib/caption-generator';
 import { publishToInstagram } from '@/lib/instagram-publish';
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!;
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
 const DEFAULT_IMAGE_URL = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1080&q=80';
 
 // Meta webhook verification handshake
