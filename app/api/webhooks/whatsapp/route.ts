@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     return new Response(challenge, { status: 200 });
   }
 
-  return NextResponse.json({ error: 'Invalid verification token' }, { status: 403 });
+  return NextResponse.json({ error: 'Invalid verification token', received_token: token, expected: VERIFY_TOKEN, mode }, { status: 403 });
 }
 
 // Incoming WhatsApp messages
