@@ -25,16 +25,29 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
+    console.error('WhatsApp webhook: Invalid JSON received');
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  console.log('WhatsApp webhook POST received:', JSON.stringify(body, null, 2));
+
+  const entry = body.entry?.[0];
+  const change = entry?.changes?.[0];
+  const value = change?.value;
+  const message = value?.messages?.[0];
+
   if (!message) {
+    console.log('WhatsApp webhook: No message found in payload. Event type:', value?.statuses ? 'status_update' : 'unknown');
     // Not a message event (status update etc.) — acknowledge and exit
     return NextResponse.json({ ok: true });
   }
 
   const messageType: string = message.type;
+  const messageId = message.id;
+  const senderId = message.from;
+
+  console.log(`Processing ${messageType} message ${messageId} from ${senderId}`);
+
   let userPrompt = '';
   let imageUrl = DEFAULT_IMAGE_URL;
 
@@ -47,16 +60,26 @@ export async function POST(request: NextRequest) {
     // Speech-to-text not yet implemented
     userPrompt = 'Check out this audio message';
   } else {
+    console.log(`Skipping unsupported message type: ${messageType}`);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!userPrompt) {
+    console.warn(`Message ${messageId}: Empty prompt extracted`);
     return NextResponse.json({ ok: true });
   }
 
   try {
+    console.log(`Generating caption for prompt: "${userPrompt.substring(0, 50)}..."`);
     const caption = await generateCaption(userPrompt);
+
+    console.log(`Publishing to Instagram with caption: "${caption.substring(0, 50)}..."`);
     const result = await publishToInstagram(caption, imageUrl);
 
+    console.log(`Successfully published post ${result.postId} from WhatsApp message ${messageId}`);
     return NextResponse.json({ ok: true, postId: result.postId, caption });
   } catch (error: any) {
-    console.error('WhatsApp webhook error:', error.message);
+    console.error(`WhatsApp webhook error processing message ${messageId}:`, error.message);
     // Always 200 — prevent Meta from retrying endlessly
     return NextResponse.json({ ok: false, error: error.message });
   }
