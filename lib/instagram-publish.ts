@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 // Instagram user ID and account name (from test data)
 const IG_USER_ID = '17841441407068598';
@@ -15,7 +17,7 @@ export async function publishToInstagram(
 ): Promise<{ postId: string; status: string }> {
   try {
     // 1. Get access token from Supabase
-    const { data: account, error: dbError } = await supabaseAdmin
+    const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
       .select('access_token')
       .eq('account_name', ACCOUNT_NAME)
@@ -59,7 +61,7 @@ export async function publishToInstagram(
     console.log('Post published successfully:', publishData.id);
 
     // 4. Log to audit table
-    await supabaseAdmin.from('social_audit_log').insert({
+    await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
       details: {
@@ -77,7 +79,7 @@ export async function publishToInstagram(
     console.error('Instagram publishing failed:', error.message);
 
     // Log failure
-    await supabaseAdmin.from('social_audit_log').insert({
+    await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'failed',
       details: {
