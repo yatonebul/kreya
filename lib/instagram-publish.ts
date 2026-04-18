@@ -8,8 +8,8 @@ function getSupabase() {
 }
 
 // Instagram user ID and account name (from test data)
-const IG_USER_ID = '17841441407068598';
-const ACCOUNT_NAME = 'nepostnuto';
+const IG_USER_ID = '26314509864842304';
+const IG_USERNAME = 'nepostnuto';
 
 export async function publishToInstagram(
   caption: string,
@@ -19,11 +19,11 @@ export async function publishToInstagram(
     // 1. Get access token from Supabase
     const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
-      .select('access_token')
-      .eq('account_name', ACCOUNT_NAME)
+      .select('encrypted_token')
+      .eq('instagram_username', IG_USERNAME)
       .single();
 
-    const accessToken = account?.access_token;
+    const accessToken = account?.encrypted_token;
 
     if (dbError || !accessToken) {
       throw new Error('Could not retrieve access token from database');
