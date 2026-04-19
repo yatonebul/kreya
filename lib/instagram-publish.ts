@@ -33,7 +33,7 @@ export async function publishToInstagram(
     // 2. Create media container
     console.log('Creating Instagram media container...');
     const containerRes = await fetch(
-      `https://graph.facebook.com/v24.0/${igUserId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
+      `https://graph.instagram.com/v21.0/${igUserId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
       { method: 'POST' }
     );
     const containerData = await containerRes.json();
@@ -49,7 +49,7 @@ export async function publishToInstagram(
     // 3. Publish media
     console.log('Publishing to Instagram...');
     const publishRes = await fetch(
-      `https://graph.facebook.com/v24.0/${igUserId}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
+      `https://graph.instagram.com/v21.0/${igUserId}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
       { method: 'POST' }
     );
     const publishData = await publishRes.json();
