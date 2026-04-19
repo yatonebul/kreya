@@ -30,9 +30,10 @@ export function sendText(to: string, text: string) {
   });
 }
 
-export function sendPostPreview(to: string, imageUrl: string, caption: string) {
-  const bodyText = caption.length > 900 ? caption.slice(0, 897) + '...' : caption;
-  const footer = caption.length > 900 ? 'Truncated — choose Edit to refine' : 'Ready to post?';
+// Send full caption as text first (no char limit), then image + buttons separately.
+// Avoids WhatsApp's 1024-char interactive body limit entirely.
+export async function sendPostPreview(to: string, imageUrl: string, caption: string) {
+  await sendText(to, `📝 Caption draft:\n\n${caption}`);
 
   return wa({
     messaging_product: 'whatsapp',
@@ -41,8 +42,8 @@ export function sendPostPreview(to: string, imageUrl: string, caption: string) {
     interactive: {
       type: 'button',
       header: { type: 'image', image: { link: imageUrl } },
-      body: { text: bodyText },
-      footer: { text: footer },
+      body: { text: 'Ready to post this to Instagram?' },
+      footer: { text: 'Tip: Edit lets you change caption, style, or image' },
       action: {
         buttons: [
           { type: 'reply', reply: { id: 'approve', title: '✅ Approve' } },

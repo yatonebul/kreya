@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
@@ -35,41 +36,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
+  // Return 200 to Meta immediately — prevents retries on slow AI calls.
+  // All processing happens in after() which runs after the response is sent.
+  after(async () => {
+    await processWebhook(body);
+  });
+
+  return NextResponse.json({ ok: true });
+}
+
+async function processWebhook(body: any) {
   const value = body.entry?.[0]?.changes?.[0]?.value;
   const message = value?.messages?.[0];
-  if (!message) return NextResponse.json({ ok: true });
+  if (!message) return;
 
   const from: string = message.from;
   const messageType: string = message.type;
 
   try {
+    // Button reply (Approve / Edit / Discard)
     if (messageType === 'interactive') {
-      const buttonId = message.interactive?.button_reply?.id;
-      await handleButtonReply(from, buttonId);
-      return NextResponse.json({ ok: true });
+      await handleButtonReply(from, message.interactive?.button_reply?.id);
+      return;
     }
 
     if (messageType === 'text' || messageType === 'image') {
       const pending = await getPending(from);
 
+      // User is in edit conversation
       if (pending?.state === 'in_edit' && messageType === 'text') {
         await handleEditRefinement(from, pending, message.text.body);
-        return NextResponse.json({ ok: true });
+        return;
       }
 
+      // User already has a pending post — resend it instead of creating a new one.
+      // Handles "did it stuck?" or accidental double-sends.
+      if (pending?.state === 'pending_approval') {
+        await sendText(from, '👆 Your draft is still waiting:');
+        await sendPostPreview(from, pending.image_url, pending.caption);
+        return;
+      }
+
+      // New post
       let prompt = '';
       if (messageType === 'text') {
         prompt = message.text?.body ?? '';
       } else {
         prompt = message.image?.caption ?? 'A beautiful moment captured';
       }
-
-      // Discard previous pending posts for this user
-      await getSupabase()
-        .from('pending_posts')
-        .update({ state: 'discarded' })
-        .eq('whatsapp_phone', from)
-        .in('state', ['pending_approval', 'in_edit']);
 
       await sendText(from, '✍️ Generating your post...');
 
@@ -78,10 +92,10 @@ export async function POST(request: NextRequest) {
         getRecentCaptions(),
         generateImagePrompt(prompt),
       ]);
-      const [caption, imageUrl] = await Promise.all([
+      const [caption] = await Promise.all([
         generateCaption(prompt, profileContext ?? undefined, recentCaptions),
-        Promise.resolve(buildImageUrl(imagePrompt, 'realistic')),
       ]);
+      const imageUrl = buildImageUrl(imagePrompt, 'realistic');
 
       await getSupabase().from('pending_posts').insert({
         whatsapp_phone: from,
@@ -91,14 +105,11 @@ export async function POST(request: NextRequest) {
       });
 
       await sendPostPreview(from, imageUrl, caption);
-      return NextResponse.json({ ok: true });
     }
   } catch (err: any) {
     console.error('[webhook error]', err.message);
     await sendText(from, '⚠️ Something went wrong. Please try again.').catch(() => {});
   }
-
-  return NextResponse.json({ ok: true });
 }
 
 async function getPending(phone: string) {
@@ -158,7 +169,7 @@ async function handleButtonReply(from: string, buttonId: string) {
       .update({ state: 'in_edit' })
       .eq('id', pending.id);
 
-    await sendText(from, '✏️ What would you like to change?\n\nCaption: tone, length, angle\nImage: say "new image" + optional style\n  📷 realistic (default)\n  🎨 artistic\n  ✏️ anime\n  🧊 3d');
+    await sendText(from, '✏️ What would you like to change?\n\nCaption: tone, length, angle, language\nImage: say "new image" and describe any style — cinematic, moody, vintage, 3d, anime, watercolour…');
 
   } else if (buttonId === 'discard') {
     await getSupabase()
@@ -173,7 +184,6 @@ async function handleButtonReply(from: string, buttonId: string) {
 async function handleEditRefinement(from: string, pending: any, instruction: string) {
   const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
 
-  // Strip image-related words to check if a caption instruction also remains
   const captionInstruction = instruction
     .replace(/\b(regenerate|change|new|different|swap|avoid|fix)\s*(the\s*)?(image|photo|picture|pic|visual|faces?|blurr\w*)\b/gi, '')
     .replace(/\band\b/gi, '')
@@ -186,7 +196,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
   }
 
   const statusParts: string[] = [];
-  if (isImageRequest) statusParts.push('new image');
+  if (isImageRequest) statusParts.push('image');
   if (hasCaptionInstruction) statusParts.push('caption');
   await sendText(from, `✍️ Updating ${statusParts.join(' & ')}...`);
 
