@@ -161,6 +161,13 @@ async function handleButtonReply(from: string, buttonId: string) {
 }
 
 async function handleEditRefinement(from: string, pending: any, instruction: string) {
+  const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap image)\b/i.test(instruction);
+
+  if (isImageRequest) {
+    await sendText(from, '🖼️ AI image generation is coming soon! I can only edit the caption text for now.\n\nWhat would you like to change about the caption?');
+    return;
+  }
+
   await sendText(from, '✍️ Updating your caption...');
 
   const profileContext = await getProfileContext();
