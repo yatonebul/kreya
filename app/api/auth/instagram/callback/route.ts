@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   // 4. Update token in Supabase
   const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
-  const { count, error: dbError } = await getSupabase()
+  const { data: updated, error: dbError } = await getSupabase()
     .from('instagram_accounts')
     .update({
       access_token: accessToken,
@@ -71,11 +71,11 @@ export async function GET(request: NextRequest) {
       is_active: true,
     })
     .eq('account_name', meData.username)
-    .select('account_name', { count: 'exact', head: true });
+    .select('account_name');
 
-  console.log('[IG callback] UPDATE result: rows matched =', count, 'error =', dbError?.message);
+  console.log('[IG callback] UPDATE result: rows matched =', updated?.length ?? 0, 'error =', dbError?.message);
 
-  if (dbError || count === 0) {
+  if (dbError || !updated?.length) {
     return NextResponse.json({ error: 'DB update failed', detail: dbError?.message ?? 'no rows matched', username: meData.username }, { status: 500 });
   }
 
