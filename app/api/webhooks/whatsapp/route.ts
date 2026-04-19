@@ -173,28 +173,41 @@ async function handleButtonReply(from: string, buttonId: string) {
 async function handleEditRefinement(from: string, pending: any, instruction: string) {
   const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
 
-  if (isImageRequest) {
-    await sendText(from, '🎨 Generating a new image...');
-    const imagePrompt = await generateImagePrompt(pending.caption);
-    const newImageUrl = buildImageUrl(imagePrompt);
+  // Strip image-related words to check if a caption instruction also remains
+  const captionInstruction = instruction
+    .replace(/\b(regenerate|change|new|different|swap|avoid|fix)\s*(the\s*)?(image|photo|picture|pic|visual|faces?|blurr\w*)\b/gi, '')
+    .replace(/\band\b/gi, '')
+    .trim();
+  const hasCaptionInstruction = captionInstruction.length > 3;
 
-    await getSupabase()
-      .from('pending_posts')
-      .update({ image_url: newImageUrl, state: 'pending_approval' })
-      .eq('id', pending.id);
-
-    await sendPostPreview(from, newImageUrl, pending.caption);
+  if (!isImageRequest && !hasCaptionInstruction) {
+    await sendText(from, '✏️ I didn\'t catch that — what would you like to change? Caption, tone, length, or ask for a new image.');
     return;
   }
 
-  await sendText(from, '✍️ Updating your caption...');
-  const profileContext = await getProfileContext();
-  const newCaption = await refineCaption(pending.caption, instruction, profileContext ?? undefined);
+  const statusParts: string[] = [];
+  if (isImageRequest) statusParts.push('new image');
+  if (hasCaptionInstruction) statusParts.push('caption');
+  await sendText(from, `✍️ Updating ${statusParts.join(' & ')}...`);
+
+  const [profileContext, imagePrompt] = await Promise.all([
+    hasCaptionInstruction ? getProfileContext() : Promise.resolve(null),
+    isImageRequest ? generateImagePrompt(pending.caption) : Promise.resolve(null),
+  ]);
+
+  const [newCaption, newImageUrl] = await Promise.all([
+    hasCaptionInstruction
+      ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
+      : Promise.resolve(pending.caption),
+    isImageRequest && imagePrompt
+      ? Promise.resolve(buildImageUrl(imagePrompt))
+      : Promise.resolve(pending.image_url),
+  ]);
 
   await getSupabase()
     .from('pending_posts')
-    .update({ caption: newCaption, state: 'pending_approval' })
+    .update({ caption: newCaption, image_url: newImageUrl, state: 'pending_approval' })
     .eq('id', pending.id);
 
-  await sendPostPreview(from, pending.image_url, newCaption);
+  await sendPostPreview(from, newImageUrl, newCaption);
 }
