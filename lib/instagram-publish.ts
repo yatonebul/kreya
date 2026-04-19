@@ -14,7 +14,7 @@ const IG_USERNAME = 'nepostnuto';
 export async function publishToInstagram(
   caption: string,
   imageUrl: string
-): Promise<{ postId: string; status: string }> {
+): Promise<{ postId: string; status: string; postUrl?: string }> {
   try {
     // 1. Get access token from Supabase
     const { data: account, error: dbError } = await getSupabase()
@@ -61,7 +61,14 @@ export async function publishToInstagram(
 
     console.log('Post published successfully:', publishData.id);
 
-    // 4. Log to audit table
+    // 4. Fetch permalink
+    const permalinkRes = await fetch(
+      `https://graph.instagram.com/v21.0/${publishData.id}?fields=permalink&access_token=${accessToken}`
+    );
+    const permalinkData = await permalinkRes.json();
+    const postUrl: string | undefined = permalinkData.permalink;
+
+    // 5. Log to audit table
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
@@ -75,6 +82,7 @@ export async function publishToInstagram(
     return {
       postId: publishData.id,
       status: 'success',
+      postUrl,
     };
   } catch (error: any) {
     console.error('Instagram publishing failed:', error.message);
