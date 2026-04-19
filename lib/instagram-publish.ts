@@ -19,11 +19,11 @@ export async function publishToInstagram(
     // 1. Get access token from Supabase
     const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
-      .select('encrypted_token')
-      .eq('instagram_username', IG_USERNAME)
+      .select('access_token')
+      .eq('account_name', IG_USERNAME)
       .single();
 
-    const accessToken = account?.encrypted_token;
+    const accessToken = account?.access_token;
 
     if (dbError || !accessToken) {
       throw new Error('Could not retrieve access token from database');
