@@ -12,15 +12,23 @@ function buildSystem(profileContext?: string) {
   return profileContext ? `${BASE_SYSTEM}\n\n${profileContext}` : BASE_SYSTEM;
 }
 
-export async function generateCaption(prompt: string, profileContext?: string): Promise<string> {
+export async function generateCaption(
+  prompt: string,
+  profileContext?: string,
+  recentCaptions?: string[]
+): Promise<string> {
+  let userContent = `Write a short, engaging Instagram caption for: "${prompt}". ${FORMAT_RULE}`;
+
+  if (recentCaptions?.length) {
+    const history = recentCaptions.map((c, i) => `${i + 1}. ${c.slice(0, 300)}`).join('\n');
+    userContent = `Recent posts (avoid repeating the same themes, phrases, or hashtags):\n${history}\n\n${userContent}`;
+  }
+
   const msg = await getAnthropic().messages.create({
     model: MODEL,
     max_tokens: 400,
     system: buildSystem(profileContext),
-    messages: [{
-      role: 'user',
-      content: `Write a short, engaging Instagram caption for: "${prompt}". ${FORMAT_RULE}`,
-    }],
+    messages: [{ role: 'user', content: userContent }],
   });
   return msg.content[0].type === 'text' ? msg.content[0].text : 'Default caption';
 }

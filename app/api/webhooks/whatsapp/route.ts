@@ -5,8 +5,24 @@ import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
-const DEFAULT_IMAGE_URL = 'https://images.pexels.com/photos/1591447/pexels-photo-1591447.jpeg';
 const IG_ACCOUNT = 'nepostnuto';
+
+const IMAGE_POOL = [
+  'https://images.pexels.com/photos/1591447/pexels-photo-1591447.jpeg',  // autumn forest path
+  'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg',  // person coding
+  'https://images.pexels.com/photos/374870/pexels-photo-374870.jpeg',    // coffee + notebook
+  'https://images.pexels.com/photos/3182812/pexels-photo-3182812.jpeg',  // team at work
+  'https://images.pexels.com/photos/2102416/pexels-photo-2102416.jpeg',  // laptop on desk
+  'https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg',  // startup meeting
+  'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg',  // whiteboard planning
+  'https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg',    // city night lights
+  'https://images.pexels.com/photos/1367276/pexels-photo-1367276.jpeg',  // sunrise cityscape
+  'https://images.pexels.com/photos/2041556/pexels-photo-2041556.jpeg',  // minimal desk setup
+];
+
+function pickImage() {
+  return IMAGE_POOL[Math.floor(Math.random() * IMAGE_POOL.length)];
+}
 
 function getSupabase() {
   return createClient(
@@ -62,13 +78,13 @@ export async function POST(request: NextRequest) {
 
       // New post request — discard any previous pending, generate fresh
       let prompt = '';
-      let imageUrl = DEFAULT_IMAGE_URL;
+      let imageUrl = '';
 
       if (messageType === 'text') {
         prompt = message.text?.body ?? '';
       } else {
         prompt = message.image?.caption ?? 'A beautiful moment captured';
-        // WhatsApp image download not yet implemented — uses default image
+        // WhatsApp image download not yet implemented — uses pool image
       }
 
       // Cancel previous pending posts for this user
@@ -80,8 +96,12 @@ export async function POST(request: NextRequest) {
 
       await sendText(from, '✍️ Generating your caption...');
 
-      const profileContext = await getProfileContext();
-      const caption = await generateCaption(prompt, profileContext ?? undefined);
+      const [profileContext, recentCaptions] = await Promise.all([
+        getProfileContext(),
+        getRecentCaptions(),
+      ]);
+      const caption = await generateCaption(prompt, profileContext ?? undefined, recentCaptions);
+      imageUrl = pickImage();
 
       await getSupabase().from('pending_posts').insert({
         whatsapp_phone: from,
@@ -120,6 +140,16 @@ async function getProfileContext(): Promise<string | null> {
     .eq('account_name', IG_ACCOUNT)
     .maybeSingle();
   return data?.profile_context ?? null;
+}
+
+async function getRecentCaptions(): Promise<string[]> {
+  const { data } = await getSupabase()
+    .from('pending_posts')
+    .select('caption')
+    .eq('state', 'published')
+    .order('created_at', { ascending: false })
+    .limit(5);
+  return data?.map(r => r.caption) ?? [];
 }
 
 async function handleButtonReply(from: string, buttonId: string) {
