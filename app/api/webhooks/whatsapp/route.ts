@@ -3,7 +3,7 @@ import { generateCaption } from '@/lib/caption-generator';
 import { publishToInstagram } from '@/lib/instagram-publish';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
-const DEFAULT_IMAGE_URL = 'https://fastly.picsum.photos/id/10/1080/1080.jpg';
+const DEFAULT_IMAGE_URL = 'https://images.pexels.com/photos/1591447/pexels-photo-1591447.jpeg';
 
 // Meta webhook verification handshake
 export async function GET(request: NextRequest) {
