@@ -52,17 +52,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Could not fetch user info', detail: meData }, { status: 500 });
   }
 
-  // 4. Upsert into Supabase
+  // 4. Update token in Supabase
   const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
   await getSupabase()
     .from('instagram_accounts')
-    .upsert({
-      instagram_user_id: meData.id,
-      account_name: meData.username,
+    .update({
       access_token: accessToken,
+      instagram_user_id: meData.id,
       token_expires_at: expiresAt,
       is_active: true,
-    }, { onConflict: 'account_name' });
+    })
+    .eq('account_name', meData.username);
 
   return NextResponse.json({
     ok: true,
