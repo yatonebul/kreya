@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
-import { buildImageUrl } from '@/lib/image-generator';
+import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
 const IG_ACCOUNT = 'nepostnuto';
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       ]);
       const [caption, imageUrl] = await Promise.all([
         generateCaption(prompt, profileContext ?? undefined, recentCaptions),
-        Promise.resolve(buildImageUrl(imagePrompt)),
+        Promise.resolve(buildImageUrl(imagePrompt, 'realistic')),
       ]);
 
       await getSupabase().from('pending_posts').insert({
@@ -158,7 +158,7 @@ async function handleButtonReply(from: string, buttonId: string) {
       .update({ state: 'in_edit' })
       .eq('id', pending.id);
 
-    await sendText(from, '✏️ What would you like to change? Caption, tone, length — or ask for a new image.');
+    await sendText(from, '✏️ What would you like to change?\n\nCaption: tone, length, angle\nImage: say "new image" + optional style\n  📷 realistic (default)\n  🎨 artistic\n  ✏️ anime\n  🧊 3d');
 
   } else if (buttonId === 'discard') {
     await getSupabase()
@@ -200,7 +200,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
       : Promise.resolve(pending.caption),
     isImageRequest && imagePrompt
-      ? Promise.resolve(buildImageUrl(imagePrompt))
+      ? Promise.resolve(buildImageUrl(imagePrompt, detectStyle(instruction)))
       : Promise.resolve(pending.image_url),
   ]);
 

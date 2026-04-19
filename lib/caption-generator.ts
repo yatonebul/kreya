@@ -37,10 +37,10 @@ export async function generateImagePrompt(topic: string): Promise<string> {
   const msg = await getAnthropic().messages.create({
     model: MODEL,
     max_tokens: 120,
-    system: 'You are an image prompt writer for Flux AI. Output ONLY the image prompt — no explanation, no quotes. NEVER include human faces, portraits, or people. Focus on scenes, environments, objects, architecture, nature, or abstract compositions — these render beautifully.',
+    system: 'You are an image prompt writer for Flux AI. Output ONLY the image prompt — no explanation, no quotes. When people appear, describe them from behind, in silhouette, or at a distance — never close-up faces. Focus on cinematic scenes, environments, mood, and composition.',
     messages: [{
       role: 'user',
-      content: `Write a vivid, Instagram-worthy image generation prompt for this topic: "${topic}". Emphasise mood, lighting, colour palette, and composition. Under 80 words.`,
+      content: `Write a vivid, photorealistic, Instagram-worthy image generation prompt for this topic: "${topic}". Emphasise cinematic lighting, colour palette, and sharp composition. Under 80 words.`,
     }],
   });
   return msg.content[0].type === 'text' ? msg.content[0].text : topic;
