@@ -33,6 +33,19 @@ export async function generateCaption(
   return msg.content[0].type === 'text' ? msg.content[0].text : 'Default caption';
 }
 
+export async function generateImagePrompt(topic: string): Promise<string> {
+  const msg = await getAnthropic().messages.create({
+    model: MODEL,
+    max_tokens: 120,
+    system: 'You are an image prompt writer for an AI image generator. Output ONLY the image prompt — no explanation, no quotes.',
+    messages: [{
+      role: 'user',
+      content: `Write a vivid, Instagram-worthy image generation prompt for this topic: "${topic}". Focus on visual composition, mood, lighting, and style. Under 80 words.`,
+    }],
+  });
+  return msg.content[0].type === 'text' ? msg.content[0].text : topic;
+}
+
 export async function refineCaption(
   currentCaption: string,
   instruction: string,

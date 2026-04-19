@@ -1,28 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateCaption, refineCaption } from '@/lib/caption-generator';
+import { generateCaption, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
+import { buildImageUrl } from '@/lib/image-generator';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
 const IG_ACCOUNT = 'nepostnuto';
-
-const IMAGE_POOL = [
-  'https://images.pexels.com/photos/1591447/pexels-photo-1591447.jpeg',  // autumn forest path
-  'https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg',  // person coding
-  'https://images.pexels.com/photos/374870/pexels-photo-374870.jpeg',    // coffee + notebook
-  'https://images.pexels.com/photos/3182812/pexels-photo-3182812.jpeg',  // team at work
-  'https://images.pexels.com/photos/2102416/pexels-photo-2102416.jpeg',  // laptop on desk
-  'https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg',  // startup meeting
-  'https://images.pexels.com/photos/3183150/pexels-photo-3183150.jpeg',  // whiteboard planning
-  'https://images.pexels.com/photos/607812/pexels-photo-607812.jpeg',    // city night lights
-  'https://images.pexels.com/photos/1367276/pexels-photo-1367276.jpeg',  // sunrise cityscape
-  'https://images.pexels.com/photos/2041556/pexels-photo-2041556.jpeg',  // minimal desk setup
-];
-
-function pickImage() {
-  return IMAGE_POOL[Math.floor(Math.random() * IMAGE_POOL.length)];
-}
 
 function getSupabase() {
   return createClient(
@@ -53,55 +37,51 @@ export async function POST(request: NextRequest) {
 
   const value = body.entry?.[0]?.changes?.[0]?.value;
   const message = value?.messages?.[0];
-  if (!message) return NextResponse.json({ ok: true }); // status update, skip
+  if (!message) return NextResponse.json({ ok: true });
 
   const from: string = message.from;
   const messageType: string = message.type;
 
   try {
-    // Button reply (Approve / Edit / Discard)
     if (messageType === 'interactive') {
       const buttonId = message.interactive?.button_reply?.id;
       await handleButtonReply(from, buttonId);
       return NextResponse.json({ ok: true });
     }
 
-    // Text or image message
     if (messageType === 'text' || messageType === 'image') {
       const pending = await getPending(from);
 
-      // User is in edit mode — refine existing caption
       if (pending?.state === 'in_edit' && messageType === 'text') {
         await handleEditRefinement(from, pending, message.text.body);
         return NextResponse.json({ ok: true });
       }
 
-      // New post request — discard any previous pending, generate fresh
       let prompt = '';
-      let imageUrl = '';
-
       if (messageType === 'text') {
         prompt = message.text?.body ?? '';
       } else {
         prompt = message.image?.caption ?? 'A beautiful moment captured';
-        // WhatsApp image download not yet implemented — uses pool image
       }
 
-      // Cancel previous pending posts for this user
+      // Discard previous pending posts for this user
       await getSupabase()
         .from('pending_posts')
         .update({ state: 'discarded' })
         .eq('whatsapp_phone', from)
         .in('state', ['pending_approval', 'in_edit']);
 
-      await sendText(from, '✍️ Generating your caption...');
+      await sendText(from, '✍️ Generating your post...');
 
-      const [profileContext, recentCaptions] = await Promise.all([
+      const [profileContext, recentCaptions, imagePrompt] = await Promise.all([
         getProfileContext(),
         getRecentCaptions(),
+        generateImagePrompt(prompt),
       ]);
-      const caption = await generateCaption(prompt, profileContext ?? undefined, recentCaptions);
-      imageUrl = pickImage();
+      const [caption, imageUrl] = await Promise.all([
+        generateCaption(prompt, profileContext ?? undefined, recentCaptions),
+        Promise.resolve(buildImageUrl(imagePrompt)),
+      ]);
 
       await getSupabase().from('pending_posts').insert({
         whatsapp_phone: from,
@@ -178,7 +158,7 @@ async function handleButtonReply(from: string, buttonId: string) {
       .update({ state: 'in_edit' })
       .eq('id', pending.id);
 
-    await sendText(from, '✏️ What would you like to change? Just tell me and I\'ll update the caption.');
+    await sendText(from, '✏️ What would you like to change? Caption, tone, length — or ask for a new image.');
 
   } else if (buttonId === 'discard') {
     await getSupabase()
@@ -186,20 +166,28 @@ async function handleButtonReply(from: string, buttonId: string) {
       .update({ state: 'discarded' })
       .eq('id', pending.id);
 
-    await sendText(from, '🗑️ Post discarded. Send a new message whenever you\'re ready to create content!');
+    await sendText(from, '🗑️ Post discarded. Send a new message whenever you\'re ready!');
   }
 }
 
 async function handleEditRefinement(from: string, pending: any, instruction: string) {
-  const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap image)\b/i.test(instruction);
+  const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
 
   if (isImageRequest) {
-    await sendText(from, '🖼️ AI image generation is coming soon! I can only edit the caption text for now.\n\nWhat would you like to change about the caption?');
+    await sendText(from, '🎨 Generating a new image...');
+    const imagePrompt = await generateImagePrompt(pending.caption);
+    const newImageUrl = buildImageUrl(imagePrompt);
+
+    await getSupabase()
+      .from('pending_posts')
+      .update({ image_url: newImageUrl, state: 'pending_approval' })
+      .eq('id', pending.id);
+
+    await sendPostPreview(from, newImageUrl, pending.caption);
     return;
   }
 
   await sendText(from, '✍️ Updating your caption...');
-
   const profileContext = await getProfileContext();
   const newCaption = await refineCaption(pending.caption, instruction, profileContext ?? undefined);
 
