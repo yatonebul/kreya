@@ -43,7 +43,14 @@ export async function GET(request: NextRequest) {
     `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${tokenData.access_token}`
   );
   const longData = await longRes.json();
+  console.log('[IG callback] long-lived exchange:', JSON.stringify({ ...longData, access_token: longData.access_token ? longData.access_token.slice(0, 20) + '...' + longData.access_token.slice(-10) : null }));
+
+  if (longData.error) {
+    return NextResponse.json({ error: 'Long-lived token exchange failed', detail: longData }, { status: 500 });
+  }
+
   const accessToken = longData.access_token ?? tokenData.access_token;
+  console.log('[IG callback] token to save:', accessToken.slice(0, 20) + '...' + accessToken.slice(-10), 'len:', accessToken.length);
 
   // 3. Get Instagram user info
   const meRes = await fetch(`https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`);
@@ -51,10 +58,11 @@ export async function GET(request: NextRequest) {
   if (!meData.id) {
     return NextResponse.json({ error: 'Could not fetch user info', detail: meData }, { status: 500 });
   }
+  console.log('[IG callback] user:', meData.username, meData.id);
 
   // 4. Update token in Supabase
   const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
-  await getSupabase()
+  const { count, error: dbError } = await getSupabase()
     .from('instagram_accounts')
     .update({
       access_token: accessToken,
@@ -62,7 +70,14 @@ export async function GET(request: NextRequest) {
       token_expires_at: expiresAt,
       is_active: true,
     })
-    .eq('account_name', meData.username);
+    .eq('account_name', meData.username)
+    .select('account_name', { count: 'exact', head: true });
+
+  console.log('[IG callback] UPDATE result: rows matched =', count, 'error =', dbError?.message);
+
+  if (dbError || count === 0) {
+    return NextResponse.json({ error: 'DB update failed', detail: dbError?.message ?? 'no rows matched', username: meData.username }, { status: 500 });
+  }
 
   return NextResponse.json({
     ok: true,
