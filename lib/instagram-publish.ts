@@ -19,20 +19,21 @@ export async function publishToInstagram(
     // 1. Get access token from Supabase
     const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
-      .select('access_token')
-      .eq('account_name', IG_USERNAME)
+      .select('access_token, instagram_user_id')
+      .eq('account_name', 'nepostnuto')
       .single();
 
     const accessToken = account?.access_token;
+    const igUserId = account?.instagram_user_id;
 
-    if (dbError || !accessToken) {
+    if (dbError || !accessToken || !igUserId) {
       throw new Error('Could not retrieve access token from database');
     }
 
     // 2. Create media container
     console.log('Creating Instagram media container...');
     const containerRes = await fetch(
-      `https://graph.facebook.com/v24.0/${IG_USER_ID}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
+      `https://graph.facebook.com/v24.0/${igUserId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
       { method: 'POST' }
     );
     const containerData = await containerRes.json();
@@ -48,7 +49,7 @@ export async function publishToInstagram(
     // 3. Publish media
     console.log('Publishing to Instagram...');
     const publishRes = await fetch(
-      `https://graph.facebook.com/v24.0/${IG_USER_ID}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
+      `https://graph.facebook.com/v24.0/${igUserId}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
       { method: 'POST' }
     );
     const publishData = await publishRes.json();
