@@ -151,7 +151,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
   ]);
   const caption = await generateCaption(
-    prompt || (isVideo ? 'An amazing video moment' : 'An amazing moment captured'),
+    prompt || (isVideo ? '[No description — write a punchy, original caption for a video post. Do not reference any specific product, topic or theme from recent posts.]' : '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]'),
     profileContext ?? undefined,
     recentCaptions
   );
