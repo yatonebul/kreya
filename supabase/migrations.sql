@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS user_profiles (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 3. pending_posts — scheduling support
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ;
+
+
 -- Skip onboarding for an existing user (replace number as needed)
 -- INSERT INTO user_profiles (whatsapp_phone, onboarding_step, brand_name, niche, tone, profile_context)
 -- VALUES (

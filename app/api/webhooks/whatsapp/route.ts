@@ -7,6 +7,7 @@ import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { handleOnboarding, getProfileContextForPhone } from '@/lib/whatsapp-onboarding';
+import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
 
@@ -72,9 +73,20 @@ async function processWebhook(body: any) {
         return;
       }
 
-      // If a draft is waiting, resend it
+      // If a draft is waiting — check for schedule intent first, then resend
       const pendingApproval = await getPostByState(from, 'pending_approval');
       if (pendingApproval && messageType === 'text') {
+        const text: string = message.text.body;
+        if (hasScheduleIntent(text)) {
+          const scheduleTime = await parseScheduleTime(text);
+          if (scheduleTime && scheduleTime > new Date()) {
+            await getSupabase().from('pending_posts')
+              .update({ state: 'scheduled', scheduled_for: scheduleTime.toISOString() })
+              .eq('id', pendingApproval.id);
+            await sendText(from, `🗓️ Scheduled for ${formatScheduleConfirmation(scheduleTime)}. I'll post it automatically.`);
+            return;
+          }
+        }
         await sendText(from, '👆 Your draft is still waiting:');
         await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id);
         return;
