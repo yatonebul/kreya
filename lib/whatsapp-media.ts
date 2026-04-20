@@ -48,16 +48,6 @@ export async function downloadAndHostMedia(mediaId: string, mimeType: string): P
   if (error) throw new Error(`Supabase Storage upload failed: ${error.message}`);
 
   const publicUrl = supabase.storage.from('user-media').getPublicUrl(data.path).data.publicUrl;
-
-  // Verify the URL is publicly accessible (fails if bucket is not set to Public)
-  const check = await fetch(publicUrl, { method: 'HEAD' });
-  console.log('[media] upload OK, url:', publicUrl, 'status:', check.status);
-  if (!check.ok) {
-    throw Object.assign(
-      new Error('📎 Media hosted but not publicly accessible. Go to Supabase → Storage → user-media bucket → make it Public.'),
-      { userFacing: true }
-    );
-  }
-
+  console.log('[media] hosted at:', publicUrl);
   return publicUrl;
 }
