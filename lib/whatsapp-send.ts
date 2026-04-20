@@ -32,8 +32,12 @@ export function sendText(to: string, text: string) {
 
 // postId is encoded in each button ID so replying to any historical preview
 // always acts on the correct post, not the latest one.
-export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string) {
+export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string, isVideo = false) {
   await sendText(to, `📝 Caption draft:\n\n${caption}`);
+
+  const header = isVideo
+    ? { type: 'text', text: '🎬 Video ready to post' }
+    : { type: 'image', image: { link: imageUrl } };
 
   return wa({
     messaging_product: 'whatsapp',
@@ -41,7 +45,7 @@ export async function sendPostPreview(to: string, imageUrl: string, caption: str
     type: 'interactive',
     interactive: {
       type: 'button',
-      header: { type: 'image', image: { link: imageUrl } },
+      header,
       body: { text: 'Ready to post this to Instagram?' },
       footer: { text: 'Tip: Edit lets you change caption, style, or image' },
       action: {

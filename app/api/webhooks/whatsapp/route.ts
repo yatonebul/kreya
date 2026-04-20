@@ -98,7 +98,7 @@ async function processWebhook(body: any) {
           }
         }
         await sendText(from, '👆 Your draft is still waiting:');
-        await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id);
+        await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id, pendingApproval.is_video ?? false);
         return;
       }
 
@@ -203,7 +203,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     }
   }
 
-  await sendPostPreview(from, imageUrl, caption, primaryPost.id);
+  await sendPostPreview(from, imageUrl, caption, primaryPost.id, isVideo);
 }
 
 async function getPostById(id: string) {
@@ -285,7 +285,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       .update({ image_url: pending.user_image_url, image_source: 'user', state: 'pending_approval' })
       .eq('id', pending.id);
     const updated = await getPostById(pending.id);
-    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id);
+    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id, pending.is_video ?? false);
     return;
   }
 
@@ -359,6 +359,6 @@ async function handleEditWithNewMedia(from: string, pending: any, message: any, 
     .single();
 
   if (updated?.id) {
-    await sendPostPreview(from, userMediaUrl, pending.caption, updated.id);
+    await sendPostPreview(from, userMediaUrl, pending.caption, updated.id, isVideo);
   }
 }
