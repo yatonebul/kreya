@@ -3,10 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
-const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? 'https://kreya-jet.vercel.app/api/auth/instagram/callback';
+const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? 'https://kreya-github.vercel.app/api/auth/instagram/callback';
 const CONNECT_URL = process.env.NEXT_PUBLIC_APP_URL
   ? `${process.env.NEXT_PUBLIC_APP_URL}/connect`
-  : 'https://kreya-jet.vercel.app/connect';
+  : 'https://kreya-github.vercel.app/connect';
 
 function getSupabase() {
   return createClient(

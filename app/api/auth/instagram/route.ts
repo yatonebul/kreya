@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
-const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? 'https://kreya-jet.vercel.app/api/auth/instagram/callback';
+const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? 'https://kreya-github.vercel.app/api/auth/instagram/callback';
 const SCOPES = [
   'instagram_business_basic',
   'instagram_business_content_publish',
