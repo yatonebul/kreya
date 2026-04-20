@@ -77,7 +77,8 @@ async function processWebhook(body: any) {
     }
   } catch (err: any) {
     console.error('[webhook error]', err.message);
-    await sendText(from, '⚠️ Something went wrong. Please try again.').catch(() => {});
+    const msg = err.userFacing ? err.message : '⚠️ Something went wrong. Please try again.';
+    await sendText(from, msg).catch(() => {});
   }
 }
 

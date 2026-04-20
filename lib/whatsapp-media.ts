@@ -22,7 +22,19 @@ export async function downloadAndHostMedia(mediaId: string, mimeType: string): P
     headers: { Authorization: `Bearer ${getToken()}` },
   });
   if (!fileRes.ok) throw new Error(`Media download failed: ${fileRes.status}`);
+
+  const MAX_BYTES = 50 * 1024 * 1024;
+  const contentLength = Number(fileRes.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_BYTES) {
+    const mb = Math.round(contentLength / 1024 / 1024);
+    throw Object.assign(new Error(`📎 File too large (${mb} MB). Please keep it under 50 MB.`), { userFacing: true });
+  }
+
   const buffer = Buffer.from(await fileRes.arrayBuffer());
+  if (buffer.byteLength > MAX_BYTES) {
+    const mb = Math.round(buffer.byteLength / 1024 / 1024);
+    throw Object.assign(new Error(`📎 File too large (${mb} MB). Please keep it under 50 MB.`), { userFacing: true });
+  }
 
   // 3. Upload to Supabase Storage (public bucket: user-media)
   const ext = mimeType.split('/')[1]?.split(';')[0] ?? 'jpg';
