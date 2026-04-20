@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  const msgType = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ?? 'none';
+  console.log('[POST] received type:', msgType);
   after(async () => { await processWebhook(body); });
   return NextResponse.json({ ok: true });
 }
