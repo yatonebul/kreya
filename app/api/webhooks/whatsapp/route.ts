@@ -6,6 +6,7 @@ import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
+import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding, getProfileContextForPhone } from '@/lib/whatsapp-onboarding';
 import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
 
@@ -69,7 +70,7 @@ async function processWebhook(body: any) {
     }
 
     // Text or media messages
-    if (['text', 'image', 'video', 'document'].includes(messageType)) {
+    if (['text', 'image', 'video', 'document', 'audio'].includes(messageType)) {
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
       if (inEdit) {
@@ -137,6 +138,16 @@ async function handleNewPost(from: string, message: any, messageType: string) {
         { userFacing: true }
       );
     }
+  } else if (messageType === 'audio') {
+    const mediaId = message.audio?.id;
+    const mimeType = message.audio?.mime_type ?? 'audio/ogg';
+    await sendText(from, '🎙️ Transcribing your voice note...');
+    try {
+      prompt = await transcribeVoice(mediaId, mimeType);
+    } catch {
+      throw Object.assign(new Error('🎙️ Couldn\'t transcribe your voice note — please try again.'), { userFacing: true });
+    }
+    await sendText(from, '✍️ Creating your post...');
   } else {
     prompt = message.text?.body ?? '';
     await sendText(from, '✍️ Generating your post...');
