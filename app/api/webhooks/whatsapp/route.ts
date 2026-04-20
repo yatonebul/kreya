@@ -49,7 +49,6 @@ async function processWebhook(body: any) {
   const from: string = message.from;
   const messageType: string = message.type;
   console.log('[webhook] from:', from, 'type:', messageType);
-  await sendText(from, `[debug] type:${messageType}`); // TEMP
 
   try {
     // Onboarding — gate all messages until setup is complete
