@@ -333,7 +333,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
     if (isImageRequest && pending.user_image_url) {
       await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
     }
-    await sendPostPreview(from, newImageUrl, newCaption, updated.id);
+    await sendPostPreview(from, newImageUrl, newCaption, updated.id, pending.is_video ?? false);
   }
 }
 
