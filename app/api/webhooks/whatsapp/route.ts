@@ -6,9 +6,9 @@ import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
+import { handleOnboarding, getProfileContextForPhone } from '@/lib/whatsapp-onboarding';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
-const IG_ACCOUNT = 'nepostnuto';
 
 function getSupabase() {
   return createClient(
@@ -46,6 +46,13 @@ async function processWebhook(body: any) {
   const messageType: string = message.type;
 
   try {
+    // Onboarding — gate all messages until setup is complete
+    if (messageType !== 'interactive') {
+      const text = messageType === 'text' ? message.text?.body : undefined;
+      const stillOnboarding = await handleOnboarding(from, messageType, text);
+      if (stillOnboarding) return;
+    }
+
     // Button replies
     if (messageType === 'interactive') {
       const rawId: string = message.interactive?.button_reply?.id ?? '';
@@ -106,7 +113,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     /\b(also.?generate|ai.?version|generate.?too|ai.?image.?too|both)\b/i.test(prompt);
 
   const [profileContext, recentCaptions, imagePromptText] = await Promise.all([
-    getProfileContext(),
+    getProfileContextForPhone(from),
     getRecentCaptions(),
     !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
   ]);
@@ -177,12 +184,6 @@ async function getPostByState(phone: string, state: string) {
     .eq('whatsapp_phone', phone).eq('state', state)
     .order('created_at', { ascending: false }).limit(1).maybeSingle();
   return data;
-}
-
-async function getProfileContext(): Promise<string | null> {
-  const { data } = await getSupabase()
-    .from('instagram_accounts').select('profile_context').eq('account_name', IG_ACCOUNT).maybeSingle();
-  return data?.profile_context ?? null;
 }
 
 async function getRecentCaptions(): Promise<string[]> {
@@ -272,7 +273,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
   await sendText(from, `✍️ Updating ${statusParts.join(' & ')}...`);
 
   const [profileContext, imagePrompt] = await Promise.all([
-    hasCaptionInstruction ? getProfileContext() : Promise.resolve(null),
+    hasCaptionInstruction ? getProfileContextForPhone(from) : Promise.resolve(null),
     isImageRequest ? generateImagePrompt(pending.caption) : Promise.resolve(null),
   ]);
 
