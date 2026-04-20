@@ -2,294 +2,144 @@
   "project": {
     "name": "Kreya",
     "tagline": "Tell Kreya what you need. Consider it done.",
-    "description": "AI-powered, WhatsApp-first social media management SaaS platform targeting creators and small businesses",
-    "core_loop": "Users send WhatsApp voice notes or text prompts → Claude AI generates social content → Kreya publishes across Instagram, TikTok, Twitter, Facebook, LinkedIn, and YouTube"
+    "description": "AI-powered, WhatsApp-first social media management SaaS. Users send WhatsApp messages (text, photo, video, voice note) → Claude generates caption + image → publishes to Instagram.",
+    "core_loop": "WhatsApp input (text / photo / video / voice) → Claude caption → AI or user image → Instagram post"
   },
 
   "brand": {
     "primary_color": "#FF4F3B",
     "color_name": "Coral",
     "headline_font": "Syne ExtraBold",
-    "body_font": "DM Sans"
+    "body_font": "DM Sans",
+    "tokens": "--ink:#07070D --dark:#0B0918 --surf:#100E22 --surf2:#171430 --surf3:#201D3C --coral:#FF4F3B --violet:#5E35FF --mint:#00E5A0 --gold:#FFD166 --rose:#FF6B8A"
   },
 
   "tech_stack": {
-    "authentication_database": {
-      "service": "Supabase",
-      "tier": "Free (SOC 2 Type 2)",
-      "project_ref": "kuwkdxahsugsfblgbetk",
-      "region": "Europe",
-      "url": "https://kuwkdxahsugsfblgbetk.supabase.co"
-    },
-    "instagram": {
-      "service": "Meta Graph API",
-      "version": "v24.0",
-      "type": "Direct integration",
-      "requires_facebook_page": false,
-      "cost": "Free",
-      "app_name": "Kreya-IG",
-      "app_id": "761297643580425",
-      "status": "Live and tested — real post published successfully"
-    },
-    "other_platforms": {
-      "service": "Late",
-      "cost_per_month": 33,
-      "platforms": ["TikTok", "Twitter", "Facebook", "LinkedIn", "YouTube"]
-    },
-    "rate_limiting": "Upstash Redis",
-    "oauth_state_management": "Upstash Redis",
-    "token_refresh_cron": "Upstash QStash",
-    "ai_model": "Claude Sonnet",
+    "framework": "Next.js 16.2.2 (App Router, server components default)",
     "hosting": {
       "platform": "Vercel",
-      "username": "yatonebul"
+      "project": "kreya-github",
+      "production_url": "https://kreya-github.vercel.app",
+      "auto_deploy": "GitHub push to main → Vercel auto-deploys",
+      "note": "Old 'kreya' project (kreya-jet.vercel.app) is deprecated — do not use"
     },
     "source_control": {
       "platform": "GitHub",
-      "url": "https://github.com/yatonebul/kreya",
-      "primary_repo": true
+      "repo": "yatonebul/kreya",
+      "primary_branch": "main"
     },
-    "secondary_vcs": {
-      "platform": "GitLab",
-      "url": "https://gitlab.com/yatonebul/kreya",
-      "note": "Also exists but GitHub is primary"
+    "database": {
+      "service": "Supabase",
+      "project_ref": "kuwkdxahsugsfblgbetk",
+      "url": "https://kuwkdxahsugsfblgbetk.supabase.co",
+      "tables": ["pending_posts", "instagram_accounts", "user_profiles", "social_audit_log"]
     },
-    "domain": {
-      "recommended": "getkreya.com",
-      "cost_per_year": 12,
-      "alternative": "kreya.ai",
-      "alternative_cost": 500
-    }
-  },
-
-  "database": {
-    "platform": "Supabase",
-    "tables": [
-      {
-        "name": "organizations",
-        "purpose": "Store organization/user account data",
-        "status": "Has test record — org_id: bc8e2a66-48b1-4e3a-96bb-847131075ede"
-      },
-      {
-        "name": "instagram_accounts",
-        "purpose": "Store linked Instagram account credentials and metadata",
-        "status": "Has live record — instagram_account_id: 477d5bc3-278a-403d-9e20-290eeb66d76f"
-      },
-      {
-        "name": "instagram_posts",
-        "purpose": "Store generated and published Instagram posts"
-      },
-      {
-        "name": "social_audit_log",
-        "purpose": "Track all social media publishing actions for compliance and auditing"
-      }
-    ],
-    "security": "Row-level security (RLS) policies configured on all tables",
-    "test_records": {
-      "user_id": "965d8626-d0a7-4c51-9f15-72498eaa4f7d",
-      "org_id": "bc8e2a66-48b1-4e3a-96bb-847131075ede",
-      "instagram_account_id": "477d5bc3-278a-403d-9e20-290eeb66d76f",
+    "storage": {
+      "bucket": "user-media (public)",
+      "purpose": "Host user-uploaded photos/videos for WhatsApp→Instagram flow"
+    },
+    "ai": {
+      "captions": "Claude Sonnet 4.6 (anthropic sdk)",
+      "image_prompts": "Claude Haiku 4.5",
+      "schedule_parsing": "Claude Haiku 4.5",
+      "voice_transcription": "Groq Whisper (whisper-large-v3-turbo)",
+      "image_generation": "Pollinations.ai (free, no key)"
+    },
+    "whatsapp": {
+      "api": "Meta Cloud API v21.0",
+      "phone_number_id": "1079839465213735",
+      "webhook_url": "https://kreya-github.vercel.app/api/webhooks/whatsapp",
+      "verify_token": "kreya_whatsapp_2026"
+    },
+    "instagram": {
+      "api": "Meta Graph API v21.0",
+      "app_id": "761297643580425",
+      "account": "nepostnuto",
       "instagram_user_id": "26314509864842304",
-      "instagram_username": "nepostnuto",
-      "note": "Test user created directly in auth.users — not a real Supabase Auth user yet"
+      "oauth_callback": "https://kreya-github.vercel.app/api/auth/instagram/callback"
     }
   },
 
-  "instagram_api": {
-    "status": "FULLY WORKING — real post published to Instagram on 2026-04-07",
-    "posting_flow": [
-      "POST /v24.0/{ig_user_id}/media — create media container with image_url and caption",
-      "POST /v24.0/{ig_user_id}/media_publish — publish container using creation_id"
-    ],
-    "test_account": {
-      "username": "nepostnuto",
-      "instagram_user_id": "26314509864842304",
-      "app_scoped_user_id": "26314509864842304"
+  "key_files": {
+    "webhook": "app/api/webhooks/whatsapp/route.ts",
+    "instagram_publish": "lib/instagram-publish.ts",
+    "whatsapp_send": "lib/whatsapp-send.ts",
+    "whatsapp_media": "lib/whatsapp-media.ts",
+    "caption_generator": "lib/caption-generator.ts",
+    "image_generator": "lib/image-generator.ts",
+    "onboarding": "lib/whatsapp-onboarding.ts",
+    "schedule_parser": "lib/schedule-parser.ts",
+    "transcribe": "lib/transcribe.ts",
+    "cron_token_refresh": "app/api/cron/refresh-instagram-tokens/route.ts",
+    "cron_publish_scheduled": "app/api/cron/publish-scheduled/route.ts",
+    "connect_page": "app/connect/page.tsx",
+    "dashboard_page": "app/dashboard/page.tsx"
+  },
+
+  "database_schema": {
+    "pending_posts": "id, whatsapp_phone, caption, image_url, user_image_url, image_source (user|ai), is_video, sibling_id, state (pending_approval|in_edit|scheduled|published|discarded), scheduled_for, ig_post_id, ig_post_url, created_at",
+    "instagram_accounts": "id, account_name, instagram_user_id, access_token, token_expires_at, is_active",
+    "user_profiles": "id, whatsapp_phone, brand_name, niche, tone, profile_context, onboarding_step (1-4), created_at",
+    "social_audit_log": "general audit log"
+  },
+
+  "whatsapp_flow": {
+    "message_types_handled": ["text", "image", "video", "document", "audio", "interactive"],
+    "onboarding": "3-question brand setup (name → niche → tone) stored in user_profiles, gates all messages until step=4",
+    "states": "pending_approval → in_edit → scheduled → published | discarded",
+    "edit_flow": {
+      "text_in_edit": "handleEditRefinement — caption update, image regeneration, or revert to user photo",
+      "media_in_edit": "handleEditWithNewMedia — replaces image/video, keeps existing caption"
     },
-    "token": {
-      "type": "Short-lived (will need refresh)",
-      "expires": "approximately 2026-06-06",
-      "scopes": [
-        "instagram_business_basic",
-        "instagram_business_content_publish",
-        "instagram_business_manage_messages",
-        "instagram_business_manage_insights",
-        "instagram_business_manage_comments"
-      ],
-      "storage": "Plain text in Supabase encrypted_token field — encryption not yet implemented"
-    }
+    "voice": "Groq Whisper transcription → used as prompt for caption + AI image generation",
+    "scheduling": "Natural language parsed by Claude Haiku → stored as scheduled_for TIMESTAMPTZ"
   },
 
-  "deployment": {
-    "homepage": {
-      "file": "index.html",
-      "status": "Deployed and live",
-      "url": "https://yatonebul.github.io/kreya"
-    },
-    "ci_cd": {
-      "platform": "Vercel",
-      "connected_repo": "GitHub (yatonebul/kreya)",
-      "status": "Active"
-    }
-  },
-
-  "repository_structure": {
-    "root_files": [
-      {
-        "name": "CLAUDE.md",
-        "purpose": "Claude-specific context and development notes"
-      },
-      {
-        "name": "README.md",
-        "purpose": "Project overview and setup instructions"
-      },
-      {
-        "name": "index.html",
-        "purpose": "Homepage (deployed at yatonebul.github.io/kreya)"
-      },
-      {
-        "name": "kreya-app.html",
-        "purpose": "Main post-login app interface and dashboard"
-      },
-      {
-        "name": "kreya-asset-kit.html",
-        "purpose": "Asset library and design system components"
-      },
-      {
-        "name": "kreya-brand-identity.html",
-        "purpose": "Brand guidelines and identity standards"
-      },
-      {
-        "name": "kreya-brand-identity-v2.html",
-        "purpose": "Updated brand identity version"
-      },
-      {
-        "name": "kreya-complete-guide.html",
-        "purpose": "Comprehensive product documentation"
-      },
-      {
-        "name": "kreya-dev-prompt.html",
-        "purpose": "Developer prompts and system instructions"
-      },
-      {
-        "name": "kreya-instagram-code.zip",
-        "purpose": "Instagram Graph API integration code and helpers"
-      },
-      {
-        "name": "kreya-instagram-guide.html",
-        "purpose": "Instagram setup and integration guide"
-      },
-      {
-        "name": "kreya-social-integration.html",
-        "purpose": "Social platform integration documentation"
-      }
-    ]
-  },
-
-  "completed_infrastructure": [
-    "Supabase project live with all 4 tables (organizations, instagram_accounts, instagram_posts, social_audit_log)",
-    "Row-level security (RLS) policies configured on all tables",
-    "Homepage (index.html) deployed and live on GitHub Pages",
-    "GitLab repo created and connected to Vercel CI/CD",
-    "GitHub repo created (yatonebul/kreya) — primary repo",
-    "Instagram account switched to Creator type",
-    "Meta developer account created (personal FB account used)",
-    "Kreya-IG app created on Meta Developer Portal (App ID: 761297643580425)",
-    "Instagram API with Instagram Login configured",
-    "Access token generated with all 5 business scopes",
-    "Token verified via Meta Token Debugger — valid, ~2 months expiry",
-    "Test user, organization, and instagram_account records inserted into Supabase",
-    "Real Instagram post published via API — core posting flow CONFIRMED WORKING",
-    "QStash credentials saved in Notion (for future token refresh cron)",
-    "Resend, Stripe, OpenAI credentials already saved in Notion"
+  "env_vars_required": [
+    "WHATSAPP_ACCESS_TOKEN",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_VERIFY_TOKEN",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "INSTAGRAM_APP_ID",
+    "INSTAGRAM_APP_SECRET",
+    "INSTAGRAM_REDIRECT_URI",
+    "ANTHROPIC_API_KEY",
+    "GROQ_API_KEY",
+    "CRON_SECRET",
+    "NEXT_PUBLIC_APP_URL"
   ],
 
-  "current_blockers": [
-    {
-      "issue": "Node.js PATH configuration on Windows",
-      "status": "In progress",
-      "details": "Node.js installed but not recognized in CMD due to PATH issues",
-      "impact": "Local development environment incomplete",
-      "workaround": "Use Git Bash instead of CMD",
-      "next_steps": "Configure PATH or use Git Bash consistently"
-    }
+  "known_limitations": {
+    "scheduling": "publish-scheduled cron removed (Vercel Hobby plan — every-5min not allowed). Scheduled posts won't auto-publish until Pro plan or alternative cron.",
+    "instagram_multi_user": "instagram-publish.ts hardcoded to 'nepostnuto' account — not multi-user yet",
+    "music_collaborators": "Not available via Instagram Graph API — app-only features"
+  },
+
+  "completed_this_session": [
+    "Fixed Vercel deployment (was stuck on old commit — cron job caused build failures)",
+    "Consolidated to single Vercel project: kreya-github.vercel.app",
+    "Fixed photo upload — user's actual photo now shown in preview (not AI-generated)",
+    "Fixed edit flow — sending photo during edit keeps caption, only swaps image",
+    "Fixed video/GIF previews — text header used instead of broken image header",
+    "Fixed edit refinement — isVideo passed to sendPostPreview in all paths",
+    "Context-aware edit prompts and live messages (video vs image)",
+    "Better caption fallback when no description given (prevents copying recent post themes)",
+    "Voice note support via Groq Whisper — send voice → get Instagram post",
+    "Removed debug echo message"
   ],
 
-  "important_caveats": [
-    "Auth system currently works in demo mode only (no Supabase keys configured in app)",
-    "Post-login app (kreya-app.html) is a placeholder screen, not the full product dashboard",
-    "Instagram token stored as plain text in Supabase — AES encryption not yet implemented",
-    "Supabase test user created directly via SQL — not a real Supabase Auth user",
-    "Token auto-refresh not yet set up — token expires ~2026-06-06, set a reminder",
-    "Supabase anon key and service role key saved in Notion"
+  "next_session_ideas": [
+    "Multi-user Instagram support (map whatsapp_phone to instagram account)",
+    "Caption variants (show 3 options, user picks one)",
+    "WhatsApp help command (/help or 'help')",
+    "Profile update via WhatsApp ('update my tone to...')",
+    "Scheduled post publishing workaround (external cron or Supabase pg_cron)",
+    "Dashboard improvements"
   ],
-
-  "on_the_horizon": [
-    "Build /api/post Vercel endpoint — wraps Instagram two-step posting flow into one function",
-    "Connect posting endpoint to Kreya dashboard UI",
-    "Wire Claude AI to generate captions automatically",
-    "Build WhatsApp input flow (the core Kreya magic)",
-    "Wire real Supabase Auth — replace test user with real authentication",
-    "Build out full post-login product dashboard (currently placeholder)",
-    "Set up QStash cron for Instagram token auto-refresh (before 2026-06-06)",
-    "Implement AES token encryption in Supabase",
-    "Domain purchase decision (getkreya.com recommended over kreya.ai)",
-    "Fix Node.js PATH issue for local development"
-  ],
-
-  "next_session_priority": "Build /api/post Vercel endpoint to wrap the Instagram posting flow that was manually tested and confirmed working on 2026-04-07",
-
-  "key_principles": {
-    "transparency": "Yato values honest audits of what's real vs. placeholder — this should be default communication style",
-    "cost_consciousness": "Free tiers and lower-cost alternatives preferred (Late over Ayrshare, getkreya.com over kreya.ai)",
-    "hands_on_guidance": "Step-by-step instructions essential, especially for terminal commands and developer tooling"
-  },
-
-  "developer_environment": {
-    "os": "Windows",
-    "terminal_recommended": "Git Bash (not CMD)",
-    "package_managers": {
-      "node": {
-        "status": "Installed",
-        "issue": "PATH not configured in CMD",
-        "workaround": "Use Git Bash"
-      }
-    },
-    "development_style": "Iterative hands-on sessions; prefers complete, copy-paste-ready deliverables",
-    "context_note": "Has done significant setup from mobile — guidance should account for context switching between phone and laptop"
-  },
-
-  "communication_preferences": {
-    "style": "Direct, transparent, honest",
-    "format": "Step-by-step instructions for CLI tasks",
-    "deliverables": "Copy-paste-ready code and commands",
-    "context_switching": "Account for mobile-to-laptop transitions"
-  },
-
-  "github_context": {
-    "primary_repo": "https://github.com/yatonebul/kreya",
-    "secondary_repo": "https://gitlab.com/yatonebul/kreya",
-    "deployment_url": "https://yatonebul.github.io/kreya",
-    "ci_cd_connected": true,
-    "mcp_access": "Connected but limited (GitHub file reading not currently available)"
-  },
-
-  "token_optimization_strategy": {
-    "purpose": "Avoid hitting session memory limits by using this file as context instead of re-reading repo",
-    "usage": "Share this file with Claude in conversations instead of raw files",
-    "benefits": [
-      "Eliminates need to read multiple HTML files each conversation",
-      "Provides structured project overview upfront",
-      "Reduces token consumption by ~60-80%",
-      "Enables faster context initialization"
-    ],
-    "when_to_update": "When tech stack changes, new blockers emerge, or infrastructure is added"
-  },
 
   "metadata": {
-    "last_updated": "2026-04-07",
-    "created_for": "Efficient Claude integration and token management",
-    "version": "1.1",
-    "changelog": "v1.1 — Added Instagram API live status, Supabase test records, completed posting flow milestone, updated blockers and next steps"
+    "last_updated": "2026-04-20",
+    "version": "2.0"
   }
 }
