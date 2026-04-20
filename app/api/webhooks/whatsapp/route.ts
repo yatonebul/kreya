@@ -45,6 +45,7 @@ async function processWebhook(body: any) {
 
   const from: string = message.from;
   const messageType: string = message.type;
+  console.log('[webhook] from:', from, 'type:', messageType);
 
   try {
     // Onboarding — gate all messages until setup is complete
@@ -117,8 +118,10 @@ async function handleNewPost(from: string, message: any, messageType: string) {
 
     const mediaLabel = isVideo ? 'video' : 'photo';
     await sendText(from, `📥 Processing your ${mediaLabel}...`);
+    console.log('[webhook] mediaId:', mediaId, 'mimeType:', mimeType);
     try {
       userMediaUrl = await downloadAndHostMedia(mediaId, mimeType);
+      console.log('[webhook] userMediaUrl:', userMediaUrl);
     } catch (err: any) {
       throw Object.assign(
         new Error(`📎 Couldn't download your ${mediaLabel} — please try sending it again.`),
