@@ -65,7 +65,7 @@ async function processWebhook(body: any) {
     }
 
     // Text or media messages
-    if (['text', 'image', 'video'].includes(messageType)) {
+    if (['text', 'image', 'video', 'document'].includes(messageType)) {
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
       if (inEdit && messageType === 'text') {
@@ -103,23 +103,25 @@ async function processWebhook(body: any) {
 
 async function handleNewPost(from: string, message: any, messageType: string) {
   const isVideo = messageType === 'video';
-  const isUserMedia = messageType === 'image' || isVideo;
+  const isDocument = messageType === 'document';
+  const isUserMedia = messageType === 'image' || isVideo || isDocument;
 
   let prompt = '';
   let userMediaUrl: string | null = null;
 
   if (isUserMedia) {
-    const media = message.image ?? message.video;
+    const media = message.image ?? message.video ?? message.document;
     const mediaId = media?.id;
     const mimeType = media?.mime_type ?? (isVideo ? 'video/mp4' : 'image/jpeg');
-    prompt = (message.image?.caption ?? message.video?.caption ?? '').trim();
+    prompt = (message.image?.caption ?? message.video?.caption ?? message.document?.caption ?? '').trim();
 
-    await sendText(from, `📥 Processing your ${isVideo ? 'video' : 'photo'}...`);
+    const mediaLabel = isVideo ? 'video' : 'photo';
+    await sendText(from, `📥 Processing your ${mediaLabel}...`);
     try {
       userMediaUrl = await downloadAndHostMedia(mediaId, mimeType);
     } catch (err: any) {
       throw Object.assign(
-        new Error(`📎 Couldn't download your ${isVideo ? 'video' : 'photo'} — please try sending it again.`),
+        new Error(`📎 Couldn't download your ${mediaLabel} — please try sending it again.`),
         { userFacing: true }
       );
     }
@@ -128,7 +130,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     await sendText(from, '✍️ Generating your post...');
   }
 
-  const wantsAiAlso = isUserMedia && !isVideo &&
+  const wantsAiAlso = isUserMedia && !isVideo && !isDocument &&
     /\b(also.?generate|ai.?version|generate.?too|ai.?image.?too|both)\b/i.test(prompt);
 
   const [profileContext, recentCaptions, imagePromptText] = await Promise.all([
