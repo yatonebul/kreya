@@ -248,7 +248,8 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     }
 
     const linkLine = result.postUrl ? `\n\n🔗 ${result.postUrl}` : '';
-    await sendText(from, `🎉 Your post is live!${linkLine}\n\nKeep creating — every post builds your audience. 🚀`);
+    const postLabel = post.is_video ? 'video' : 'post';
+    await sendText(from, `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep creating — every post builds your audience. 🚀`);
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
@@ -257,13 +258,13 @@ async function handleButtonReply(from: string, action: string, postId: string | 
 
     await getSupabase().from('pending_posts').update({ state: 'in_edit' }).eq('id', post.id);
 
-    const hasUserPhoto = !!post.user_image_url;
-    await sendText(from,
-      '✏️ What would you like to change?\n\n' +
-      'Caption: tone, length, angle, language\n' +
-      'Image: say "new image" + any style (cinematic, moody, 3d, anime…)' +
-      (hasUserPhoto ? '\n\nSay "use my photo" to revert to your uploaded image.' : '')
-    );
+    const isVideoPost = !!post.is_video;
+    const hasUserPhoto = !!post.user_image_url && !isVideoPost;
+    const editMsg = isVideoPost
+      ? '✏️ What would you like to change?\n\nCaption: tone, length, angle, language\nVideo: send a new video to replace it'
+      : '✏️ What would you like to change?\n\nCaption: tone, length, angle, language\nImage: say "new image" + any style (cinematic, moody, 3d, anime…)' +
+        (hasUserPhoto ? '\n\nSay "use my photo" to revert to your uploaded image.' : '');
+    await sendText(from, editMsg);
 
   } else if (action === 'discard') {
     await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
