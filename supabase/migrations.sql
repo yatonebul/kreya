@@ -39,3 +39,13 @@ ALTER TABLE pending_posts
 --   'Brand: Your Brand. Niche: your niche. Tone: your tone. Write captions that feel authentic to this brand.'
 -- )
 -- ON CONFLICT (whatsapp_phone) DO NOTHING;
+
+
+-- 4. waitlist — email collection with platform interests
+CREATE TABLE IF NOT EXISTS waitlist (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  email       TEXT        NOT NULL UNIQUE,
+  platforms   TEXT[]      DEFAULT '{}',
+  use_case    TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
