@@ -37,7 +37,6 @@ export async function POST(request: NextRequest) {
   }
 
   // Return 200 to Meta immediately — prevents retries on slow AI calls.
-  // All processing happens in after() which runs after the response is sent.
   after(async () => {
     await processWebhook(body);
   });
@@ -54,26 +53,29 @@ async function processWebhook(body: any) {
   const messageType: string = message.type;
 
   try {
-    // Button reply (Approve / Edit / Discard)
     if (messageType === 'interactive') {
-      await handleButtonReply(from, message.interactive?.button_reply?.id);
+      const rawId: string = message.interactive?.button_reply?.id ?? '';
+      const colonIdx = rawId.indexOf(':');
+      const action = colonIdx >= 0 ? rawId.slice(0, colonIdx) : rawId;
+      const postId = colonIdx >= 0 ? rawId.slice(colonIdx + 1) : null;
+      await handleButtonReply(from, action, postId);
       return;
     }
 
     if (messageType === 'text' || messageType === 'image') {
-      const pending = await getPending(from);
-
-      // User is in edit conversation
-      if (pending?.state === 'in_edit' && messageType === 'text') {
-        await handleEditRefinement(from, pending, message.text.body);
+      // Check edit state first — specific post being edited
+      const inEdit = await getPostByState(from, 'in_edit');
+      if (inEdit && messageType === 'text') {
+        await handleEditRefinement(from, inEdit, message.text.body);
         return;
       }
 
-      // User already has a pending post — resend it instead of creating a new one.
-      // Handles "did it stuck?" or accidental double-sends.
-      if (pending?.state === 'pending_approval') {
+      // If a pending-approval post exists, resend it — don't silently overwrite.
+      // Handles "did it get stuck?" style messages.
+      const pendingApproval = await getPostByState(from, 'pending_approval');
+      if (pendingApproval) {
         await sendText(from, '👆 Your draft is still waiting:');
-        await sendPostPreview(from, pending.image_url, pending.caption);
+        await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id);
         return;
       }
 
@@ -92,19 +94,18 @@ async function processWebhook(body: any) {
         getRecentCaptions(),
         generateImagePrompt(prompt),
       ]);
-      const [caption] = await Promise.all([
-        generateCaption(prompt, profileContext ?? undefined, recentCaptions),
-      ]);
+      const caption = await generateCaption(prompt, profileContext ?? undefined, recentCaptions);
       const imageUrl = buildImageUrl(imagePrompt, 'realistic');
 
-      await getSupabase().from('pending_posts').insert({
-        whatsapp_phone: from,
-        caption,
-        image_url: imageUrl,
-        state: 'pending_approval',
-      });
+      const { data: inserted } = await getSupabase()
+        .from('pending_posts')
+        .insert({ whatsapp_phone: from, caption, image_url: imageUrl, state: 'pending_approval' })
+        .select('id')
+        .single();
 
-      await sendPostPreview(from, imageUrl, caption);
+      if (inserted?.id) {
+        await sendPostPreview(from, imageUrl, caption, inserted.id);
+      }
     }
   } catch (err: any) {
     console.error('[webhook error]', err.message);
@@ -112,12 +113,23 @@ async function processWebhook(body: any) {
   }
 }
 
-async function getPending(phone: string) {
+// Fetch a specific post by ID — used when button reply contains a post UUID
+async function getPostById(id: string) {
+  const { data } = await getSupabase()
+    .from('pending_posts')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  return data;
+}
+
+// Fetch the latest post in a given state for a user
+async function getPostByState(phone: string, state: string) {
   const { data } = await getSupabase()
     .from('pending_posts')
     .select('*')
     .eq('whatsapp_phone', phone)
-    .in('state', ['pending_approval', 'in_edit'])
+    .eq('state', state)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -143,39 +155,50 @@ async function getRecentCaptions(): Promise<string[]> {
   return data?.map(r => r.caption) ?? [];
 }
 
-async function handleButtonReply(from: string, buttonId: string) {
-  const pending = await getPending(from);
+async function handleButtonReply(from: string, action: string, postId: string | null) {
+  // If button contains a post UUID, use that exact post; otherwise fall back to latest
+  const post = postId
+    ? await getPostById(postId)
+    : await getPostByState(from, 'pending_approval');
 
-  if (!pending) {
+  if (!post) {
     await sendText(from, 'No pending post found. Send me a message to create a new post! 💬');
     return;
   }
 
-  if (buttonId === 'approve') {
+  if (action === 'approve') {
     await sendText(from, '⏳ Publishing to Instagram...');
-    const result = await publishToInstagram(pending.caption, pending.image_url);
+    const result = await publishToInstagram(post.caption, post.image_url);
 
     await getSupabase()
       .from('pending_posts')
       .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
-      .eq('id', pending.id);
+      .eq('id', post.id);
 
     const linkLine = result.postUrl ? `\n\n🔗 ${result.postUrl}` : '';
     await sendText(from, `🎉 Your post is live!${linkLine}\n\nKeep creating — every post builds your audience. 🚀`);
 
-  } else if (buttonId === 'edit') {
+  } else if (action === 'edit') {
+    // Ensure only this post is in_edit — reset any others
+    await getSupabase()
+      .from('pending_posts')
+      .update({ state: 'pending_approval' })
+      .eq('whatsapp_phone', from)
+      .eq('state', 'in_edit')
+      .neq('id', post.id);
+
     await getSupabase()
       .from('pending_posts')
       .update({ state: 'in_edit' })
-      .eq('id', pending.id);
+      .eq('id', post.id);
 
     await sendText(from, '✏️ What would you like to change?\n\nCaption: tone, length, angle, language\nImage: say "new image" and describe any style — cinematic, moody, vintage, 3d, anime, watercolour…');
 
-  } else if (buttonId === 'discard') {
+  } else if (action === 'discard') {
     await getSupabase()
       .from('pending_posts')
       .update({ state: 'discarded' })
-      .eq('id', pending.id);
+      .eq('id', post.id);
 
     await sendText(from, '🗑️ Post discarded. Send a new message whenever you\'re ready!');
   }
@@ -214,10 +237,14 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       : Promise.resolve(pending.image_url),
   ]);
 
-  await getSupabase()
+  const { data: updated } = await getSupabase()
     .from('pending_posts')
     .update({ caption: newCaption, image_url: newImageUrl, state: 'pending_approval' })
-    .eq('id', pending.id);
+    .eq('id', pending.id)
+    .select('id')
+    .single();
 
-  await sendPostPreview(from, newImageUrl, newCaption);
+  if (updated?.id) {
+    await sendPostPreview(from, newImageUrl, newCaption, updated.id);
+  }
 }

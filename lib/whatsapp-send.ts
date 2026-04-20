@@ -30,9 +30,9 @@ export function sendText(to: string, text: string) {
   });
 }
 
-// Send full caption as text first (no char limit), then image + buttons separately.
-// Avoids WhatsApp's 1024-char interactive body limit entirely.
-export async function sendPostPreview(to: string, imageUrl: string, caption: string) {
+// postId is encoded in each button ID so replying to any historical preview
+// always acts on the correct post, not the latest one.
+export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string) {
   await sendText(to, `📝 Caption draft:\n\n${caption}`);
 
   return wa({
@@ -46,9 +46,9 @@ export async function sendPostPreview(to: string, imageUrl: string, caption: str
       footer: { text: 'Tip: Edit lets you change caption, style, or image' },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: 'approve', title: '✅ Approve' } },
-          { type: 'reply', reply: { id: 'edit', title: '✏️ Edit' } },
-          { type: 'reply', reply: { id: 'discard', title: '🗑️ Discard' } },
+          { type: 'reply', reply: { id: `approve:${postId}`, title: '✅ Approve' } },
+          { type: 'reply', reply: { id: `edit:${postId}`,    title: '✏️ Edit' } },
+          { type: 'reply', reply: { id: `discard:${postId}`, title: '🗑️ Discard' } },
         ],
       },
     },
