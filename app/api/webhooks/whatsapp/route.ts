@@ -1,63 +1,302 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCaption } from '@/lib/caption-generator';
+import { createClient } from '@supabase/supabase-js';
+import { generateCaption, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { publishToInstagram } from '@/lib/instagram-publish';
+import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
+import { buildImageUrl, detectStyle } from '@/lib/image-generator';
+import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!;
-const DEFAULT_IMAGE_URL = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1080&q=80';
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
+const IG_ACCOUNT = 'nepostnuto';
 
-// Meta webhook verification handshake
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
-
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     return new Response(challenge, { status: 200 });
   }
-
   return NextResponse.json({ error: 'Invalid verification token' }, { status: 403 });
 }
 
-// Incoming WhatsApp messages
 export async function POST(request: NextRequest) {
   let body: any;
-  try {
-    body = await request.json();
-  } catch {
+  try { body = await request.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  after(async () => { await processWebhook(body); });
+  return NextResponse.json({ ok: true });
+}
 
-  const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  if (!message) {
-    // Not a message event (status update etc.) — acknowledge and exit
-    return NextResponse.json({ ok: true });
-  }
+async function processWebhook(body: any) {
+  const value = body.entry?.[0]?.changes?.[0]?.value;
+  const message = value?.messages?.[0];
+  if (!message) return;
 
+  const from: string = message.from;
   const messageType: string = message.type;
-  let userPrompt = '';
-  let imageUrl = DEFAULT_IMAGE_URL;
-
-  if (messageType === 'text') {
-    userPrompt = message.text?.body ?? '';
-  } else if (messageType === 'image') {
-    userPrompt = message.image?.caption ?? 'A beautiful moment captured';
-    // Media download not yet implemented — uses default image
-  } else if (messageType === 'audio') {
-    // Speech-to-text not yet implemented
-    userPrompt = 'Check out this audio message';
-  } else {
-    return NextResponse.json({ ok: true });
-  }
 
   try {
-    const caption = await generateCaption(userPrompt);
-    const result = await publishToInstagram(caption, imageUrl);
+    // Button replies
+    if (messageType === 'interactive') {
+      const rawId: string = message.interactive?.button_reply?.id ?? '';
+      const colonIdx = rawId.indexOf(':');
+      const action = colonIdx >= 0 ? rawId.slice(0, colonIdx) : rawId;
+      const postId = colonIdx >= 0 ? rawId.slice(colonIdx + 1) : null;
+      await handleButtonReply(from, action, postId);
+      return;
+    }
 
-    return NextResponse.json({ ok: true, postId: result.postId, caption });
-  } catch (error: any) {
-    console.error('WhatsApp webhook error:', error.message);
-    // Always 200 — prevent Meta from retrying endlessly
-    return NextResponse.json({ ok: false, error: error.message });
+    // Text or media messages
+    if (['text', 'image', 'video'].includes(messageType)) {
+      // If in edit mode, route to refinement
+      const inEdit = await getPostByState(from, 'in_edit');
+      if (inEdit && messageType === 'text') {
+        await handleEditRefinement(from, inEdit, message.text.body);
+        return;
+      }
+
+      // If a draft is waiting, resend it
+      const pendingApproval = await getPostByState(from, 'pending_approval');
+      if (pendingApproval && messageType === 'text') {
+        await sendText(from, '👆 Your draft is still waiting:');
+        await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id);
+        return;
+      }
+
+      await handleNewPost(from, message, messageType);
+    }
+  } catch (err: any) {
+    console.error('[webhook error]', err.message);
+    await sendText(from, '⚠️ Something went wrong. Please try again.').catch(() => {});
+  }
+}
+
+async function handleNewPost(from: string, message: any, messageType: string) {
+  const isVideo = messageType === 'video';
+  const isUserMedia = messageType === 'image' || isVideo;
+
+  let prompt = '';
+  let userMediaUrl: string | null = null;
+
+  if (isUserMedia) {
+    const media = message.image ?? message.video;
+    const mediaId = media?.id;
+    const mimeType = media?.mime_type ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+    prompt = (message.image?.caption ?? message.video?.caption ?? '').trim();
+
+    await sendText(from, `📥 Processing your ${isVideo ? 'video' : 'photo'}...`);
+    userMediaUrl = await downloadAndHostMedia(mediaId, mimeType);
+  } else {
+    prompt = message.text?.body ?? '';
+    await sendText(from, '✍️ Generating your post...');
+  }
+
+  const wantsAiAlso = isUserMedia && !isVideo &&
+    /\b(also.?generate|ai.?version|generate.?too|ai.?image.?too|both)\b/i.test(prompt);
+
+  const [profileContext, recentCaptions, imagePromptText] = await Promise.all([
+    getProfileContext(),
+    getRecentCaptions(),
+    !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
+  ]);
+  const caption = await generateCaption(
+    prompt || (isVideo ? 'An amazing video moment' : 'An amazing moment captured'),
+    profileContext ?? undefined,
+    recentCaptions
+  );
+
+  const imageUrl = userMediaUrl ?? buildImageUrl(imagePromptText!, 'realistic');
+
+  // Create the primary post
+  const { data: primaryPost } = await getSupabase()
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption,
+      image_url: imageUrl,
+      user_image_url: userMediaUrl,
+      image_source: userMediaUrl ? 'user' : 'ai',
+      is_video: isVideo,
+      state: 'pending_approval',
+    })
+    .select('id')
+    .single();
+
+  if (!primaryPost) return;
+
+  // If user sent a photo AND asked for AI version — generate sibling post
+  if (wantsAiAlso && imagePromptText) {
+    const aiImageUrl = buildImageUrl(imagePromptText, 'realistic');
+    const { data: aiPost } = await getSupabase()
+      .from('pending_posts')
+      .insert({
+        whatsapp_phone: from,
+        caption,
+        image_url: aiImageUrl,
+        image_source: 'ai',
+        is_video: false,
+        sibling_id: primaryPost.id,
+        state: 'pending_approval',
+      })
+      .select('id')
+      .single();
+
+    if (aiPost) {
+      await getSupabase().from('pending_posts').update({ sibling_id: aiPost.id }).eq('id', primaryPost.id);
+      await sendText(from, '📸 Your photo version:');
+      await sendPostPreview(from, imageUrl, caption, primaryPost.id);
+      await sendText(from, '🤖 AI-generated version:');
+      await sendPostPreview(from, aiImageUrl, caption, aiPost.id);
+      await sendText(from, 'Approve the one you want to post. The other will be discarded.');
+      return;
+    }
+  }
+
+  await sendPostPreview(from, imageUrl, caption, primaryPost.id);
+}
+
+async function getPostById(id: string) {
+  const { data } = await getSupabase().from('pending_posts').select('*').eq('id', id).maybeSingle();
+  return data;
+}
+
+async function getPostByState(phone: string, state: string) {
+  const { data } = await getSupabase()
+    .from('pending_posts').select('*')
+    .eq('whatsapp_phone', phone).eq('state', state)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return data;
+}
+
+async function getProfileContext(): Promise<string | null> {
+  const { data } = await getSupabase()
+    .from('instagram_accounts').select('profile_context').eq('account_name', IG_ACCOUNT).maybeSingle();
+  return data?.profile_context ?? null;
+}
+
+async function getRecentCaptions(): Promise<string[]> {
+  const { data } = await getSupabase()
+    .from('pending_posts').select('caption').eq('state', 'published')
+    .order('created_at', { ascending: false }).limit(5);
+  return data?.map(r => r.caption) ?? [];
+}
+
+async function handleButtonReply(from: string, action: string, postId: string | null) {
+  const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
+
+  if (!post) {
+    await sendText(from, 'No pending post found. Send me a message to create a new post! 💬');
+    return;
+  }
+
+  if (action === 'approve') {
+    await sendText(from, '⏳ Publishing to Instagram...');
+    const result = await publishToInstagram(post.caption, post.image_url, post.is_video ?? false);
+
+    await getSupabase().from('pending_posts')
+      .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
+      .eq('id', post.id);
+
+    // Discard sibling if this was a photo-vs-AI choice
+    if (post.sibling_id) {
+      await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
+    }
+
+    const linkLine = result.postUrl ? `\n\n🔗 ${result.postUrl}` : '';
+    await sendText(from, `🎉 Your post is live!${linkLine}\n\nKeep creating — every post builds your audience. 🚀`);
+
+  } else if (action === 'edit') {
+    await getSupabase().from('pending_posts')
+      .update({ state: 'pending_approval' })
+      .eq('whatsapp_phone', from).eq('state', 'in_edit').neq('id', post.id);
+
+    await getSupabase().from('pending_posts').update({ state: 'in_edit' }).eq('id', post.id);
+
+    const hasUserPhoto = !!post.user_image_url;
+    await sendText(from,
+      '✏️ What would you like to change?\n\n' +
+      'Caption: tone, length, angle, language\n' +
+      'Image: say "new image" + any style (cinematic, moody, 3d, anime…)' +
+      (hasUserPhoto ? '\n\nSay "use my photo" to revert to your uploaded image.' : '')
+    );
+
+  } else if (action === 'discard') {
+    await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
+    if (post.sibling_id) {
+      await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
+    }
+    await sendText(from, '🗑️ Post discarded. Send a new message whenever you\'re ready!');
+  }
+}
+
+async function handleEditRefinement(from: string, pending: any, instruction: string) {
+  const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
+  const isRevertPhoto = !!pending.user_image_url &&
+    /\b(use my photo|my photo|my image|original|uploaded|revert)\b/i.test(instruction);
+
+  // Revert to user's uploaded photo
+  if (isRevertPhoto) {
+    await getSupabase().from('pending_posts')
+      .update({ image_url: pending.user_image_url, image_source: 'user', state: 'pending_approval' })
+      .eq('id', pending.id);
+    const updated = await getPostById(pending.id);
+    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id);
+    return;
+  }
+
+  const captionInstruction = instruction
+    .replace(/\b(regenerate|change|new|different|swap|avoid|fix)\s*(the\s*)?(image|photo|picture|pic|visual|faces?|blurr\w*)\b/gi, '')
+    .replace(/\band\b/gi, '')
+    .trim();
+  const hasCaptionInstruction = captionInstruction.length > 3;
+
+  if (!isImageRequest && !hasCaptionInstruction) {
+    await sendText(from, '✏️ I didn\'t catch that — what would you like to change?');
+    return;
+  }
+
+  const statusParts: string[] = [];
+  if (isImageRequest) statusParts.push('image');
+  if (hasCaptionInstruction) statusParts.push('caption');
+  await sendText(from, `✍️ Updating ${statusParts.join(' & ')}...`);
+
+  const [profileContext, imagePrompt] = await Promise.all([
+    hasCaptionInstruction ? getProfileContext() : Promise.resolve(null),
+    isImageRequest ? generateImagePrompt(pending.caption) : Promise.resolve(null),
+  ]);
+
+  const [newCaption, newImageUrl] = await Promise.all([
+    hasCaptionInstruction
+      ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
+      : Promise.resolve(pending.caption),
+    isImageRequest && imagePrompt
+      ? Promise.resolve(buildImageUrl(imagePrompt, detectStyle(instruction)))
+      : Promise.resolve(pending.image_url),
+  ]);
+
+  const newSource = isImageRequest ? 'ai' : pending.image_source;
+
+  const { data: updated } = await getSupabase()
+    .from('pending_posts')
+    .update({ caption: newCaption, image_url: newImageUrl, image_source: newSource, state: 'pending_approval' })
+    .eq('id', pending.id)
+    .select('id')
+    .single();
+
+  if (updated?.id) {
+    if (isImageRequest && pending.user_image_url) {
+      await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
+    }
+    await sendPostPreview(from, newImageUrl, newCaption, updated.id);
   }
 }
