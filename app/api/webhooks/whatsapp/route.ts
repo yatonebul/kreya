@@ -269,7 +269,8 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
   }
 
   const captionInstruction = instruction
-    .replace(/\b(regenerate|change|new|different|swap|avoid|fix)\s*(the\s*)?(image|photo|picture|pic|visual|faces?|blurr\w*)\b/gi, '')
+    .replace(/\b(edit|update|regenerate|change|new|different|swap|avoid|fix|redo|create|generate|make)\s*(the\s*)?(image|photo|picture|pic|visual|faces?|blurr\w*)\b/gi, '')
+    .replace(/\b(edit|update|redo)\b/gi, '')  // remove leftover action verbs with no caption target
     .replace(/\band\b/gi, '')
     .trim();
   const hasCaptionInstruction = captionInstruction.length > 3;
