@@ -115,7 +115,14 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     prompt = (message.image?.caption ?? message.video?.caption ?? '').trim();
 
     await sendText(from, `📥 Processing your ${isVideo ? 'video' : 'photo'}...`);
-    userMediaUrl = await downloadAndHostMedia(mediaId, mimeType);
+    try {
+      userMediaUrl = await downloadAndHostMedia(mediaId, mimeType);
+    } catch (err: any) {
+      throw Object.assign(
+        new Error(`📎 Couldn't download your ${isVideo ? 'video' : 'photo'} — please try sending it again.`),
+        { userFacing: true }
+      );
+    }
   } else {
     prompt = message.text?.body ?? '';
     await sendText(from, '✍️ Generating your post...');
