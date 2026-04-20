@@ -7,16 +7,12 @@ function getSupabase() {
   );
 }
 
-// Instagram user ID and account name (from test data)
-const IG_USER_ID = '26314509864842304';
-const IG_USERNAME = 'nepostnuto';
-
 export async function publishToInstagram(
   caption: string,
-  imageUrl: string
+  mediaUrl: string,
+  isVideo = false
 ): Promise<{ postId: string; status: string; postUrl?: string }> {
   try {
-    // 1. Get access token from Supabase
     const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
       .select('access_token, instagram_user_id')
@@ -30,11 +26,19 @@ export async function publishToInstagram(
       throw new Error('Could not retrieve access token from database');
     }
 
-    // 2. Create media container
-    console.log('Creating Instagram media container...');
+    // 1. Create media container
+    console.log(`Creating Instagram ${isVideo ? 'Reel' : 'photo'} container...`);
+    const containerParams = new URLSearchParams({ caption, access_token: accessToken });
+    if (isVideo) {
+      containerParams.set('media_type', 'REELS');
+      containerParams.set('video_url', mediaUrl);
+    } else {
+      containerParams.set('image_url', mediaUrl);
+    }
+
     const containerRes = await fetch(
-      `https://graph.instagram.com/v21.0/${igUserId}/media?image_url=${encodeURIComponent(imageUrl)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`,
-      { method: 'POST' }
+      `https://graph.instagram.com/v21.0/${igUserId}/media`,
+      { method: 'POST', body: containerParams }
     );
     const containerData = await containerRes.json();
 
@@ -43,10 +47,26 @@ export async function publishToInstagram(
       throw new Error(`Meta API container error: ${JSON.stringify(containerData)}`);
     }
 
-    console.log('Container created, waiting for Meta processing...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // 2. For video, poll until processing is complete (up to 2 min)
+    if (isVideo) {
+      console.log('Waiting for video processing...');
+      let attempts = 0;
+      while (attempts < 24) {
+        await new Promise(r => setTimeout(r, 5000));
+        const statusRes = await fetch(
+          `https://graph.instagram.com/v21.0/${containerData.id}?fields=status_code&access_token=${accessToken}`
+        );
+        const { status_code } = await statusRes.json();
+        console.log('Video status:', status_code);
+        if (status_code === 'FINISHED') break;
+        if (status_code === 'ERROR') throw new Error('Video processing failed on Meta side');
+        attempts++;
+      }
+    } else {
+      await new Promise(r => setTimeout(r, 5000));
+    }
 
-    // 3. Publish media
+    // 3. Publish
     console.log('Publishing to Instagram...');
     const publishRes = await fetch(
       `https://graph.instagram.com/v21.0/${igUserId}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
@@ -59,7 +79,7 @@ export async function publishToInstagram(
       throw new Error(`Meta API publish error: ${JSON.stringify(publishData)}`);
     }
 
-    console.log('Post published successfully:', publishData.id);
+    console.log('Published successfully:', publishData.id);
 
     // 4. Fetch permalink
     const permalinkRes = await fetch(
@@ -68,35 +88,20 @@ export async function publishToInstagram(
     const permalinkData = await permalinkRes.json();
     const postUrl: string | undefined = permalinkData.permalink;
 
-    // 5. Log to audit table
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
-      details: {
-        post_id: publishData.id,
-        caption,
-        source: 'whatsapp',
-      },
+      details: { post_id: publishData.id, caption, source: 'whatsapp', is_video: isVideo },
     });
 
-    return {
-      postId: publishData.id,
-      status: 'success',
-      postUrl,
-    };
+    return { postId: publishData.id, status: 'success', postUrl };
   } catch (error: any) {
     console.error('Instagram publishing failed:', error.message);
-
-    // Log failure
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'failed',
-      details: {
-        error: error.message,
-        source: 'whatsapp',
-      },
+      details: { error: error.message, source: 'whatsapp' },
     });
-
     throw error;
   }
 }

@@ -14,7 +14,6 @@ export function detectStyle(instruction: string): ImageStyle {
   if (/\b(anime|manga|cartoon|illustrat\w+|cel.?shad)\b/.test(i)) return 'anime';
   if (/\b(3d|render|cgi|blender|three.?d|clay|sculpt)\b/.test(i)) return '3d';
   if (/\b(artistic|painterly|oil paint|watercolou?r|abstract|impressio\w+|sketch|drawing|vintage|retro|film grain|moody|cyberpunk|neon|surreal|fantasy|dreamy|lo.?fi)\b/.test(i)) return 'artistic';
-  // cinematic / realistic / photo / sharp are all default
   return 'realistic';
 }
 
