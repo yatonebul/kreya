@@ -72,9 +72,15 @@ async function processWebhook(body: any) {
     if (['text', 'image', 'video', 'document'].includes(messageType)) {
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
-      if (inEdit && messageType === 'text') {
-        await handleEditRefinement(from, inEdit, message.text.body);
-        return;
+      if (inEdit) {
+        if (messageType === 'text') {
+          await handleEditRefinement(from, inEdit, message.text.body);
+          return;
+        }
+        if (['image', 'video', 'document'].includes(messageType)) {
+          await handleEditWithNewMedia(from, inEdit, message, messageType);
+          return;
+        }
       }
 
       // If a draft is waiting — check for schedule intent first, then resend
@@ -328,5 +334,31 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
     }
     await sendPostPreview(from, newImageUrl, newCaption, updated.id);
+  }
+}
+
+async function handleEditWithNewMedia(from: string, pending: any, message: any, messageType: string) {
+  const isVideo = messageType === 'video';
+  const media = message.image ?? message.video ?? message.document;
+  const mediaId = media?.id;
+  const mimeType = media?.mime_type ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+
+  await sendText(from, `📥 Processing your ${isVideo ? 'video' : 'photo'}...`);
+  let userMediaUrl: string;
+  try {
+    userMediaUrl = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    throw Object.assign(new Error(`📎 Couldn't download your photo — please try again.`), { userFacing: true });
+  }
+
+  const { data: updated } = await getSupabase()
+    .from('pending_posts')
+    .update({ image_url: userMediaUrl, user_image_url: userMediaUrl, image_source: 'user', is_video: isVideo, state: 'pending_approval' })
+    .eq('id', pending.id)
+    .select('id')
+    .single();
+
+  if (updated?.id) {
+    await sendPostPreview(from, userMediaUrl, pending.caption, updated.id);
   }
 }
