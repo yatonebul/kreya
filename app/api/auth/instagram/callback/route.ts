@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendText } from '@/lib/whatsapp-send';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
@@ -19,9 +20,25 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const state = searchParams.get('state');
 
   if (error || !code) {
     return NextResponse.redirect(`${CONNECT_URL}?error=${encodeURIComponent(error ?? 'no_code')}`);
+  }
+
+  // Resolve CSRF state → whatsapp phone
+  let whatsappPhone: string | null = null;
+  if (state) {
+    const { data: pending } = await getSupabase()
+      .from('oauth_pending_states')
+      .select('phone')
+      .eq('state', state)
+      .maybeSingle();
+
+    if (pending?.phone) {
+      whatsappPhone = pending.phone;
+      await getSupabase().from('oauth_pending_states').delete().eq('state', state);
+    }
   }
 
   try {
@@ -54,7 +71,7 @@ export async function GET(request: NextRequest) {
     const meData = await meRes.json();
     if (!meData.id) throw new Error('Could not fetch user info');
 
-    // 4. Upsert token in Supabase
+    // 4. Upsert token + phone in Supabase
     const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
     const { error: dbError } = await getSupabase()
       .from('instagram_accounts')
@@ -64,13 +81,24 @@ export async function GET(request: NextRequest) {
         access_token: accessToken,
         token_expires_at: expiresAt,
         is_active: true,
+        ...(whatsappPhone ? { whatsapp_phone: whatsappPhone } : {}),
       }, { onConflict: 'account_name' });
 
     if (dbError) throw new Error(`DB error: ${dbError.message}`);
 
-    return NextResponse.redirect(`${CONNECT_URL}?connected=${encodeURIComponent(meData.username)}`);
+    // 5. Notify user via WhatsApp
+    if (whatsappPhone) {
+      await sendText(
+        whatsappPhone,
+        `✅ *@${meData.username}* connected!\n\nYou're all set — send me a message, photo, video, or voice note and I'll create your next Instagram post. 🚀`
+      ).catch(() => {});
+    }
+
+    const phoneParam = whatsappPhone ? `&phone=${encodeURIComponent(whatsappPhone)}` : '';
+    return NextResponse.redirect(`${CONNECT_URL}?connected=${encodeURIComponent(meData.username)}${phoneParam}`);
   } catch (err: any) {
     console.error('[IG callback error]', err.message);
-    return NextResponse.redirect(`${CONNECT_URL}?error=${encodeURIComponent(err.message)}`);
+    const phoneParam = whatsappPhone ? `&phone=${encodeURIComponent(whatsappPhone)}` : '';
+    return NextResponse.redirect(`${CONNECT_URL}?error=${encodeURIComponent(err.message)}${phoneParam}`);
   }
 }

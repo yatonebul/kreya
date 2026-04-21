@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
   for (const post of posts) {
     try {
-      const result = await publishToInstagram(post.caption, post.image_url, post.is_video ?? false);
+      const result = await publishToInstagram(post.whatsapp_phone, post.caption, post.image_url, post.is_video ?? false);
 
       await supabase.from('pending_posts')
         .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })

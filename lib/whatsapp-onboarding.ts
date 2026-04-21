@@ -8,10 +8,14 @@ function getSupabase() {
   );
 }
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
+
 const Q1 = `👋 Welcome to Kreya!\n\nI'll write and post to Instagram for you — just send me a message or photo.\n\nFirst: *what's your brand or account name?*`;
 const Q2 = (name: string) => `Nice, ${name}! 🙌\n\nWhat's your *niche*?\n(e.g. fitness, food, travel, fashion, tech, lifestyle, photography...)`;
 const Q3 = `Almost there! How would you describe your *posting style*?\n\n(e.g. casual & fun, professional & polished, inspirational, bold & edgy, educational...)`;
-const DONE = (name: string) => `✅ All set, *${name}*!\n\nSend me a message or photo and I'll create your next Instagram post. 🚀`;
+const DONE = (name: string) => `✅ *${name}* is set up!`;
+const INSTAGRAM_CONNECT = (phone: string) =>
+  `📸 *One last step* — connect your Instagram account so I can post for you:\n\n${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(phone)}\n\nTap the link and authorize. Once connected, send me any message, photo, or voice note to create your first post! 🚀`;
 
 function buildProfileContext(brandName: string, niche: string, tone: string): string {
   return `Brand: ${brandName}. Niche: ${niche}. Tone: ${tone}. Write captions that feel authentic to this brand — avoid generic phrases and mirror the described tone exactly.`;
@@ -63,6 +67,7 @@ export async function handleOnboarding(from: string, messageType: string, text?:
       .update({ tone: answer, profile_context: profileContext, onboarding_step: 4 })
       .eq('whatsapp_phone', from);
     await sendText(from, DONE(profile.brand_name!));
+    await sendText(from, INSTAGRAM_CONNECT(from));
     return true;
   }
 

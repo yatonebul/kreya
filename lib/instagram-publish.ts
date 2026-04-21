@@ -8,6 +8,7 @@ function getSupabase() {
 }
 
 export async function publishToInstagram(
+  whatsappPhone: string,
   caption: string,
   mediaUrl: string,
   isVideo = false
@@ -16,14 +17,15 @@ export async function publishToInstagram(
     const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
       .select('access_token, instagram_user_id')
-      .eq('account_name', 'nepostnuto')
-      .single();
+      .eq('whatsapp_phone', whatsappPhone)
+      .eq('is_active', true)
+      .maybeSingle();
 
     const accessToken = account?.access_token;
     const igUserId = account?.instagram_user_id;
 
     if (dbError || !accessToken || !igUserId) {
-      throw new Error('Could not retrieve access token from database');
+      throw new Error('No Instagram account connected for this user');
     }
 
     // 1. Create media container
@@ -91,7 +93,7 @@ export async function publishToInstagram(
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
-      details: { post_id: publishData.id, caption, source: 'whatsapp', is_video: isVideo },
+      details: { post_id: publishData.id, caption, source: 'whatsapp', is_video: isVideo, whatsapp_phone: whatsappPhone },
     });
 
     return { postId: publishData.id, status: 'success', postUrl };
@@ -100,7 +102,7 @@ export async function publishToInstagram(
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'failed',
-      details: { error: error.message, source: 'whatsapp' },
+      details: { error: error.message, source: 'whatsapp', whatsapp_phone: whatsappPhone },
     });
     throw error;
   }

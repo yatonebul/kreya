@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendText } from '@/lib/whatsapp-send';
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
 function getSupabase() {
   return createClient(
@@ -24,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const { data: accounts, error } = await supabase
     .from('instagram_accounts')
-    .select('account_name, access_token, token_expires_at')
+    .select('account_name, access_token, token_expires_at, whatsapp_phone')
     .eq('is_active', true)
     .lt('token_expires_at', cutoff.toISOString());
 
@@ -61,6 +64,16 @@ export async function GET(request: NextRequest) {
       results.push({ account: account.account_name, status: 'refreshed' });
     } catch (err: any) {
       console.error(`[token-refresh] ${account.account_name} failed:`, err.message);
+
+      // Notify user via WhatsApp if phone is known
+      if (account.whatsapp_phone) {
+        const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(account.whatsapp_phone)}`;
+        await sendText(
+          account.whatsapp_phone,
+          `⚠️ Your Instagram (@${account.account_name}) connection needs to be renewed.\n\nTap here to reconnect:\n${reconnectUrl}`
+        ).catch(() => {});
+      }
+
       results.push({ account: account.account_name, status: 'failed', error: err.message });
     }
   }

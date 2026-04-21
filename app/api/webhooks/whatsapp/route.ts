@@ -11,6 +11,7 @@ import { handleOnboarding, getProfileContextForPhone } from '@/lib/whatsapp-onbo
 import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
 function getSupabase() {
   return createClient(
@@ -245,8 +246,22 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
 
   if (action === 'approve') {
+    // Guard: ensure user has Instagram connected before publishing
+    const { data: igAccount } = await getSupabase()
+      .from('instagram_accounts')
+      .select('account_name')
+      .eq('whatsapp_phone', from)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (!igAccount) {
+      const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+      await sendText(from, `📸 Connect your Instagram first:\n\n${connectUrl}\n\nOnce connected, tap *Approve* again.`);
+      return;
+    }
+
     await sendText(from, '⏳ Publishing to Instagram...');
-    const result = await publishToInstagram(post.caption, post.image_url, post.is_video ?? false);
+    const result = await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
 
     await getSupabase().from('pending_posts')
       .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
