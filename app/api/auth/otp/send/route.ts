@@ -29,7 +29,11 @@ export async function POST(req: NextRequest) {
   const code      = String(randomInt(100000, 1000000)); // 6 digits
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
 
-  await supabase.from('otp_codes').insert({ phone, code_hash: hashOtp(code), expires_at: expiresAt });
+  const { error: dbErr } = await supabase.from('otp_codes').insert({ phone, code_hash: hashOtp(code), expires_at: expiresAt });
+  if (dbErr) {
+    console.error('[OTP send] DB insert failed:', dbErr.message);
+    return NextResponse.json({ error: 'Could not create code — database unavailable. Try again shortly.' }, { status: 500 });
+  }
 
   await sendText(
     phone,

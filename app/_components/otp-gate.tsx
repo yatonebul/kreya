@@ -31,9 +31,12 @@ export function OtpGate({ identifier }: { identifier: string }) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(sendBody),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+      let data: { error?: string } = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
+      if (!res.ok) { setError(data.error ?? 'Failed to send code. Please try again.'); return; }
       setStep('sent');
+    } catch {
+      setError('Network error. Please check your connection.');
     } finally {
       setSending(false);
     }
@@ -43,19 +46,25 @@ export function OtpGate({ identifier }: { identifier: string }) {
     if (code.length !== 6) return;
     setStep('verifying');
     setError('');
-    // verify endpoint always uses 'phone' field (stores either phone or email)
-    const res  = await fetch('/api/auth/otp/verify', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ phone: identifier, code }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error);
+    try {
+      // verify endpoint always uses 'phone' field (stores either phone or email)
+      const res  = await fetch('/api/auth/otp/verify', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ phone: identifier, code }),
+      });
+      let data: { error?: string } = {};
+      try { data = await res.json(); } catch { /* non-JSON response */ }
+      if (!res.ok) {
+        setError(data.error ?? 'Verification failed. Please try again.');
+        setStep('sent');
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError('Network error. Please try again.');
       setStep('sent');
-      return;
     }
-    router.refresh();
   }
 
   return (
