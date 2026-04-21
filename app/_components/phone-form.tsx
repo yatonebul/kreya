@@ -6,6 +6,7 @@ export function PhoneForm() {
   const [phone, setPhone] = useState('');
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [waLink, setWaLink] = useState<string | null>(null);
+  const [messageSent, setMessageSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
@@ -23,6 +24,7 @@ export function PhoneForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong');
       setWaLink(data.waLink);
+      setMessageSent(!!data.messageSent);
       setState('done');
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -31,6 +33,22 @@ export function PhoneForm() {
   }
 
   if (state === 'done') {
+    if (messageSent) {
+      return (
+        <div
+          className="rounded-2xl px-5 py-4 text-sm font-medium w-full max-w-md"
+          style={{
+            background: 'rgba(0,229,160,0.10)',
+            border: '1px solid var(--mint)',
+            color: 'var(--mint)',
+            fontFamily: 'var(--font-dm-sans)',
+          }}
+        >
+          ✓ Check your WhatsApp — Kreya just messaged you!
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col gap-4 w-full max-w-md">
         <div
@@ -42,7 +60,7 @@ export function PhoneForm() {
             fontFamily: 'var(--font-dm-sans)',
           }}
         >
-          ✓ Got it! Open WhatsApp to get started.
+          ✓ Got it! Tap below to open WhatsApp and start.
         </div>
         {waLink && (
           <a
@@ -50,11 +68,7 @@ export function PhoneForm() {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 text-base font-semibold px-6 py-3.5 rounded-full transition-opacity hover:opacity-90 w-full"
-            style={{
-              background: '#25D366',
-              color: '#fff',
-              fontFamily: 'var(--font-dm-sans)',
-            }}
+            style={{ background: '#25D366', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}
           >
             <WhatsAppIcon />
             Open WhatsApp →

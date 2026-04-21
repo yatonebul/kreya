@@ -31,9 +31,7 @@ export async function POST(request: NextRequest) {
     .insert({ phone: normalized })
     .then(() => {}, () => {}); // ignore duplicate
 
-  if (waLink) {
-    await sendInviteTemplate(normalized, waLink).catch(() => {});
-  }
+  const messageSent = await sendInviteTemplate(normalized);
 
-  return NextResponse.json({ success: true, waLink });
+  return NextResponse.json({ success: true, messageSent, waLink });
 }
