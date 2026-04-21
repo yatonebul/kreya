@@ -109,9 +109,15 @@ export default async function AccountPage({
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-syne)' }}>{brandName}</h1>
           {igAccount && (
-            <span className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-              @{igAccount.account_name}
-            </span>
+            <a
+              href={`https://instagram.com/${igAccount.account_name}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm transition-opacity hover:opacity-80 w-fit"
+              style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}
+            >
+              @{igAccount.account_name} ↗
+            </a>
           )}
         </div>
 
@@ -134,7 +140,15 @@ export default async function AccountPage({
           {igAccount ? (
             <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surf3)' }}>
               <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-dm-sans)' }}>@{igAccount.account_name}</span>
+                <a
+                  href={`https://instagram.com/${igAccount.account_name}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium transition-opacity hover:opacity-80 w-fit"
+                  style={{ fontFamily: 'var(--font-dm-sans)' }}
+                >
+                  @{igAccount.account_name} ↗
+                </a>
                 <TokenBadge days={igDays} />
               </div>
               <a
