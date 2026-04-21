@@ -41,6 +41,17 @@ CREATE TABLE IF NOT EXISTS oauth_pending_states (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 6. waitlist_entries — landing page phone + email collection
+CREATE TABLE IF NOT EXISTS waitlist_entries (
+  id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone      TEXT,
+  email      TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_phone ON waitlist_entries(phone) WHERE phone IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist_entries(email) WHERE email IS NOT NULL;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

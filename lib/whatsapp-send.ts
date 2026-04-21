@@ -30,6 +30,28 @@ export function sendText(to: string, text: string) {
   });
 }
 
+// Outbound invite — requires a template approved in Meta Business Manager.
+// Template name configured via WHATSAPP_INVITE_TEMPLATE env var.
+// Until a custom template exists, this will silently fail (caught by callers).
+export function sendInviteTemplate(to: string, waLink: string) {
+  const templateName = process.env.WHATSAPP_INVITE_TEMPLATE ?? 'hello_world';
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: 'en_US' },
+      components: [
+        {
+          type: 'body',
+          parameters: [{ type: 'text', text: waLink }],
+        },
+      ],
+    },
+  });
+}
+
 // postId is encoded in each button ID so replying to any historical preview
 // always acts on the correct post, not the latest one.
 export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string, isVideo = false) {
