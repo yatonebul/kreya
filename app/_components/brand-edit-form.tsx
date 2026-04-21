@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 type Profile = { brand_name: string; niche: string; tone: string };
 
@@ -11,6 +12,7 @@ const FIELD_LABELS: Record<keyof Profile, string> = {
 };
 
 export function BrandEditForm({ phone, initial }: { phone: string; initial: Profile }) {
+  const router = useRouter();
   const [values, setValues] = useState<Profile>(initial);
   const [editing, setEditing] = useState<keyof Profile | null>(null);
   const [draft, setDraft] = useState('');
@@ -35,6 +37,7 @@ export function BrandEditForm({ phone, initial }: { phone: string; initial: Prof
         setValues(v => ({ ...v, [field]: draft.trim() }));
         setSaved(field);
         setTimeout(() => setSaved(null), 2000);
+        if (field === 'brand_name') router.refresh();
       }
     } finally {
       setSaving(false);
