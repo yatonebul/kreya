@@ -42,9 +42,9 @@ export default async function AccountPage({
 }: {
   searchParams: Promise<{ phone?: string }>;
 }) {
-  const { phone } = await searchParams;
+  const { phone: rawPhone } = await searchParams;
 
-  if (!phone) {
+  if (!rawPhone) {
     return (
       <main className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dark)' }}>
         <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
@@ -54,8 +54,11 @@ export default async function AccountPage({
     );
   }
 
+  // Normalize: strip leading +/spaces (WhatsApp stores without +)
+  const phone = rawPhone.trim().replace(/^\+/, '');
+  // For instagram_accounts which may have been manually set with + prefix
+  const phones = [phone, `+${phone}`];
   const supabase = getSupabase();
-  const phones = phone.startsWith('+') ? [phone, phone.slice(1)] : [phone, `+${phone}`];
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
   const [{ data: profile }, { data: igAccount }, { data: posts }, { data: scheduled }] = await Promise.all([
