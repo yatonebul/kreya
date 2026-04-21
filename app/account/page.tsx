@@ -5,6 +5,8 @@ import { BrandEditForm } from '@/app/_components/brand-edit-form';
 import { OtpGate } from '@/app/_components/otp-gate';
 import { LogoutButton } from '@/app/_components/logout-button';
 import { LinkPhoneForm } from '@/app/_components/link-phone-form';
+import { PendingPosts } from '@/app/_components/pending-posts';
+import { OnboardingWizard } from '@/app/_components/onboarding-wizard';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -147,7 +149,20 @@ export default async function AccountPage({
       ])
     : [{ count: 0 }, { count: 0 }];
 
+  const { data: pendingPosts } = dataPhone
+    ? await supabase.from('pending_posts')
+        .select('id, caption, image_url, is_video, state')
+        .eq('whatsapp_phone', dataPhone)
+        .in('state', ['pending_approval', 'in_edit'])
+        .order('created_at', { ascending: false })
+    : { data: [] };
+
   const brandName  = profile?.brand_name ?? (isEmailSession ? sessionId : 'Your account');
+
+  // New user with no brand profile yet → show onboarding wizard
+  if (!profile?.brand_name) {
+    return <OnboardingWizard phone={queryId} />;
+  }
   const igDays     = daysUntil(igAccount?.token_expires_at ?? null);
   const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(dataPhone ?? queryId)}`;
   const waLink     = WA_NUMBER && dataPhone ? `https://wa.me/${WA_NUMBER.replace('+', '')}?text=Hi+Kreya!` : null;
@@ -183,6 +198,11 @@ export default async function AccountPage({
           <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-syne)' }}>{brandName}</h1>
           {igAccount && <SocialLink network="instagram" handle={igAccount.account_name} />}
         </div>
+
+        {/* Pending / in-edit posts — shown at the top so user can't miss them */}
+        {(pendingPosts?.length ?? 0) > 0 && (
+          <PendingPosts initial={pendingPosts!} />
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">
