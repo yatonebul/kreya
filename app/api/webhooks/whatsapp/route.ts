@@ -13,6 +13,11 @@ import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
+// WhatsApp sends phone without '+'; manual DB entries may have '+'. Query both.
+function phoneVariants(phone: string): string[] {
+  return phone.startsWith('+') ? [phone, phone.slice(1)] : [phone, `+${phone}`];
+}
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -256,7 +261,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     const { data: igAccount } = await getSupabase()
       .from('instagram_accounts')
       .select('account_name')
-      .eq('whatsapp_phone', from)
+      .in('whatsapp_phone', phoneVariants(from))
       .eq('is_active', true)
       .maybeSingle();
 
@@ -404,7 +409,7 @@ async function handleGreeting(from: string) {
 
   const [{ data: profile }, { data: igAccount }] = await Promise.all([
     supabase.from('user_profiles').select('brand_name').eq('whatsapp_phone', from).maybeSingle(),
-    supabase.from('instagram_accounts').select('account_name, token_expires_at').eq('whatsapp_phone', from).eq('is_active', true).maybeSingle(),
+    supabase.from('instagram_accounts').select('account_name, token_expires_at').in('whatsapp_phone', phoneVariants(from)).eq('is_active', true).maybeSingle(),
   ]);
 
   const name = profile?.brand_name ?? 'there';

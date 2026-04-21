@@ -26,18 +26,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${CONNECT_URL}?error=${encodeURIComponent(error ?? 'no_code')}`);
   }
 
-  // Resolve CSRF state → whatsapp phone
+  // Resolve state → whatsapp phone
+  // State is either "<uuid>|<phone>" (inline fallback) or a plain UUID (DB lookup)
   let whatsappPhone: string | null = null;
   if (state) {
-    const { data: pending } = await getSupabase()
-      .from('oauth_pending_states')
-      .select('phone')
-      .eq('state', state)
-      .maybeSingle();
-
-    if (pending?.phone) {
-      whatsappPhone = pending.phone;
-      await getSupabase().from('oauth_pending_states').delete().eq('state', state);
+    const decoded = decodeURIComponent(state);
+    const pipeIdx = decoded.indexOf('|');
+    if (pipeIdx >= 0) {
+      // Inline form: "<uuid>|<phone>"
+      const uuid = decoded.slice(0, pipeIdx);
+      whatsappPhone = decoded.slice(pipeIdx + 1);
+      await getSupabase().from('oauth_pending_states').delete().eq('state', uuid).catch(() => {});
+    } else {
+      // DB lookup form
+      const { data: pending } = await getSupabase()
+        .from('oauth_pending_states')
+        .select('phone')
+        .eq('state', decoded)
+        .maybeSingle();
+      if (pending?.phone) {
+        whatsappPhone = pending.phone;
+        await getSupabase().from('oauth_pending_states').delete().eq('state', decoded);
+      }
     }
   }
 

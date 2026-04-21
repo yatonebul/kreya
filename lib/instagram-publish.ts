@@ -14,10 +14,14 @@ export async function publishToInstagram(
   isVideo = false
 ): Promise<{ postId: string; status: string; postUrl?: string }> {
   try {
+    const phones = whatsappPhone.startsWith('+')
+      ? [whatsappPhone, whatsappPhone.slice(1)]
+      : [whatsappPhone, `+${whatsappPhone}`];
+
     const { data: account, error: dbError } = await getSupabase()
       .from('instagram_accounts')
       .select('access_token, instagram_user_id')
-      .eq('whatsapp_phone', whatsappPhone)
+      .in('whatsapp_phone', phones)
       .eq('is_active', true)
       .maybeSingle();
 

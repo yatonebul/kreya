@@ -26,8 +26,12 @@ export async function GET(request: NextRequest) {
   }
 
   const state = randomUUID();
-  await getSupabase().from('oauth_pending_states').insert({ state, phone });
+  const { error: dbErr } = await getSupabase().from('oauth_pending_states').insert({ state, phone });
+  if (dbErr) console.error('[IG OAuth] state insert failed:', dbErr.message);
 
-  const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${SCOPES}&state=${state}`;
+  // Encode phone in state as fallback: "<uuid>|<phone>" — callback handles both forms
+  const stateWithPhone = `${state}|${phone}`;
+
+  const url = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${SCOPES}&state=${encodeURIComponent(stateWithPhone)}`;
   return NextResponse.redirect(url);
 }
