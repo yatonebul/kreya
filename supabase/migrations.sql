@@ -28,6 +28,24 @@ ALTER TABLE pending_posts
   ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ;
 
 
+-- 4. instagram_accounts — per-user phone mapping + OAuth CSRF state
+ALTER TABLE instagram_accounts
+  ADD COLUMN IF NOT EXISTS whatsapp_phone TEXT,
+  ADD COLUMN IF NOT EXISTS oauth_state    TEXT;
+CREATE INDEX IF NOT EXISTS idx_instagram_accounts_phone ON instagram_accounts(whatsapp_phone);
+
+-- 5. oauth_pending_states — temporary CSRF state tokens for Instagram OAuth flow
+CREATE TABLE IF NOT EXISTS oauth_pending_states (
+  state       TEXT        PRIMARY KEY,
+  phone       TEXT        NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Auto-clean states older than 15 minutes (run once to register)
+-- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
+--   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
+
+
 -- Skip onboarding for an existing user (replace number as needed)
 -- INSERT INTO user_profiles (whatsapp_phone, onboarding_step, brand_name, niche, tone, profile_context)
 -- VALUES (
