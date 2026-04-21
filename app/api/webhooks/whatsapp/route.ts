@@ -427,6 +427,6 @@ async function handleGreeting(from: string) {
 
   await sendText(
     from,
-    `👋 Hey *${name}*!\n\n${igLine}\n\nSend me a message, photo, video, or voice note to create your next post.`
+    `👋 Hey *${name}*!\n\n${igLine}\n\n🔗 Your account: ${APP_URL}/account?phone=${encodeURIComponent(from)}\n\nSend me a message, photo, video, or voice note to create your next post.`
   );
 }
