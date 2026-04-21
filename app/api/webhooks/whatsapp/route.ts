@@ -9,9 +9,11 @@ import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding, getProfileContextForPhone } from '@/lib/whatsapp-onboarding';
 import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
+import { adminUrlToken } from '@/lib/session';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
+const APP_URL      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
+const ADMIN_PHONE  = process.env.ADMIN_WHATSAPP_PHONE ?? '';
 
 // WhatsApp sends phone without '+'; manual DB entries may have '+'. Query both.
 function phoneVariants(phone: string): string[] {
@@ -57,6 +59,22 @@ async function processWebhook(body: any) {
   console.log('[webhook] from:', from, 'type:', messageType);
 
   try {
+    // Admin shortcut — only responds to the configured admin phone
+    if (messageType === 'text' && ADMIN_PHONE) {
+      const adminPhoneClean = ADMIN_PHONE.replace(/^\+/, '');
+      const fromClean       = from.replace(/^\+/, '');
+      if (fromClean === adminPhoneClean) {
+        const txt = message.text?.body?.trim() ?? '';
+        if (/^(\/admin|admin\s*link|admin\s*url|my\s*admin)$/i.test(txt)) {
+          const secret   = process.env.ADMIN_SECRET ?? '';
+          const token    = adminUrlToken(secret);
+          const adminUrl = `${APP_URL}/admin?secret=${token}`;
+          await sendText(from, `🔐 *Admin dashboard*\n\n${adminUrl}`);
+          return;
+        }
+      }
+    }
+
     // Onboarding — gate all messages until setup is complete
     if (messageType !== 'interactive') {
       const text = messageType === 'text' ? message.text?.body : undefined;
