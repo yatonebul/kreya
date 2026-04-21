@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { PhoneForm } from './_components/phone-form';
 import { EmailForm } from './_components/email-form';
 
@@ -15,13 +16,22 @@ export default function Home() {
         <span className="text-xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>
           Kreya
         </span>
-        <a
-          href="#waitlist"
-          className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-80"
-          style={{ fontFamily: 'var(--font-dm-sans)', background: 'var(--surf2)', color: 'var(--muted)', border: '1px solid var(--surf3)' }}
-        >
-          Join waitlist
-        </a>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/login"
+            className="text-sm px-4 py-2 rounded-full font-medium transition-opacity hover:opacity-80"
+            style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)' }}
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/register"
+            className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-90"
+            style={{ fontFamily: 'var(--font-dm-sans)', background: 'var(--coral)', color: '#fff' }}
+          >
+            Get access
+          </Link>
+        </div>
       </nav>
 
       {/* Hero */}
@@ -150,6 +160,13 @@ export default function Home() {
           </p>
         </div>
         <EmailForm />
+        <Link
+          href="/register"
+          className="text-sm font-medium transition-opacity hover:opacity-80"
+          style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}
+        >
+          Or request full access →
+        </Link>
       </section>
 
       {/* Footer */}

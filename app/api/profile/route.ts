@@ -37,8 +37,7 @@ export async function PATCH(request: NextRequest) {
 
   const { error } = await getSupabase()
     .from('user_profiles')
-    .update(updates)
-    .eq('whatsapp_phone', phone);
+    .upsert({ whatsapp_phone: phone, ...updates }, { onConflict: 'whatsapp_phone' });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true, updated: updates });

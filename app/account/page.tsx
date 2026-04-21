@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { BrandEditForm } from '@/app/_components/brand-edit-form';
 import { OtpGate } from '@/app/_components/otp-gate';
 import { LogoutButton } from '@/app/_components/logout-button';
+import { LinkPhoneForm } from '@/app/_components/link-phone-form';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -69,59 +70,87 @@ function StateBadge({ state }: { state: string }) {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ phone?: string }>;
+  searchParams: Promise<{ phone?: string; email?: string }>;
 }) {
-  const { phone: rawPhone } = await searchParams;
+  const { phone: rawPhone, email: rawEmail } = await searchParams;
 
-  if (!rawPhone) {
-    return (
-      <main className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dark)' }}>
-        <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-          No account found. Open the link Kreya sent you on WhatsApp.
-        </p>
-      </main>
-    );
-  }
+  // Accept either ?phone= (WhatsApp users) or ?email= (email users)
+  const urlIdentifier = rawPhone
+    ? rawPhone.trim().replace(/^\+/, '')
+    : rawEmail?.trim().toLowerCase() ?? null;
 
-  // Normalize: strip leading +/spaces (WhatsApp stores without +)
-  const urlPhone = rawPhone.trim().replace(/^\+/, '');
-
-  // Session gate — require a valid WhatsApp-verified cookie
-  const jar         = await cookies();
+  // Session gate
+  const jar          = await cookies();
   const sessionToken = jar.get(SESSION_COOKIE)?.value;
   const session      = sessionToken ? await verifySession(sessionToken) : null;
 
   if (!session) {
-    return <OtpGate phone={urlPhone} />;
+    if (!urlIdentifier) {
+      return (
+        <main className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dark)' }}>
+          <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+            No account found.{' '}
+            <a href="/login" style={{ color: 'var(--coral)' }}>Sign in</a> or{' '}
+            <a href="/register" style={{ color: 'var(--coral)' }}>request access</a>.
+          </p>
+        </main>
+      );
+    }
+    return <OtpGate identifier={urlIdentifier} />;
   }
 
-  // Use phone from the session (authoritative) — not the URL parameter
-  const phone  = session.phone;
-  // For instagram_accounts which may have been manually set with + prefix
-  const phones = [phone, `+${phone}`];
+  // session.phone holds either a phone number or an email (for email-only accounts)
+  const sessionId = session.phone;
+  const isEmailSession = sessionId.includes('@');
+
   const supabase = getSupabase();
+
+  // For email sessions, look up linked WhatsApp phone
+  let dataPhone = isEmailSession ? null : sessionId;
+  let sessionEmail: string | null = isEmailSession ? sessionId : null;
+
+  if (isEmailSession) {
+    const { data: reg } = await supabase
+      .from('email_registrations')
+      .select('phone')
+      .eq('email', sessionId)
+      .maybeSingle();
+    dataPhone = reg?.phone ?? null;
+  }
+
+  // The identifier used for all DB queries — prefer phone, fall back to email
+  const queryId = dataPhone ?? sessionId;
+  const phones  = dataPhone ? [dataPhone, `+${dataPhone}`] : [];
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
   const [{ data: profile }, { data: igAccount }, { data: posts }, { data: scheduled }] = await Promise.all([
-    supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', phone).maybeSingle(),
-    supabase.from('instagram_accounts').select('account_name, token_expires_at').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle(),
-    supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
-      .eq('whatsapp_phone', phone).eq('state', 'published')
-      .order('created_at', { ascending: false }).limit(9),
-    supabase.from('pending_posts').select('id, caption, image_url, is_video, scheduled_for')
-      .eq('whatsapp_phone', phone).eq('state', 'scheduled')
-      .order('scheduled_for', { ascending: true }),
+    supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', queryId).maybeSingle(),
+    phones.length
+      ? supabase.from('instagram_accounts').select('account_name, token_expires_at').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle()
+      : Promise.resolve({ data: null }),
+    dataPhone
+      ? supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
+          .eq('whatsapp_phone', dataPhone).eq('state', 'published')
+          .order('created_at', { ascending: false }).limit(9)
+      : Promise.resolve({ data: [] }),
+    dataPhone
+      ? supabase.from('pending_posts').select('id, caption, image_url, is_video, scheduled_for')
+          .eq('whatsapp_phone', dataPhone).eq('state', 'scheduled')
+          .order('scheduled_for', { ascending: true })
+      : Promise.resolve({ data: [] }),
   ]);
 
-  const [{ count: totalPublished }, { count: thisMonth }] = await Promise.all([
-    supabase.from('pending_posts').select('*', { count: 'exact', head: true }).eq('whatsapp_phone', phone).eq('state', 'published'),
-    supabase.from('pending_posts').select('*', { count: 'exact', head: true }).eq('whatsapp_phone', phone).eq('state', 'published').gte('created_at', monthAgo),
-  ]);
+  const [{ count: totalPublished }, { count: thisMonth }] = dataPhone
+    ? await Promise.all([
+        supabase.from('pending_posts').select('*', { count: 'exact', head: true }).eq('whatsapp_phone', dataPhone).eq('state', 'published'),
+        supabase.from('pending_posts').select('*', { count: 'exact', head: true }).eq('whatsapp_phone', dataPhone).eq('state', 'published').gte('created_at', monthAgo),
+      ])
+    : [{ count: 0 }, { count: 0 }];
 
-  const brandName  = profile?.brand_name ?? 'Your account';
+  const brandName  = profile?.brand_name ?? (isEmailSession ? sessionId : 'Your account');
   const igDays     = daysUntil(igAccount?.token_expires_at ?? null);
-  const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(phone)}`;
-  const waLink     = WA_NUMBER ? `https://wa.me/${WA_NUMBER.replace('+', '')}?text=Hi+Kreya!` : null;
+  const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(dataPhone ?? queryId)}`;
+  const waLink     = WA_NUMBER && dataPhone ? `https://wa.me/${WA_NUMBER.replace('+', '')}?text=Hi+Kreya!` : null;
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--dark)' }}>
@@ -199,11 +228,22 @@ export default async function AccountPage({
           )}
         </section>
 
+        {/* Link WhatsApp — only shown for email users without a linked phone */}
+        {isEmailSession && !dataPhone && (
+          <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)', border: '1px solid rgba(255,209,102,0.2)' }}>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>Link WhatsApp</h2>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--gold)', background: 'rgba(255,209,102,0.12)', border: '1px solid var(--gold)' }}>optional</span>
+            </div>
+            <LinkPhoneForm email={sessionId} />
+          </section>
+        )}
+
         {/* Brand profile */}
         <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
           <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>Brand profile</h2>
           <BrandEditForm
-            phone={phone}
+            phone={queryId}
             initial={{
               brand_name: profile?.brand_name ?? '',
               niche:      profile?.niche      ?? '',
