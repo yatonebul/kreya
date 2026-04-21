@@ -82,6 +82,16 @@ async function processWebhook(body: any) {
         return;
       }
 
+      // Command shortcuts — bypass pending draft so they always work
+      if (messageType === 'text') {
+        const txt = message.text?.body ?? '';
+        if (isHelpCommand(txt))       { await handleHelp(from);                               return; }
+        if (isStatusCheck(txt))       { await handleStatus(from);                             return; }
+        if (isCancelScheduled(txt))   { await handleCancelScheduled(from);                    return; }
+        const profileEdit = parseProfileUpdate(txt);
+        if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
+      }
+
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
       if (inEdit) {
@@ -402,6 +412,116 @@ async function handleEditWithNewMedia(from: string, pending: any, message: any, 
 
 function isGreeting(text: string): boolean {
   return /^(hi|hello|hey|hola|yo|sup|howdy|greetings|ciao|start)([\s,!.]*kreya)?[!.?,\s]*$/i.test(text.trim());
+}
+
+function isHelpCommand(text: string): boolean {
+  return /^(help|\/help|\?|commands|what can you do|how does this work)[!?.\s]*$/i.test(text.trim());
+}
+
+function isStatusCheck(text: string): boolean {
+  return /\b(status|what.*pending|what.*scheduled|my posts|my queue|queue|upcoming)\b/i.test(text.trim());
+}
+
+function isCancelScheduled(text: string): boolean {
+  return /\b(cancel|remove|delete|discard)\s+(my\s+)?(next\s+)?(scheduled|upcoming)\s*(post)?\b/i.test(text.trim());
+}
+
+type ProfileField = { field: 'brand_name' | 'niche' | 'tone'; value: string };
+
+function parseProfileUpdate(text: string): ProfileField | null {
+  const t = text.trim();
+  let m: RegExpMatchArray | null;
+  m = t.match(/\b(?:change|update|set)\s+(?:my\s+)?(?:brand[\s-]?name|name)\s+to\s+(.+)/i);
+  if (m) return { field: 'brand_name', value: m[1].trim() };
+  m = t.match(/\b(?:change|update|set)\s+(?:my\s+)?(?:tone|voice|style|writing style)\s+to\s+(.+)/i);
+  if (m) return { field: 'tone', value: m[1].trim() };
+  m = t.match(/\b(?:change|update|set)\s+(?:my\s+)?niche\s+to\s+(.+)/i);
+  if (m) return { field: 'niche', value: m[1].trim() };
+  return null;
+}
+
+async function handleHelp(from: string) {
+  const accountUrl = `${APP_URL}/account?phone=${encodeURIComponent(from)}`;
+  await sendText(from,
+    `🤖 *Here's what I can do:*\n\n` +
+    `📸 *Create a post*\nSend any text, photo, video, or voice note — I write the caption and prepare your post for review.\n\n` +
+    `✅ *Approve / Edit / Discard*\nAfter each draft, tap the buttons to publish, refine, or bin it.\n\n` +
+    `🗓️ *Schedule*\nWhile a draft is waiting, reply with a time:\n"Post tomorrow at 9am" · "Schedule for Friday 3pm"\n\n` +
+    `✏️ *Edit your profile*\n"Change my tone to casual"\n"Update niche to fitness"\n"Set brand name to ..."\n\n` +
+    `📊 *Check your queue*\nSend: *status*\n\n` +
+    `🚫 *Cancel a scheduled post*\nSend: *cancel scheduled*\n\n` +
+    `🔗 *Web dashboard*\n${accountUrl}`
+  );
+}
+
+async function handleStatus(from: string) {
+  const supabase = getSupabase();
+  const { data: posts } = await supabase
+    .from('pending_posts')
+    .select('state, caption, scheduled_for')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'scheduled'])
+    .order('created_at', { ascending: false });
+
+  if (!posts?.length) {
+    await sendText(from, '✅ Queue is clear — no pending or scheduled posts.\n\nSend me a message, photo, or voice note to create one!');
+    return;
+  }
+
+  const lines = posts.map(p => {
+    const preview = p.caption ? p.caption.slice(0, 60) + (p.caption.length > 60 ? '…' : '') : '(no caption)';
+    if (p.state === 'scheduled' && p.scheduled_for) {
+      const when = new Date(p.scheduled_for).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Prague' });
+      return `🗓️ *Scheduled for ${when}*\n${preview}`;
+    }
+    if (p.state === 'pending_approval') return `⏳ *Needs your approval*\n${preview}`;
+    if (p.state === 'in_edit')         return `✏️ *In edit*\n${preview}`;
+    return `• ${preview}`;
+  });
+
+  await sendText(from, `📋 *Your queue (${posts.length})*\n\n${lines.join('\n\n')}`);
+}
+
+async function handleCancelScheduled(from: string) {
+  const { data: post } = await getSupabase()
+    .from('pending_posts')
+    .select('id, caption, scheduled_for')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'scheduled')
+    .order('scheduled_for', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!post) {
+    await sendText(from, '📭 No scheduled posts to cancel.');
+    return;
+  }
+
+  await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
+  const preview = post.caption?.slice(0, 60) ?? '';
+  const when = post.scheduled_for
+    ? new Date(post.scheduled_for).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Prague' })
+    : '';
+  await sendText(from, `🗑️ Cancelled the post scheduled for ${when}:\n"${preview}…"\n\nSend a new message whenever you're ready.`);
+}
+
+async function handleProfileUpdate(from: string, edit: ProfileField) {
+  const supabase = getSupabase();
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('brand_name, niche, tone')
+    .eq('whatsapp_phone', from)
+    .maybeSingle();
+
+  if (!profile) {
+    await sendText(from, "⚠️ I couldn't find your profile. Complete your onboarding first.");
+    return;
+  }
+
+  await supabase.from('user_profiles').update({ [edit.field]: edit.value }).eq('whatsapp_phone', from);
+
+  const labels: Record<ProfileField['field'], string> = { brand_name: 'Brand name', niche: 'Niche', tone: 'Tone' };
+  await sendText(from, `✅ *${labels[edit.field]} updated*\n\nNew value: *${edit.value}*\n\nYour next post will reflect this change.`);
 }
 
 async function handleGreeting(from: string) {
