@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   await getSupabase()
     .from('waitlist_entries')
     .upsert({ phone: normalized }, { onConflict: 'phone' })
-    .catch(() => {});
+    .then(() => {}, () => {});
 
   if (waLink) {
     await sendInviteTemplate(normalized, waLink).catch(() => {});
