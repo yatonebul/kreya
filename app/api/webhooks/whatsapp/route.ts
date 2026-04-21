@@ -71,6 +71,12 @@ async function processWebhook(body: any) {
 
     // Text or media messages
     if (['text', 'image', 'video', 'document', 'audio'].includes(messageType)) {
+      // Greeting from existing user — show account status instead of generating a post
+      if (messageType === 'text' && isGreeting(message.text?.body ?? '')) {
+        await handleGreeting(from);
+        return;
+      }
+
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
       if (inEdit) {
@@ -387,4 +393,35 @@ async function handleEditWithNewMedia(from: string, pending: any, message: any, 
   if (updated?.id) {
     await sendPostPreview(from, userMediaUrl, pending.caption, updated.id, isVideo);
   }
+}
+
+function isGreeting(text: string): boolean {
+  return /^(hi|hello|hey|hola|yo|sup|howdy|greetings|ciao|start)([\s,!.]*kreya)?[!.?,\s]*$/i.test(text.trim());
+}
+
+async function handleGreeting(from: string) {
+  const supabase = getSupabase();
+
+  const [{ data: profile }, { data: igAccount }] = await Promise.all([
+    supabase.from('user_profiles').select('brand_name').eq('whatsapp_phone', from).maybeSingle(),
+    supabase.from('instagram_accounts').select('account_name, token_expires_at').eq('whatsapp_phone', from).eq('is_active', true).maybeSingle(),
+  ]);
+
+  const name = profile?.brand_name ?? 'there';
+  const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+
+  let igLine: string;
+  if (igAccount) {
+    const days = Math.ceil((new Date(igAccount.token_expires_at).getTime() - Date.now()) / 86_400_000);
+    igLine = days > 7
+      ? `📸 Instagram: *@${igAccount.account_name}* ✓\nWant to switch accounts? ${connectUrl}`
+      : `📸 Instagram: *@${igAccount.account_name}* ⚠️ Token expires in ${days}d\nRenew: ${connectUrl}`;
+  } else {
+    igLine = `📸 Instagram: *not connected*\nConnect here: ${connectUrl}`;
+  }
+
+  await sendText(
+    from,
+    `👋 Hey *${name}*!\n\n${igLine}\n\nSend me a message, photo, video, or voice note to create your next post.`
+  );
 }
