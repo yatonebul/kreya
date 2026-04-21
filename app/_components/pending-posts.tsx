@@ -12,8 +12,12 @@ type Post = {
 };
 
 function PostCard({ post, onDone }: { post: Post; onDone: (id: string) => void }) {
-  const [busy, setBusy] = useState<'approve' | 'discard' | null>(null);
-  const [error, setError] = useState('');
+  const [busy,           setBusy]           = useState<'approve' | 'discard' | null>(null);
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionDraft,   setCaptionDraft]   = useState(post.caption);
+  const [savedCaption,   setSavedCaption]   = useState(post.caption);
+  const [savingCaption,  setSavingCaption]  = useState(false);
+  const [error,          setError]          = useState('');
 
   async function act(action: 'approve' | 'discard') {
     setBusy(action);
@@ -22,6 +26,24 @@ function PostCard({ post, onDone }: { post: Post; onDone: (id: string) => void }
     const data = await res.json();
     if (!res.ok) { setError(data.error ?? 'Failed'); setBusy(null); return; }
     onDone(post.id);
+  }
+
+  async function saveCaption() {
+    const trimmed = captionDraft.trim();
+    if (!trimmed || trimmed === savedCaption) { setEditingCaption(false); return; }
+    setSavingCaption(true);
+    const res = await fetch(`/api/posts/${post.id}`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ caption: trimmed }),
+    });
+    setSavingCaption(false);
+    if (res.ok) {
+      setSavedCaption(trimmed);
+      setEditingCaption(false);
+    } else {
+      setError('Could not save caption.');
+    }
   }
 
   return (
@@ -43,22 +65,61 @@ function PostCard({ post, onDone }: { post: Post; onDone: (id: string) => void }
       </div>
 
       {/* Caption */}
-      <div className="px-4 pt-3 pb-1 flex-1">
-        <p className="text-sm leading-relaxed line-clamp-3" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-          {post.caption}
-        </p>
+      <div className="px-4 pt-3 pb-2">
+        {editingCaption ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              value={captionDraft}
+              onChange={e => setCaptionDraft(e.target.value)}
+              rows={4}
+              autoFocus
+              className="w-full text-sm rounded-xl px-3 py-2 outline-none resize-none"
+              style={{ background: 'var(--surf2)', color: 'var(--white)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--coral)', caretColor: 'var(--coral)' }}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={saveCaption}
+                disabled={savingCaption}
+                className="text-xs px-3 py-1.5 rounded-full font-medium"
+                style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)', opacity: savingCaption ? 0.6 : 1 }}
+              >
+                {savingCaption ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={() => { setEditingCaption(false); setCaptionDraft(savedCaption); }}
+                className="text-xs px-3 py-1.5 rounded-full"
+                style={{ background: 'var(--surf2)', color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm leading-relaxed line-clamp-3 flex-1" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+              {savedCaption}
+            </p>
+            <button
+              onClick={() => setEditingCaption(true)}
+              className="text-xs flex-shrink-0 px-2 py-1 rounded-lg transition-opacity hover:opacity-80"
+              style={{ color: 'var(--muted2)', fontFamily: 'var(--font-space-mono)', background: 'var(--surf2)' }}
+            >
+              edit
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Actions — only for pending_approval */}
-      {post.state === 'pending_approval' && (
-        <div className="flex gap-2 px-4 pb-4 pt-3">
+      {post.state === 'pending_approval' && !editingCaption && (
+        <div className="flex gap-2 px-4 pb-4 pt-2">
           <button
             onClick={() => act('approve')}
             disabled={busy !== null}
             className="flex-1 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-90"
             style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)', opacity: busy ? 0.5 : 1 }}
           >
-            {busy === 'approve' ? 'Publishing…' : 'Post now'}
+            {busy === 'approve' ? 'Publishing…' : 'Post now ↗'}
           </button>
           <button
             onClick={() => act('discard')}
@@ -84,7 +145,6 @@ export function PendingPosts({ initial }: { initial: Post[] }) {
 
   function onDone(id: string) {
     setPosts(p => p.filter(x => x.id !== id));
-    // Refresh server data so stats update
     router.refresh();
   }
 
