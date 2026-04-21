@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       // Inline form: "<uuid>|<phone>"
       const uuid = decoded.slice(0, pipeIdx);
       whatsappPhone = decoded.slice(pipeIdx + 1);
-      await getSupabase().from('oauth_pending_states').delete().eq('state', uuid).catch(() => {});
+      await getSupabase().from('oauth_pending_states').delete().eq('state', uuid).then(() => {}, () => {});
     } else {
       // DB lookup form
       const { data: pending } = await getSupabase()
