@@ -21,3 +21,14 @@ create table if not exists account_sessions (
   created_at  timestamptz not null default now()
 );
 create index if not exists account_sessions_token_hash on account_sessions(token_hash);
+
+-- Email registrations with admin approval gate
+create table if not exists email_registrations (
+  id          uuid primary key default gen_random_uuid(),
+  email       text not null unique,
+  phone       text,
+  status      text not null default 'pending',
+  created_at  timestamptz not null default now(),
+  approved_at timestamptz
+);
+create index if not exists email_reg_status on email_registrations(status, created_at desc);
