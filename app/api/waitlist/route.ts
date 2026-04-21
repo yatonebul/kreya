@@ -15,8 +15,11 @@ export async function POST(request: NextRequest) {
 
   const { error } = await getSupabase()
     .from('waitlist_entries')
-    .upsert({ email: email.toLowerCase().trim() }, { onConflict: 'email' });
+    .insert({ email: email.toLowerCase().trim() });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // 23505 = unique_violation — already on the list, treat as success
+  if (error && error.code !== '23505') {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

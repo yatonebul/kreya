@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
 
   await getSupabase()
     .from('waitlist_entries')
-    .upsert({ phone: normalized }, { onConflict: 'phone' })
-    .then(() => {}, () => {});
+    .insert({ phone: normalized })
+    .then(() => {}, () => {}); // ignore duplicate
 
   if (waLink) {
     await sendInviteTemplate(normalized, waLink).catch(() => {});
