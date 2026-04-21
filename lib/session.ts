@@ -12,6 +12,11 @@ export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
 
+// One-way hash of ADMIN_SECRET — safe to put in URLs / WhatsApp messages
+export function adminUrlToken(secret: string): string {
+  return createHash('sha256').update(secret + 'kreya-admin-url-v1').digest('hex').slice(0, 48);
+}
+
 export function hashOtp(code: string) {
   const pepper = process.env.OTP_SECRET ?? 'kreya-otp-v1';
   return createHash('sha256').update(code + pepper).digest('hex');

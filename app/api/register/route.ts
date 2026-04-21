@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendText } from '@/lib/whatsapp-send';
+import { sendEmail, waitlistEmailHtml } from '@/lib/email';
+import { adminUrlToken } from '@/lib/session';
 
 const ADMIN_PHONE = process.env.ADMIN_WHATSAPP_PHONE ?? '';
 const APP_URL     = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
@@ -17,26 +19,35 @@ export async function POST(req: NextRequest) {
   }
 
   const normalizedPhone = phone ? phone.trim().replace(/^\+/, '') : null;
+  const normalizedEmail = email.toLowerCase().trim();
 
   const { error } = await db().from('email_registrations').insert({
-    email:  email.toLowerCase().trim(),
+    email:  normalizedEmail,
     phone:  normalizedPhone || null,
     status: 'pending',
   });
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, duplicate: true });
     }
     return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 });
   }
 
+  // Waitlist confirmation email (fire-and-forget)
+  sendEmail({
+    to:      normalizedEmail,
+    subject: "You're on the Kreya waitlist",
+    html:    waitlistEmailHtml(normalizedEmail),
+  }).catch(() => {});
+
   // Ping admin on WhatsApp (fire-and-forget)
   if (ADMIN_PHONE) {
     const adminSecret = process.env.ADMIN_SECRET ?? '';
+    const urlToken    = adminUrlToken(adminSecret);
     sendText(
       ADMIN_PHONE,
-      `🔔 *New Kreya registration*\n\n📧 ${email}${normalizedPhone ? `\n📱 +${normalizedPhone}` : ''}\n\n👉 ${APP_URL}/admin?secret=${adminSecret}`
+      `🔔 *New Kreya registration*\n\n📧 ${normalizedEmail}${normalizedPhone ? `\n📱 +${normalizedPhone}` : ''}\n\n👉 ${APP_URL}/admin?secret=${urlToken}`
     ).catch(() => {});
   }
 

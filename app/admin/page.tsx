@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { AdminActions } from '@/app/_components/admin-actions';
+import { adminUrlToken } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +16,9 @@ export default async function AdminPage({
   searchParams: Promise<{ secret?: string }>;
 }) {
   const { secret } = await searchParams;
+  const expectedToken = ADMIN_SECRET ? adminUrlToken(ADMIN_SECRET) : '';
 
-  if (!ADMIN_SECRET || secret !== ADMIN_SECRET) {
+  if (!ADMIN_SECRET || secret !== expectedToken) {
     return (
       <main className="min-h-screen flex items-center justify-center" style={{ background: 'var(--dark)' }}>
         <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>Access denied.</p>
@@ -70,9 +72,7 @@ export default async function AdminPage({
                   </span>
                 </div>
                 <StatusBadge status={r.status} />
-                {r.status === 'pending' && (
-                  <AdminActions id={r.id} adminSecret={ADMIN_SECRET} />
-                )}
+                <AdminActions id={r.id} adminSecret={ADMIN_SECRET} status={r.status} />
               </div>
             ))}
           </div>

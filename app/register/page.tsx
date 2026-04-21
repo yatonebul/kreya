@@ -7,8 +7,9 @@ export default function RegisterPage() {
   const [email,   setEmail]   = useState('');
   const [phone,   setPhone]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [done,    setDone]    = useState(false);
-  const [error,   setError]   = useState('');
+  const [done,      setDone]      = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
+  const [error,     setError]     = useState('');
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,6 +23,7 @@ export default function RegisterPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
+      if (data.duplicate) { setDuplicate(true); return; }
       setDone(true);
     } finally {
       setLoading(false);
@@ -46,10 +48,20 @@ export default function RegisterPage() {
           <div className="rounded-2xl p-6 flex flex-col gap-3 text-center" style={{ background: 'var(--surf2)' }}>
             <span className="text-3xl">✅</span>
             <p className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
-              Request received
+              You're on the list
             </p>
             <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-              We'll send an invite to <strong style={{ color: 'var(--white)' }}>{email}</strong> once your account is approved.
+              Check <strong style={{ color: 'var(--white)' }}>{email}</strong> — we sent a confirmation. We'll email you again once approved.
+            </p>
+          </div>
+        ) : duplicate ? (
+          <div className="rounded-2xl p-6 flex flex-col gap-3 text-center" style={{ background: 'var(--surf2)', border: '1px solid rgba(255,209,102,0.2)' }}>
+            <span className="text-3xl">👀</span>
+            <p className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
+              Already registered
+            </p>
+            <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+              <strong style={{ color: 'var(--white)' }}>{email}</strong> is already on the waitlist. Check your inbox (and spam) for updates — we'll reach out once approved.
             </p>
           </div>
         ) : (
