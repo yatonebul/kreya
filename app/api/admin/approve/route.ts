@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
 
   if (!reg) return NextResponse.json({ error: 'Not found.' }, { status: 404 });
 
+  const wasStatus = reg.status;
+
   await supabase.from('email_registrations')
     .update({ status: 'approved', approved_at: new Date().toISOString() })
     .eq('id', id);
@@ -44,23 +46,32 @@ export async function POST(req: NextRequest) {
   const magicUrl = `${APP_URL}/api/auth/magic?token=${token}&id=${encodeURIComponent(reg.email)}`;
   const loginUrl = `${APP_URL}/login`;
 
-  await sendEmail({
-    to:      reg.email,
-    subject: "You're in — access your Kreya dashboard",
-    html:    inviteEmailHtml(magicUrl, loginUrl, WA_NUMBER || undefined),
-  });
+  // Send invite email — non-fatal if Resend fails
+  let emailSent = false;
+  try {
+    await sendEmail({
+      to:      reg.email,
+      subject: "You're in — access your Kreya dashboard",
+      html:    inviteEmailHtml(magicUrl, loginUrl, WA_NUMBER || undefined),
+    });
+    emailSent = true;
+  } catch (err) {
+    console.error('[approve] sendEmail failed:', err);
+  }
 
-  // WhatsApp ping to admin with total approved count
+  // WhatsApp ping to admin — always fires regardless of email result
   if (ADMIN_PHONE) {
     const { count } = await supabase
       .from('email_registrations')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'approved');
 
-    const urlToken = adminUrlToken(ADMIN_SECRET);
+    const urlToken  = adminUrlToken(ADMIN_SECRET);
+    const reLabel   = wasStatus === 'rejected' ? ' (re-approved)' : '';
+    const emailNote = emailSent ? 'Invite email sent.' : '⚠️ Invite email failed — check Resend.';
     sendText(
       ADMIN_PHONE,
-      `✅ *Approved: ${reg.email}*\n\nInvite email sent with magic link.\nTotal approved: *${count ?? '?'}*\n\n👉 ${APP_URL}/admin?secret=${urlToken}`
+      `✅ *Approved: ${reg.email}*${reLabel}\n\n${emailNote}\nTotal approved: *${count ?? '?'}*\n\n👉 ${APP_URL}/admin?secret=${urlToken}`
     ).catch(() => {});
   }
 

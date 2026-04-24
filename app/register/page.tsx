@@ -8,7 +8,7 @@ export default function RegisterPage() {
   const [phone,   setPhone]   = useState('');
   const [loading, setLoading] = useState(false);
   const [done,      setDone]      = useState(false);
-  const [duplicate, setDuplicate] = useState(false);
+  const [duplicate, setDuplicate] = useState<null | 'pending' | 'approved' | 'rejected'>(null);
   const [error,     setError]     = useState('');
 
   async function submit(e: React.FormEvent) {
@@ -23,7 +23,7 @@ export default function RegisterPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
-      if (data.duplicate) { setDuplicate(true); return; }
+      if (data.duplicate) { setDuplicate(data.status ?? 'pending'); return; }
       setDone(true);
     } finally {
       setLoading(false);
@@ -54,14 +54,31 @@ export default function RegisterPage() {
               Check <strong style={{ color: 'var(--white)' }}>{email}</strong> — we sent a confirmation. We'll email you again once approved.
             </p>
           </div>
+        ) : duplicate === 'approved' ? (
+          <div className="rounded-2xl p-6 flex flex-col gap-3 text-center" style={{ background: 'var(--surf2)', border: '1px solid rgba(0,229,160,0.2)' }}>
+            <span className="text-3xl">✅</span>
+            <p className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
+              Your account is approved
+            </p>
+            <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+              <strong style={{ color: 'var(--white)' }}>{email}</strong> already has access. Sign in to open your dashboard.
+            </p>
+            <a
+              href="/login"
+              className="mt-1 inline-block py-2.5 px-6 rounded-full text-sm font-medium"
+              style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}
+            >
+              Sign in →
+            </a>
+          </div>
         ) : duplicate ? (
           <div className="rounded-2xl p-6 flex flex-col gap-3 text-center" style={{ background: 'var(--surf2)', border: '1px solid rgba(255,209,102,0.2)' }}>
             <span className="text-3xl">👀</span>
             <p className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
-              Already registered
+              Already on the waitlist
             </p>
             <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-              <strong style={{ color: 'var(--white)' }}>{email}</strong> is already on the waitlist. Check your inbox (and spam) for updates — we'll reach out once approved.
+              <strong style={{ color: 'var(--white)' }}>{email}</strong> is already registered. Check your inbox (and spam) — we'll reach out once approved.
             </p>
           </div>
         ) : (

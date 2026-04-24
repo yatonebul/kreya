@@ -29,7 +29,13 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ ok: true, duplicate: true });
+      // Return existing status so UI can show the right message
+      const { data: existing } = await db()
+        .from('email_registrations')
+        .select('status')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+      return NextResponse.json({ ok: true, duplicate: true, status: existing?.status ?? 'pending' });
     }
     return NextResponse.json({ error: 'Something went wrong.' }, { status: 500 });
   }
