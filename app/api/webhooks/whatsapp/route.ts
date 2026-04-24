@@ -43,8 +43,20 @@ export async function POST(request: NextRequest) {
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const msgType = body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.type ?? 'none';
-  console.log('[POST] received type:', msgType);
+  const value   = body?.entry?.[0]?.changes?.[0]?.value;
+  const msgType = value?.messages?.[0]?.type ?? 'none';
+  const statuses = value?.statuses;
+  if (statuses?.length) {
+    for (const s of statuses) {
+      if (s.status === 'failed') {
+        console.error('[WA delivery FAILED] to:', s.recipient_id, 'errors:', JSON.stringify(s.errors));
+      } else {
+        console.log('[WA delivery]', s.status, 'to:', s.recipient_id);
+      }
+    }
+  } else {
+    console.log('[POST] received type:', msgType);
+  }
   after(async () => { await processWebhook(body); });
   return NextResponse.json({ ok: true });
 }
