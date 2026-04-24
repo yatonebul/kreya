@@ -202,7 +202,7 @@ export default async function AccountPage({
 
         {/* Pending / in-edit posts — shown at the top so user can't miss them */}
         {(pendingPosts?.length ?? 0) > 0 && (
-          <PendingPosts initial={pendingPosts!} />
+          <PendingPosts initial={pendingPosts!} connectUrl={connectUrl} />
         )}
 
         {/* Stats */}

@@ -50,6 +50,10 @@ export async function publishToInstagram(
 
     if (!containerData.id) {
       console.error('Container error:', containerData);
+      const errCode = containerData?.error?.code;
+      if (errCode === 190 || errCode === 102) {
+        throw new Error(`INSTAGRAM_TOKEN_EXPIRED: ${JSON.stringify(containerData)}`);
+      }
       throw new Error(`Meta API container error: ${JSON.stringify(containerData)}`);
     }
 

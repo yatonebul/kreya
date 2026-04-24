@@ -54,6 +54,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ ok: true, postUrl: result.postUrl });
   } catch (err: any) {
+    if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
+      return NextResponse.json({ error: 'Instagram access expired. Please reconnect your account.', reconnectInstagram: true }, { status: 401 });
+    }
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

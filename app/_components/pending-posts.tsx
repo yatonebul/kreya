@@ -11,20 +11,27 @@ type Post = {
   state: string;
 };
 
-function PostCard({ post, onDone }: { post: Post; onDone: (id: string) => void }) {
-  const [busy,           setBusy]           = useState<'approve' | 'discard' | null>(null);
-  const [editingCaption, setEditingCaption] = useState(false);
-  const [captionDraft,   setCaptionDraft]   = useState(post.caption);
-  const [savedCaption,   setSavedCaption]   = useState(post.caption);
-  const [savingCaption,  setSavingCaption]  = useState(false);
-  const [error,          setError]          = useState('');
+function PostCard({ post, onDone, connectUrl }: { post: Post; onDone: (id: string) => void; connectUrl?: string }) {
+  const [busy,              setBusy]              = useState<'approve' | 'discard' | null>(null);
+  const [editingCaption,    setEditingCaption]    = useState(false);
+  const [captionDraft,      setCaptionDraft]      = useState(post.caption);
+  const [savedCaption,      setSavedCaption]      = useState(post.caption);
+  const [savingCaption,     setSavingCaption]     = useState(false);
+  const [error,             setError]             = useState('');
+  const [needsReconnect,    setNeedsReconnect]    = useState(false);
 
   async function act(action: 'approve' | 'discard') {
     setBusy(action);
     setError('');
+    setNeedsReconnect(false);
     const res  = await fetch(`/api/posts/${post.id}/${action}`, { method: 'POST' });
     const data = await res.json();
-    if (!res.ok) { setError(data.error ?? 'Failed'); setBusy(null); return; }
+    if (!res.ok) {
+      if (data.reconnectInstagram) setNeedsReconnect(true);
+      setError(data.error ?? 'Failed');
+      setBusy(null);
+      return;
+    }
     onDone(post.id);
   }
 
@@ -133,13 +140,24 @@ function PostCard({ post, onDone }: { post: Post; onDone: (id: string) => void }
       )}
 
       {error && (
-        <p className="px-4 pb-3 text-xs" style={{ color: 'var(--coral)', fontFamily: 'var(--font-dm-sans)' }}>{error}</p>
+        <div className="px-4 pb-3 flex flex-col gap-2">
+          <p className="text-xs" style={{ color: 'var(--coral)', fontFamily: 'var(--font-dm-sans)' }}>{error}</p>
+          {needsReconnect && connectUrl && (
+            <a
+              href={connectUrl}
+              className="inline-block text-xs px-3 py-1.5 rounded-full font-medium text-center"
+              style={{ background: 'var(--violet)', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}
+            >
+              Reconnect Instagram →
+            </a>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-export function PendingPosts({ initial }: { initial: Post[] }) {
+export function PendingPosts({ initial, connectUrl }: { initial: Post[]; connectUrl?: string }) {
   const router = useRouter();
   const [posts, setPosts] = useState(initial);
 
@@ -160,7 +178,7 @@ export function PendingPosts({ initial }: { initial: Post[] }) {
       </div>
       <div className="flex flex-col gap-4">
         {posts.map(post => (
-          <PostCard key={post.id} post={post} onDone={onDone} />
+          <PostCard key={post.id} post={post} onDone={onDone} connectUrl={connectUrl} />
         ))}
       </div>
     </section>
