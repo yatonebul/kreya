@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendText } from '@/lib/whatsapp-send';
-import { sendEmail, waitlistEmailHtml } from '@/lib/email';
+import { sendEmail, waitlistEmailHtml, adminRegistrationEmailHtml } from '@/lib/email';
 import { adminUrlToken } from '@/lib/session';
 
 const ADMIN_PHONE = process.env.ADMIN_WHATSAPP_PHONE ?? '';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? process.env.GMAIL_USER ?? '';
 const APP_URL     = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
 function db() {
@@ -47,6 +48,21 @@ export async function POST(req: NextRequest) {
     html:    waitlistEmailHtml(normalizedEmail),
   }).then(() => console.log('[register] waitlist email sent to', normalizedEmail))
     .catch(err => console.error('[register] waitlist email FAILED:', err.message));
+
+  // Admin email notification
+  if (ADMIN_EMAIL) {
+    const adminSecret = process.env.ADMIN_SECRET ?? '';
+    const urlToken    = adminUrlToken(adminSecret);
+    const adminUrl    = `${APP_URL}/admin?secret=${urlToken}`;
+    sendEmail({
+      to:      ADMIN_EMAIL,
+      subject: `🔔 New Kreya registration: ${normalizedEmail}`,
+      html:    adminRegistrationEmailHtml(normalizedEmail, normalizedPhone, adminUrl),
+    }).then(() => console.log('[register] admin email sent'))
+      .catch(err => console.error('[register] admin email FAILED:', err.message));
+  } else {
+    console.warn('[register] ADMIN_EMAIL not set — skipping admin email');
+  }
 
   // Ping admin on WhatsApp (fire-and-forget)
   if (ADMIN_PHONE) {

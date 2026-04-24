@@ -43,6 +43,15 @@ function base(content: string) {
   </div>`;
 }
 
+export function adminRegistrationEmailHtml(email: string, phone: string | null, adminUrl: string) {
+  return base(`
+    <p style="font-size:20px;font-weight:700;margin:0 0 12px">🔔 New waitlist signup</p>
+    <p style="font-size:14px;color:rgba(255,255,255,.6);margin:0 0 8px">📧 <strong style="color:#fff">${email}</strong></p>
+    ${phone ? `<p style="font-size:14px;color:rgba(255,255,255,.6);margin:0 0 8px">📱 <strong style="color:#fff">+${phone}</strong></p>` : ''}
+    <a href="${adminUrl}" style="display:inline-block;margin-top:20px;background:#FF4F3B;color:#fff;text-decoration:none;padding:12px 24px;border-radius:100px;font-size:14px;font-weight:600">Open admin panel →</a>
+  `);
+}
+
 export function waitlistEmailHtml(email: string) {
   return base(`
     <p style="font-size:20px;font-weight:700;margin:0 0 12px">You're on the list 🎉</p>
