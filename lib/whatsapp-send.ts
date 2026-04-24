@@ -44,6 +44,7 @@ export async function sendOtpCode(to: string, code: string) {
         language: { code: 'en' },
         components: [
           { type: 'body', parameters: [{ type: 'text', text: code }] },
+          { type: 'button', sub_type: 'COPY_CODE', index: '0', parameters: [{ type: 'coupon_code', coupon_code: code }] },
         ],
       },
     });
