@@ -1,16 +1,39 @@
-const FROM = process.env.EMAIL_FROM ?? 'Kreya <onboarding@resend.dev>';
-const API  = 'https://api.resend.com/emails';
+import nodemailer from 'nodemailer';
 
-export async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
-  const key = process.env.RESEND_API_KEY;
+async function sendViaGmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.GMAIL_USER!,
+      pass: process.env.GMAIL_APP_PASSWORD!,
+    },
+  });
+  await transporter.sendMail({
+    from: `Kreya <${process.env.GMAIL_USER}>`,
+    to,
+    subject,
+    html,
+  });
+}
+
+async function sendViaResend({ to, subject, html }: { to: string; subject: string; html: string }) {
+  const key  = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM ?? 'Kreya <onboarding@resend.dev>';
   if (!key) throw new Error('RESEND_API_KEY not set');
-  const res = await fetch(API, {
-    method: 'POST',
+  const res = await fetch('https://api.resend.com/emails', {
+    method:  'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to, subject, html }),
+    body:    JSON.stringify({ from, to, subject, html }),
   });
   if (!res.ok) throw new Error(`Resend error: ${await res.text()}`);
   return res.json();
+}
+
+export async function sendEmail(opts: { to: string; subject: string; html: string }) {
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    return sendViaGmail(opts);
+  }
+  return sendViaResend(opts);
 }
 
 function base(content: string) {
