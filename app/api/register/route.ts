@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     to:      normalizedEmail,
     subject: "You're on the Kreya waitlist",
     html:    waitlistEmailHtml(normalizedEmail),
-  }).catch(() => {});
+  }).then(() => console.log('[register] waitlist email sent to', normalizedEmail))
+    .catch(err => console.error('[register] waitlist email FAILED:', err.message));
 
   // Ping admin on WhatsApp (fire-and-forget)
   if (ADMIN_PHONE) {
@@ -54,7 +55,12 @@ export async function POST(req: NextRequest) {
     sendText(
       ADMIN_PHONE,
       `🔔 *New Kreya registration*\n\n📧 ${normalizedEmail}${normalizedPhone ? `\n📱 +${normalizedPhone}` : ''}\n\n👉 ${APP_URL}/admin?secret=${urlToken}`
-    ).catch(() => {});
+    ).then(r => {
+      if (r?.error) console.error('[register] admin WA FAILED:', JSON.stringify(r.error));
+      else console.log('[register] admin WA sent');
+    }).catch(err => console.error('[register] admin WA error:', err.message));
+  } else {
+    console.warn('[register] ADMIN_WHATSAPP_PHONE not set — skipping WA ping');
   }
 
   return NextResponse.json({ ok: true });
