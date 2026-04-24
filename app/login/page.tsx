@@ -124,6 +124,11 @@ function LoginForm() {
 
         {step === 'input' && (
           <div className="flex flex-col gap-4">
+            {mode === 'phone' && (
+              <p className="text-xs px-3 py-2 rounded-xl" style={{ background: 'var(--surf2)', color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)' }}>
+                💬 You must have messaged Kreya on WhatsApp in the last 24 hours for the code to arrive. Use <button onClick={() => switchMode('email')} style={{ color: 'var(--coral)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>email login</button> if you haven't.
+              </p>
+            )}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
                 {mode === 'email' ? 'Email address' : 'WhatsApp number'}
