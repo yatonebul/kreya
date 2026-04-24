@@ -35,10 +35,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not create code — database unavailable. Try again shortly.' }, { status: 500 });
   }
 
-  await sendText(
+  const waResult = await sendText(
     phone,
     `Your Kreya verification code: *${code}*\n\nValid for 10 minutes. Don't share this with anyone.`
   );
+
+  if (waResult?.error) {
+    console.error('[OTP send] WhatsApp failed:', JSON.stringify(waResult.error));
+    const waMsg = waResult.error.message ?? '';
+    const hint  = waMsg.toLowerCase().includes('token') ? ' (access token may be expired)' : '';
+    return NextResponse.json({ error: `Could not send WhatsApp message${hint}. Check Vercel logs.` }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
