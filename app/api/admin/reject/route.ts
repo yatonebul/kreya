@@ -8,7 +8,7 @@ const ADMIN_PHONE  = process.env.ADMIN_WHATSAPP_PHONE ?? '';
 const APP_URL      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 export async function POST(req: NextRequest) {
