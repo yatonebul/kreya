@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomInt } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { hashOtp } from '@/lib/session';
-import { sendText } from '@/lib/whatsapp-send';
+import { sendOtpCode } from '@/lib/whatsapp-send';
 
 function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -35,10 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not create code — database unavailable. Try again shortly.' }, { status: 500 });
   }
 
-  const waResult = await sendText(
-    phone,
-    `Your Kreya verification code: *${code}*\n\nValid for 10 minutes. Don't share this with anyone.`
-  );
+  const waResult = await sendOtpCode(phone, code);
 
   if (waResult?.error) {
     console.error('[OTP send] WhatsApp failed:', JSON.stringify(waResult.error));

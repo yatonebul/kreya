@@ -30,6 +30,27 @@ export function sendText(to: string, text: string) {
   });
 }
 
+// Sends OTP via an authentication template (works outside the 24-hour messaging window).
+// Falls back to free-form text when WHATSAPP_OTP_TEMPLATE is not set.
+export async function sendOtpCode(to: string, code: string) {
+  const templateName = process.env.WHATSAPP_OTP_TEMPLATE;
+  if (templateName) {
+    return wa({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: 'en' },
+        components: [
+          { type: 'body', parameters: [{ type: 'text', text: code }] },
+        ],
+      },
+    });
+  }
+  return sendText(to, `Your Kreya verification code: *${code}*\n\nValid for 10 minutes. Don't share this with anyone.`);
+}
+
 // Outbound invite — requires a template approved in Meta Business Manager.
 // Template name configured via WHATSAPP_INVITE_TEMPLATE env var.
 // Returns true if the API accepted the message, false otherwise.
