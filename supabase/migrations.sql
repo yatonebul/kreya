@@ -76,6 +76,16 @@ CREATE INDEX IF NOT EXISTS idx_pending_posts_post_mortem
   WHERE state = 'published' AND post_mortem_sent_at IS NULL;
 
 
+-- 10. pending_posts — carousel support.
+--     media_items: JSONB array of {url, is_video} entries (up to 10 slides).
+--                  Null for single-media posts (back-compat: read image_url).
+--     'collecting_carousel' is an additional state value used while the user
+--     is dropping photos into a /carousel session; finalizes to
+--     'pending_approval' on 'done'.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS media_items JSONB;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

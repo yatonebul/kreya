@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
-import { publishToInstagram } from '@/lib/instagram-publish';
+import { publishToInstagram, publishCarouselToInstagram, type CarouselItem } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview, sendPostPublishedActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -120,8 +120,29 @@ async function processWebhook(body: any) {
         if (isStatusCheck(txt))       { await handleStatus(from);                             return; }
         if (isCancelScheduled(txt))   { await handleCancelScheduled(from);                    return; }
         if (isLearnStyleCommand(txt)) { await handleLearnStyle(from);                         return; }
+        if (isCarouselCommand(txt))   { await handleCarouselStart(from);                      return; }
         const profileEdit = parseProfileUpdate(txt);
         if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
+      }
+
+      // If actively collecting a carousel, route every text/image into the collection flow
+      const collecting = await getPostByState(from, 'collecting_carousel');
+      if (collecting) {
+        if (messageType === 'text') {
+          const txt = message.text?.body ?? '';
+          if (isCarouselFinishCommand(txt)) { await handleCarouselFinish(from, collecting); return; }
+          if (/^cancel/i.test(txt.trim()))  { await handleCarouselCancel(from, collecting); return; }
+          await sendText(from, '📸 Send another photo, or type *done* to publish — *cancel* to bail.');
+          return;
+        }
+        if (messageType === 'image') {
+          await handleCarouselAppend(from, collecting, message);
+          return;
+        }
+        if (messageType === 'video' || messageType === 'audio' || messageType === 'document') {
+          await sendText(from, '🎞️ Carousels are photos only for now — send a JPG/PNG, or type *done* / *cancel*.');
+          return;
+        }
       }
 
       // If in edit mode, route to refinement
@@ -390,10 +411,15 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       return;
     }
 
-    await sendText(from, '⏳ Publishing to Instagram...');
+    const carouselItems: CarouselItem[] | null = Array.isArray(post.media_items) ? post.media_items : null;
+    const isCarousel = carouselItems !== null && carouselItems.length > 1;
+
+    await sendText(from, isCarousel ? `⏳ Publishing carousel (${carouselItems.length} slides)...` : '⏳ Publishing to Instagram...');
     let result;
     try {
-      result = await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
+      result = isCarousel
+        ? await publishCarouselToInstagram(from, post.caption, carouselItems)
+        : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
     } catch (err: any) {
       if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
         const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
@@ -552,6 +578,14 @@ function isLearnStyleCommand(text: string): boolean {
   return /^(\/style|learn\s+(my\s+)?(voice|style|tone)|refresh\s+(my\s+)?(voice|style|tone)|update\s+(my\s+)?(voice|style))[!?.\s]*$/i.test(text.trim());
 }
 
+function isCarouselCommand(text: string): boolean {
+  return /^(\/carousel|carousel|new\s+carousel|start\s+carousel)[!?.\s]*$/i.test(text.trim());
+}
+
+function isCarouselFinishCommand(text: string): boolean {
+  return /^(done|finish|finalize|ready|publish|that['’]?s\s+all)[!?.\s]*$/i.test(text.trim());
+}
+
 type ProfileField = { field: 'brand_name' | 'niche' | 'tone'; value: string };
 
 function parseProfileUpdate(text: string): ProfileField | null {
@@ -571,6 +605,7 @@ async function handleHelp(from: string) {
   await sendText(from,
     `🤖 *Here's what I can do:*\n\n` +
     `📸 *Create a post*\nSend any text, photo, video, or voice note — I write the caption and prepare your post for review.\n\n` +
+    `🎞️ *Carousel*\nSend: */carousel* — then drop 2–10 photos and type *done*.\n\n` +
     `✅ *Approve / Edit / Discard*\nAfter each draft, tap the buttons to publish, refine, or bin it.\n\n` +
     `🗓️ *Schedule*\nWhile a draft is waiting, reply with a time:\n"Post tomorrow at 9am" · "Schedule for Friday 3pm"\n\n` +
     `✏️ *Edit your profile*\n"Change my tone to casual"\n"Update niche to fitness"\n"Set brand name to ..."\n\n` +
@@ -632,6 +667,122 @@ async function handleLearnStyle(from: string) {
   } else {
     await sendText(from, `⚠️ Couldn't update your voice profile right now — try again in a minute.`);
   }
+}
+
+async function handleCarouselStart(from: string) {
+  const supabase = getSupabase();
+  // Discard any existing pending draft so the collection lane is clean
+  const { data: stale } = await supabase
+    .from('pending_posts').select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  await supabase.from('pending_posts').insert({
+    whatsapp_phone: from,
+    state: 'collecting_carousel',
+    media_items: [],
+    caption: '',
+  });
+
+  await sendText(
+    from,
+    "🎞️ *Carousel mode*\n\nSend 2–10 photos one by one. Type *done* when you're ready, or *cancel* to bail.",
+  );
+}
+
+async function handleCarouselAppend(from: string, post: { id: string; media_items: CarouselItem[] | null }, message: { image?: { id?: string; mime_type?: string } }) {
+  const items: CarouselItem[] = post.media_items ?? [];
+  if (items.length >= 10) {
+    await sendText(from, "⚠️ Carousels max out at 10 photos. Type *done* to publish what you've got.");
+    return;
+  }
+
+  const mediaId = message.image?.id;
+  const mimeType = message.image?.mime_type ?? 'image/jpeg';
+  if (!mediaId) {
+    await sendText(from, '📎 Couldn\'t read that photo — try sending it again.');
+    return;
+  }
+
+  let url: string;
+  try {
+    url = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    await sendText(from, '📎 Couldn\'t download that photo — try again.');
+    return;
+  }
+
+  const next = [...items, { url, is_video: false }];
+  await getSupabase()
+    .from('pending_posts')
+    .update({ media_items: next })
+    .eq('id', post.id);
+
+  const remaining = 10 - next.length;
+  const tail = remaining === 0
+    ? 'That\'s the max — type *done* to publish.'
+    : remaining === 1
+      ? 'Room for 1 more, or type *done* to publish.'
+      : `Send up to ${remaining} more, or type *done* to publish.`;
+  await sendText(from, `✅ Photo *${next.length}* added. ${tail}`);
+}
+
+async function handleCarouselFinish(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
+  const items: CarouselItem[] = post.media_items ?? [];
+  if (items.length < 2) {
+    await sendText(from, '⚠️ A carousel needs at least 2 photos. Send another, or type *cancel*.');
+    return;
+  }
+
+  await sendText(from, '✍️ Writing caption for your carousel…');
+
+  const [profileContext, recentCaptions] = await Promise.all([
+    getProfileContextForPhone(from),
+    getRecentCaptions(),
+  ]);
+  const variants = await generateCaptionVariants(
+    `[Carousel of ${items.length} photos. Write a single caption that frames the whole set; do not number or itemize each slide.]`,
+    profileContext ?? undefined,
+    recentCaptions,
+  );
+  const caption = variants[0] ?? '';
+
+  await getSupabase()
+    .from('pending_posts')
+    .update({
+      state: 'pending_approval',
+      caption,
+      image_url: items[0].url,
+    })
+    .eq('id', post.id);
+
+  if (variants.length > 1) {
+    const { error } = await getSupabase()
+      .from('pending_posts')
+      .update({ caption_variants: variants })
+      .eq('id', post.id);
+    if (error) console.warn('[caption_variants update]', error.message);
+  }
+
+  await sendText(from, `🎞️ Carousel ready — *${items.length} slides*. First slide previewed below.`);
+  await sendPostPreview(from, items[0].url, caption, post.id, false);
+
+  if (variants.length > 1) {
+    const others = variants.slice(1).map((v, i) => {
+      const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+      return `*${i + 2}.* ${trimmed}`;
+    }).join('\n\n');
+    await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+  }
+}
+
+async function handleCarouselCancel(from: string, post: { id: string }) {
+  await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
+  await sendText(from, '🗑️ Carousel cancelled.');
 }
 
 async function handleCancelScheduled(from: string) {

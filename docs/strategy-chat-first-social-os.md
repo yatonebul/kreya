@@ -226,10 +226,13 @@ Hybrid: flat SaaS + metered AI add-ons (per video-minute repurpose, per generate
 - Schema-tolerant fallback: works on legacy DB until migration runs
 - Highest-leverage AI upgrade: every caption gets noticeably more on-brand for ~1 day of work
 
-**Step 5 (day 8–10) — Carousel + Reels**
-- Schema: `pending_posts.media_items jsonb[]` (or new `post_media` child table) — keep `image_url` for back-compat
-- WA: detect "send N images in 60s" as a carousel intent; ask "carousel or single?"
-- IG: extend `instagram-publish.ts` with carousel container + Reels media type
+**Step 5 — Carousel** ✅ shipped this session (Reels was already supported)
+- `pending_posts.media_items jsonb` (`[{url, is_video}, …]`) — null for single-media posts (back-compat).
+- `/carousel` WA command opens a `collecting_carousel` row; subsequent photos append to `media_items`; `done` finalizes by generating one caption variant set + previewing the first slide; `cancel` discards.
+- `publishCarouselToInstagram` does the 3-step IG carousel flow (per-slide `is_carousel_item` containers → carousel parent with `media_type=CAROUSEL` and `children` list → publish).
+- Approve path branches: `media_items.length > 1` → carousel publish; otherwise the existing single-media path.
+- Reels: already routed via `media_type=REELS` in `publishToInstagram` when `is_video` is set — nothing to add.
+- Auto-detect ("user sends 2 images in a row") deferred — for now users opt in via `/carousel`.
 
 **Step 6 — 24h post-mortem** ✅ shipped this session
 - `lib/instagram-insights.ts` fetches `reach/views/likes/comments/saved` via the IG Graph Insights endpoint and produces a heuristic takeaway (save-rate / comment-rate / like-rate gates).
