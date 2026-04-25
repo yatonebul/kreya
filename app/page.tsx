@@ -75,17 +75,68 @@ export default async function Home() {
           Send a WhatsApp voice note or text. Kreya writes the caption, picks the image, and publishes to Instagram — automatically.
         </p>
 
-        {/* Platform badges */}
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {['Instagram', 'TikTok', 'Twitter', 'LinkedIn', 'Facebook', 'YouTube'].map(p => (
-            <span
-              key={p}
-              className="text-xs px-3 py-1 rounded-full"
-              style={{ fontFamily: 'var(--font-space-mono)', background: 'var(--surf2)', color: 'var(--muted)', border: '1px solid var(--surf3)' }}
-            >
-              {p}
+        {/* Platform badges — Instagram is live; others are colored ghosts under "Coming next" */}
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full"
+            style={{
+              background: 'linear-gradient(135deg, var(--coral) 0%, var(--rose) 100%)',
+              boxShadow: '0 8px 28px -10px rgba(255,79,59,.55), inset 0 0 0 1px rgba(255,255,255,.12)',
+            }}
+          >
+            <span className="relative flex h-2 w-2 items-center justify-center">
+              <span
+                className="absolute inline-flex h-full w-full rounded-full animate-ping"
+                style={{ background: 'var(--mint)', opacity: 0.65 }}
+              />
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: 'var(--mint)' }} />
             </span>
-          ))}
+            <InstagramIcon />
+            <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-syne)', color: '#fff' }}>
+              Instagram
+            </span>
+            <span
+              className="text-[10px] tracking-widest uppercase px-1.5 py-0.5 rounded-full ml-1"
+              style={{
+                fontFamily: 'var(--font-space-mono)',
+                background: 'rgba(7,7,13,.35)',
+                color: 'var(--mint)',
+              }}
+            >
+              Live
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2 mt-1">
+            <span
+              className="text-[10px] tracking-[0.22em] uppercase"
+              style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}
+            >
+              Coming next
+            </span>
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {[
+                { name: 'TikTok',   color: '#FF6B8A' },
+                { name: 'LinkedIn', color: '#5E35FF' },
+                { name: 'Twitter',  color: '#00E5A0' },
+                { name: 'Facebook', color: '#FFD166' },
+                { name: 'YouTube',  color: '#FF4F3B' },
+              ].map(({ name, color }) => (
+                <span
+                  key={name}
+                  className="text-xs px-3 py-1 rounded-full"
+                  style={{
+                    fontFamily: 'var(--font-space-mono)',
+                    color,
+                    border: `1px solid ${color}`,
+                    background: `${color}14`,
+                  }}
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* CTA block */}
@@ -200,6 +251,14 @@ export default async function Home() {
       </footer>
 
     </main>
+  );
+}
+
+function InstagramIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff" aria-hidden>
+      <path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.81-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.81-.25-2.23-.41a3.71 3.71 0 0 1-1.38-.9 3.71 3.71 0 0 1-.9-1.38c-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.81.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16zm0 1.96c-3.15 0-3.5.01-4.74.07-.99.05-1.53.21-1.89.34-.47.18-.81.4-1.16.75-.35.35-.57.69-.75 1.16-.13.36-.29.9-.34 1.89-.06 1.24-.07 1.59-.07 4.74s.01 3.5.07 4.74c.05.99.21 1.53.34 1.89.18.47.4.81.75 1.16.35.35.69.57 1.16.75.36.13.9.29 1.89.34 1.24.06 1.59.07 4.74.07s3.5-.01 4.74-.07c.99-.05 1.53-.21 1.89-.34.47-.18.81-.4 1.16-.75.35-.35.57-.69.75-1.16.13-.36.29-.9.34-1.89.06-1.24.07-1.59.07-4.74s-.01-3.5-.07-4.74c-.05-.99-.21-1.53-.34-1.89a3.13 3.13 0 0 0-.75-1.16 3.13 3.13 0 0 0-1.16-.75c-.36-.13-.9-.29-1.89-.34-1.24-.06-1.59-.07-4.74-.07zm0 3.34a4.54 4.54 0 1 1 0 9.08 4.54 4.54 0 0 1 0-9.08zm0 7.5a2.96 2.96 0 1 0 0-5.92 2.96 2.96 0 0 0 0 5.92zm5.78-7.7a1.06 1.06 0 1 1-2.12 0 1.06 1.06 0 0 1 2.12 0z" />
+    </svg>
   );
 }
 

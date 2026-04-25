@@ -76,7 +76,7 @@ export async function sendInviteTemplate(to: string): Promise<boolean> {
 // postId is encoded in each button ID so replying to any historical preview
 // always acts on the correct post, not the latest one.
 export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string, isVideo = false) {
-  await sendText(to, `📝 Caption draft:\n\n${caption}`);
+  await sendText(to, `🎙️ *Your voice:*\n\n${caption}`);
 
   const header = isVideo
     ? { type: 'text', text: '🎬 Video ready to post' }

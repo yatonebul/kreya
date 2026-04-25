@@ -10,9 +10,9 @@ function getSupabase() {
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
-const Q1 = `👋 Welcome to Kreya!\n\nI'll write and post to Instagram for you — just send me a message or photo.\n\nFirst: *what's your brand or account name?*`;
-const Q2 = (name: string) => `Nice, ${name}! 🙌\n\nWhat's your *niche*?\n(e.g. fitness, food, travel, fashion, tech, lifestyle, photography...)`;
-const Q3 = `Almost there! How would you describe your *posting style*?\n\n(e.g. casual & fun, professional & polished, inspirational, bold & edgy, educational...)`;
+const Q1 = `👋 Welcome to Kreya!\n\nI write captions and post to Instagram for you — send a voice note, photo, or text and I'll handle the rest.\n\nFirst, who am I writing for? Type your *brand name, @handle, or just your name*.`;
+const Q2 = (name: string) => `Nice, ${name}! 🙌\n\nWhat's your *niche*? — fitness, food, travel, photography, fashion, tech, lifestyle… or your own.`;
+const Q3 = `Last one — how should I sound?\n\n*Casual & fun · Polished & pro · Bold & edgy · Inspirational · Educational…* (or describe your own).`;
 const DONE = (name: string) => `✅ *${name}* is set up!`;
 const INSTAGRAM_CONNECT = (phone: string) =>
   `📸 *One last step* — connect your Instagram account so I can post for you:\n\n${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(phone)}\n\nTap the link and authorize. Once connected, send me any message, photo, or voice note to create your first post! 🚀`;
