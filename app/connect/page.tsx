@@ -24,6 +24,23 @@ async function getAllAccounts() {
   return data ?? [];
 }
 
+function humanizeIgError(raw: string): string {
+  const s = decodeURIComponent(raw).toLowerCase();
+  if (s.includes('insufficient developer role') || s.includes('developer role')) {
+    return "Your Instagram account isn't on our access list yet. Make sure your account is a Business or Creator account, then contact us to get added.";
+  }
+  if (s.includes('profile') && (s.includes('exist') || s.includes('found'))) {
+    return "Instagram couldn't find your profile. Switch your account to Business or Creator in Instagram → Settings → Account type → Switch to Professional.";
+  }
+  if (s.includes('permission')) {
+    return "Permission denied by Instagram. Make sure you're using a Business or Creator account, not a personal one.";
+  }
+  if (s.includes('token') || s.includes('oauth') || s.includes('session')) {
+    return "Instagram connection expired. Please try connecting again.";
+  }
+  return decodeURIComponent(raw);
+}
+
 function daysUntil(iso: string | null) {
   if (!iso) return null;
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
@@ -70,8 +87,9 @@ export default async function ConnectPage({
           </div>
         )}
         {params.error && (
-          <div className="rounded-2xl px-5 py-4 text-sm font-medium" style={{ background: 'rgba(255,79,59,0.12)', border: '1px solid var(--coral)', color: 'var(--coral)', fontFamily: 'var(--font-dm-sans)' }}>
-            ✗ {decodeURIComponent(params.error)}
+          <div className="rounded-2xl px-5 py-4 flex flex-col gap-2" style={{ background: 'rgba(255,79,59,0.12)', border: '1px solid var(--coral)', fontFamily: 'var(--font-dm-sans)' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--coral)' }}>✗ Connection failed</p>
+            <p className="text-sm" style={{ color: 'var(--muted)' }}>{humanizeIgError(params.error)}</p>
           </div>
         )}
 
