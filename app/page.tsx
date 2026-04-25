@@ -54,25 +54,27 @@ export default async function Home() {
       {/* Hero */}
       <section className="flex flex-col items-center justify-center flex-1 text-center px-6 pt-16 pb-24 gap-8">
         <span
-          className="text-xs tracking-widest uppercase px-3 py-1 rounded-full"
+          className="inline-flex items-center gap-2 text-xs tracking-widest uppercase px-3 py-1 rounded-full"
           style={{ fontFamily: 'var(--font-space-mono)', background: 'var(--surf3)', color: 'var(--mint)' }}
         >
-          AI-powered social media
+          <span aria-hidden>🎙️</span>
+          Voice-first · Chat-native
         </span>
 
         <h1
-          className="text-5xl md:text-7xl font-extrabold leading-tight max-w-3xl"
+          className="text-5xl md:text-7xl font-extrabold leading-[1.05] max-w-3xl"
           style={{ fontFamily: 'var(--font-syne)' }}
         >
-          Tell Kreya what you need.{' '}
-          <span style={{ color: 'var(--coral)' }}>Consider it done.</span>
+          Speak it.{' '}
+          <span style={{ color: 'var(--coral)' }}>Kreya posts it.</span>
         </h1>
 
         <p
           className="text-lg md:text-xl max-w-xl leading-relaxed"
           style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}
         >
-          Send a WhatsApp voice note or text. Kreya writes the caption, picks the image, and publishes to Instagram — automatically.
+          Voice-note your idea on WhatsApp. Kreya writes the caption in your voice and publishes to Instagram — in under{' '}
+          <span style={{ color: 'var(--white)', fontWeight: 600 }}>30 seconds</span>.
         </p>
 
         {/* Platform badges — Instagram is live; others are colored ghosts under "Coming next" */}
@@ -166,7 +168,7 @@ export default async function Home() {
           {/* Phone input */}
           <div className="w-full flex flex-col gap-2">
             <p className="text-sm font-medium text-left" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-              Enter your number — get the link sent to you
+              Drop your number — I&apos;ll WhatsApp you the link.
             </p>
             <PhoneForm />
           </div>
@@ -185,20 +187,20 @@ export default async function Home() {
           {[
             {
               step: '01',
-              title: 'Send a message',
-              body: 'Voice note or text on WhatsApp. Describe what you want to post — no apps to learn.',
+              title: 'Voice. Photo. Text.',
+              body: 'Voice-note, snap a photo, or type one line on WhatsApp. No app to install, nothing to learn.',
               color: 'var(--coral)',
             },
             {
               step: '02',
-              title: 'Kreya creates',
-              body: 'Claude AI writes the perfect caption and generates visuals tailored to your brand.',
+              title: 'Your voice, dialed in.',
+              body: 'Kreya learns your tone from past Instagram posts, then offers 3 caption angles. Reply 1, 2, or 3 — done.',
               color: 'var(--violet)',
             },
             {
               step: '03',
-              title: 'Published instantly',
-              body: 'Approve with one tap and your post goes live. Or schedule it for later — your call.',
+              title: 'Live in 30 seconds.',
+              body: 'Approve with a tap. Or say "post tomorrow at 9" — Kreya schedules it and ships it for you.',
               color: 'var(--mint)',
             },
           ].map(({ step, title, body, color }) => (
