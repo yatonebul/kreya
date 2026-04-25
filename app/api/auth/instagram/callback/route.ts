@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendText } from '@/lib/whatsapp-send';
+import { learnStyleFromInstagram } from '@/lib/style-memory';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
@@ -81,8 +82,23 @@ export async function GET(request: NextRequest) {
     const meData = await meRes.json();
     if (!meData.id) throw new Error('Could not fetch user info');
 
-    // 4. Upsert token + phone in Supabase (manual check avoids missing unique constraint)
+    // 4. Upsert token + phone in Supabase (manual check avoids missing unique constraint).
+    //    Whoever just completed OAuth becomes the active account for that phone — any
+    //    sibling rows (other IGs already linked to the same phone) are demoted to
+    //    is_active=false. The user can flip the active one back on /connect.
     const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
+
+    if (whatsappPhone) {
+      const phoneSearch = whatsappPhone.startsWith('+')
+        ? [whatsappPhone, whatsappPhone.slice(1)]
+        : [whatsappPhone, `+${whatsappPhone}`];
+      await getSupabase()
+        .from('instagram_accounts')
+        .update({ is_active: false })
+        .in('whatsapp_phone', phoneSearch)
+        .neq('instagram_user_id', meData.id);
+    }
+
     const { data: existing } = await getSupabase()
       .from('instagram_accounts').select('id').eq('instagram_user_id', meData.id).maybeSingle();
 
@@ -113,6 +129,19 @@ export async function GET(request: NextRequest) {
         whatsappPhone,
         `✅ *@${meData.username}* connected!\n\nYou're all set — send me a message, photo, video, or voice note and I'll create your next Instagram post. 🚀`
       ).catch(() => {});
+    }
+
+    // 6. Learn the user's voice from their last 50 captions (fire-and-forget — don't block the redirect)
+    if (whatsappPhone) {
+      const phone = whatsappPhone;
+      const igUserId = meData.id as string;
+      const token = accessToken as string;
+      after(async () => {
+        const result = await learnStyleFromInstagram(phone, igUserId, token);
+        if (result.ok) {
+          await sendText(phone, `🧠 I read your last ${result.captionsFound} captions to learn your voice. Future posts will sound more like you.`).catch(() => {});
+        }
+      });
     }
 
     const phoneParam = whatsappPhone ? `&phone=${encodeURIComponent(whatsappPhone)}` : '';

@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
+import { WaButton } from '@/app/_components/wa-button';
+import { AccountRowActions } from '@/app/_components/account-row-actions';
 
 function getSupabase() {
   return createClient(
@@ -38,6 +41,9 @@ function humanizeIgError(raw: string): string {
   if (s.includes('token') || s.includes('oauth') || s.includes('session')) {
     return "Instagram connection expired. Please try connecting again.";
   }
+  if (s.includes('null value') || s.includes('not-null') || s.includes('violates')) {
+    return "We hit a database snag finishing the connection. The team has been notified — try again in a minute, or reach out if it persists.";
+  }
   return decodeURIComponent(raw);
 }
 
@@ -73,12 +79,15 @@ export default async function ConnectPage({
         <a href="/" className="text-xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>
           Kreya
         </a>
-        <span className="text-xs tracking-widest uppercase" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
-          {isPersonalized ? 'Your Account' : 'Connections'}
-        </span>
+        <div className="flex items-center gap-3">
+          <WaButton />
+          <span className="text-xs tracking-widest uppercase hidden md:inline" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+            {isPersonalized ? 'Your Account' : 'Connections'}
+          </span>
+        </div>
       </nav>
 
-      <div className="flex-1 px-6 md:px-12 py-12 max-w-2xl mx-auto w-full flex flex-col gap-6">
+      <div className="flex-1 px-6 md:px-12 py-12 pb-28 md:pb-12 max-w-2xl mx-auto w-full flex flex-col gap-6">
 
         {/* Toast */}
         {params.connected && (
@@ -119,28 +128,36 @@ export default async function ConnectPage({
               {accounts.map(acc => {
                 const days = daysUntil(acc.token_expires_at);
                 const reconnectHref = `/api/auth/instagram${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`;
+                const activeRing = acc.is_active
+                  ? '0 0 0 1px rgba(0,229,160,0.45) inset'
+                  : 'none';
                 return (
-                  <div key={acc.account_name} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surf3)' }}>
-                    <div className="flex flex-col gap-0.5">
+                  <div
+                    key={acc.account_name}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
+                    style={{ background: 'var(--surf3)', boxShadow: activeRing }}
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0">
                       <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-dm-sans)' }}>
                         @{acc.account_name}
                       </span>
-                      <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
-                        ID {acc.instagram_user_id}
+                      <span className="text-xs truncate" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+                        ID {acc.instagram_user_id} · <TokenBadge days={days} />
                       </span>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)' }}>
-                        <TokenBadge days={days} />
+                    {phone ? (
+                      <AccountRowActions
+                        phone={phone}
+                        accountName={acc.account_name}
+                        instagramUserId={acc.instagram_user_id}
+                        isActive={!!acc.is_active}
+                        reconnectHref={reconnectHref}
+                      />
+                    ) : (
+                      <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: acc.is_active ? 'var(--mint)' : 'var(--muted2)' }}>
+                        {acc.is_active ? '● Active' : 'inactive'}
                       </span>
-                      <a
-                        href={reconnectHref}
-                        className="text-xs px-3 py-1.5 rounded-full font-medium transition-opacity hover:opacity-80"
-                        style={{ background: 'var(--surf)', color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)' }}
-                      >
-                        Reconnect
-                      </a>
-                    </div>
+                    )}
                   </div>
                 );
               })}
@@ -192,6 +209,8 @@ export default async function ConnectPage({
         )}
 
       </div>
+
+      <MobileBottomNav fallbackHref="#" showLogout={false} />
     </main>
   );
 }

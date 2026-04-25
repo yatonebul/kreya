@@ -41,7 +41,12 @@ export async function GET(request: NextRequest) {
       const result = await publishToInstagram(post.whatsapp_phone, post.caption, post.image_url, post.is_video ?? false);
 
       await supabase.from('pending_posts')
-        .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
+        .update({
+          state: 'published',
+          ig_post_id: result.postId,
+          ig_post_url: result.postUrl ?? null,
+          published_at: new Date().toISOString(),
+        })
         .eq('id', post.id);
 
       if (post.sibling_id) {

@@ -52,9 +52,97 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_phone ON waitlist_entries(phone) 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist_entries(email) WHERE email IS NOT NULL;
 
 
+-- 7. pending_posts — 3 caption variants per draft (user picks 1/2/3 to swap)
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS caption_variants JSONB;
+
+
+-- 8. user_profiles — voice/style learned from the user's past Instagram captions.
+-- Augments profile_context (which holds the brand/niche/tone the user typed in onboarding).
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS learned_style TEXT;
+
+
+-- 9. pending_posts — 24h post-mortem support.
+--    published_at        — actual publish timestamp (separate from created_at,
+--                          which is the original draft time).
+--    post_mortem_sent_at — set when the 24h digest WhatsApp goes out, so the
+--                          cron job is idempotent.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS published_at        TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS post_mortem_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_pending_posts_post_mortem
+  ON pending_posts (state, published_at)
+  WHERE state = 'published' AND post_mortem_sent_at IS NULL;
+
+
+-- 10. pending_posts — carousel support.
+--     media_items: JSONB array of {url, is_video} entries (up to 10 slides).
+--                  Null for single-media posts (back-compat: read image_url).
+--     'collecting_carousel' is an additional state value used while the user
+--     is dropping photos into a /carousel session; finalizes to
+--     'pending_approval' on 'done'.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS media_items JSONB;
+
+
+-- 11. instagram_accounts — multi-account-per-phone support.
+--     org_id is a leftover NOT NULL column from an earlier multi-tenant
+--     scaffolding iteration. It blocks new IG connections (UI shows a DB
+--     error on a fresh OAuth). Code never reads it; service-role-key access
+--     bypasses RLS, so dropping the constraint is safe.
+ALTER TABLE instagram_accounts ALTER COLUMN org_id DROP NOT NULL;
+
+
+-- 12. user_profiles — pricing plan stub for future paywalls.
+--     'free' allows one connected IG account; 'pro' / 'agency' will allow
+--     multiple. The OAuth callback / UI does NOT enforce yet — column is
+--     here so the gate can be flipped without another migration.
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
+
+
+-- ============================================================
+-- pg_cron schedules (Vercel Hobby blocks every-5min cron, so we
+-- run the time-sensitive jobs from Supabase via pg_cron + pg_net).
+-- Run once per project. Replace BASE_URL and CRON_SECRET below.
+-- ============================================================
+--
+-- 1) ENABLE EXTENSIONS (Database → Extensions, or run SQL):
+--    CREATE EXTENSION IF NOT EXISTS pg_cron;
+--    CREATE EXTENSION IF NOT EXISTS pg_net;
+--
+-- 2) SCHEDULE: publish due drafts every minute
+-- SELECT cron.schedule(
+--   'kreya-publish-scheduled',
+--   '* * * * *',
+--   $$
+--   SELECT net.http_get(
+--     url := 'https://kreya-github.vercel.app/api/cron/publish-scheduled',
+--     headers := '{"Authorization":"Bearer YOUR_CRON_SECRET"}'::jsonb
+--   );
+--   $$
+-- );
+--
+-- 3) SCHEDULE: 24h post-mortem digests, hourly
+-- SELECT cron.schedule(
+--   'kreya-post-mortem',
+--   '0 * * * *',
+--   $$
+--   SELECT net.http_get(
+--     url := 'https://kreya-github.vercel.app/api/cron/post-mortem',
+--     headers := '{"Authorization":"Bearer YOUR_CRON_SECRET"}'::jsonb
+--   );
+--   $$
+-- );
+--
+-- To inspect:   SELECT * FROM cron.job;
+-- To remove:    SELECT cron.unschedule('kreya-post-mortem');
 
 
 -- Skip onboarding for an existing user (replace number as needed)

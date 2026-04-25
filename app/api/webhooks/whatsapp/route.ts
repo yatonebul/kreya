@@ -1,9 +1,10 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateCaption, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
-import { publishToInstagram } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
+import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
+import { learnStyleFromInstagram } from '@/lib/style-memory';
+import { publishToInstagram, publishCarouselToInstagram, type CarouselItem } from '@/lib/instagram-publish';
+import { sendText, sendPostPreview, sendPostPublishedActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -118,8 +119,33 @@ async function processWebhook(body: any) {
         if (isHelpCommand(txt))       { await handleHelp(from);                               return; }
         if (isStatusCheck(txt))       { await handleStatus(from);                             return; }
         if (isCancelScheduled(txt))   { await handleCancelScheduled(from);                    return; }
+        if (isLearnStyleCommand(txt)) { await handleLearnStyle(from);                         return; }
+        if (isCarouselCommand(txt))   { await handleCarouselStart(from);                      return; }
+        if (isAccountsCommand(txt))   { await handleListAccounts(from);                       return; }
+        const useHandle = parseUseAccountCommand(txt);
+        if (useHandle)                { await handleUseAccount(from, useHandle);               return; }
         const profileEdit = parseProfileUpdate(txt);
         if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
+      }
+
+      // If actively collecting a carousel, route every text/image into the collection flow
+      const collecting = await getPostByState(from, 'collecting_carousel');
+      if (collecting) {
+        if (messageType === 'text') {
+          const txt = message.text?.body ?? '';
+          if (isCarouselFinishCommand(txt)) { await handleCarouselFinish(from, collecting); return; }
+          if (/^cancel/i.test(txt.trim()))  { await handleCarouselCancel(from, collecting); return; }
+          await sendText(from, '📸 Send another photo, or type *done* to publish — *cancel* to bail.');
+          return;
+        }
+        if (messageType === 'image') {
+          await handleCarouselAppend(from, collecting, message);
+          return;
+        }
+        if (messageType === 'video' || messageType === 'audio' || messageType === 'document') {
+          await sendText(from, '🎞️ Carousels are photos only for now — send a JPG/PNG, or type *done* / *cancel*.');
+          return;
+        }
       }
 
       // If in edit mode, route to refinement
@@ -139,6 +165,27 @@ async function processWebhook(body: any) {
       const pendingApproval = await getPostByState(from, 'pending_approval');
       if (pendingApproval && messageType === 'text') {
         const text: string = message.text.body;
+
+        // Variant swap — bare "1"/"2"/"3" picks an alternate caption
+        const variantPick = text.trim().match(/^([123])$/);
+        const variants = pendingApproval.caption_variants as string[] | null;
+        if (variantPick && Array.isArray(variants) && variants.length >= Number(variantPick[1])) {
+          const idx = Number(variantPick[1]) - 1;
+          const newCaption = variants[idx];
+          if (newCaption && newCaption !== pendingApproval.caption) {
+            await getSupabase()
+              .from('pending_posts')
+              .update({ caption: newCaption })
+              .eq('id', pendingApproval.id);
+            await sendPostPreview(from, pendingApproval.image_url, newCaption, pendingApproval.id, pendingApproval.is_video ?? false);
+            return;
+          }
+          if (newCaption === pendingApproval.caption) {
+            await sendText(from, `That's already the active caption — tap *Approve* to post, or reply with the other number to swap.`);
+            return;
+          }
+        }
+
         if (hasScheduleIntent(text)) {
           const scheduleTime = await parseScheduleTime(text);
           if (scheduleTime && scheduleTime > new Date()) {
@@ -150,7 +197,7 @@ async function processWebhook(body: any) {
           }
         }
         // Show draft with clear instructions — user must explicitly discard to start fresh
-        await sendText(from, '👆 You have an unfinished post. Tap *Discard* to start a new one, or *Approve* to post this:');
+        await sendText(from, '👆 Still got a draft on the line — tap *Approve* to post it, or *Discard* to start fresh:');
         await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id, pendingApproval.is_video ?? false);
         return;
       }
@@ -221,11 +268,15 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     getRecentCaptions(),
     !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
   ]);
-  const caption = await generateCaption(
-    prompt || (isVideo ? '[No description — write a punchy, original caption for a video post. Do not reference any specific product, topic or theme from recent posts.]' : '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]'),
-    profileContext ?? undefined,
-    recentCaptions
-  );
+  const captionPrompt = prompt || (isVideo
+    ? '[No description — write a punchy, original caption for a video post. Do not reference any specific product, topic or theme from recent posts.]'
+    : '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]');
+
+  // Sibling AI flow shares one caption across both posts; variants only in the standard single-post flow.
+  const variants = wantsAiAlso
+    ? [await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions)]
+    : await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions);
+  const caption = variants[0] ?? '';
 
   const imageUrl = userMediaUrl ?? buildImageUrl(imagePromptText!, 'realistic');
 
@@ -253,6 +304,16 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     .single();
 
   if (!primaryPost) return;
+
+  // Store variants for later swap (graceful: if column not yet migrated, the
+  // update fails silently and the user just won't see the swap follow-up).
+  if (variants.length > 1) {
+    const { error: variantsErr } = await getSupabase()
+      .from('pending_posts')
+      .update({ caption_variants: variants })
+      .eq('id', primaryPost.id);
+    if (variantsErr) console.warn('[caption_variants update]', variantsErr.message);
+  }
 
   // If user sent a photo AND asked for AI version — generate sibling post
   if (wantsAiAlso && imagePromptText) {
@@ -283,6 +344,14 @@ async function handleNewPost(from: string, message: any, messageType: string) {
   }
 
   await sendPostPreview(from, imageUrl, caption, primaryPost.id, isVideo);
+
+  if (variants.length > 1) {
+    const others = variants.slice(1).map((v, i) => {
+      const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+      return `*${i + 2}.* ${trimmed}`;
+    }).join('\n\n');
+    await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+  }
 }
 
 async function getPostById(id: string) {
@@ -306,6 +375,23 @@ async function getRecentCaptions(): Promise<string[]> {
 }
 
 async function handleButtonReply(from: string, action: string, postId: string | null) {
+  // Engagement-loop actions sent after publish — no pending post is required.
+  if (action === 'next_post') {
+    await sendText(from, "✨ I'm ready — voice-note, photo, or one line and I'll write your next post.");
+    return;
+  }
+  if (action === 'schedule_next') {
+    await sendText(
+      from,
+      "📅 Send your next draft, then reply with a time:\n\n• \"post tomorrow at 9am\"\n• \"schedule for Friday 3pm\"\n• \"best time this week\"",
+    );
+    return;
+  }
+  if (action === 'refresh_voice') {
+    await handleLearnStyle(from);
+    return;
+  }
+
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
   if (!post) {
@@ -328,10 +414,15 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       return;
     }
 
-    await sendText(from, '⏳ Publishing to Instagram...');
+    const carouselItems: CarouselItem[] | null = Array.isArray(post.media_items) ? post.media_items : null;
+    const isCarousel = carouselItems !== null && carouselItems.length > 1;
+
+    await sendText(from, isCarousel ? `⏳ Publishing carousel (${carouselItems.length} slides)...` : '⏳ Publishing to Instagram...');
     let result;
     try {
-      result = await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
+      result = isCarousel
+        ? await publishCarouselToInstagram(from, post.caption, carouselItems)
+        : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
     } catch (err: any) {
       if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
         const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
@@ -342,16 +433,20 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     }
 
     await getSupabase().from('pending_posts')
-      .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
+      .update({
+        state: 'published',
+        ig_post_id: result.postId,
+        ig_post_url: result.postUrl ?? null,
+        published_at: new Date().toISOString(),
+      })
       .eq('id', post.id);
 
     if (post.sibling_id) {
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }
 
-    const linkLine = result.postUrl ? `\n\n🔗 ${result.postUrl}` : '';
     const postLabel = post.is_video ? 'video' : 'post';
-    await sendText(from, `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep creating — every post builds your audience. 🚀`);
+    await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
@@ -482,6 +577,27 @@ function isCancelScheduled(text: string): boolean {
   return /\b(cancel|remove|delete|discard)\s+(my\s+)?(next\s+)?(scheduled|upcoming)\s*(post)?\b/i.test(text.trim());
 }
 
+function isLearnStyleCommand(text: string): boolean {
+  return /^(\/style|learn\s+(my\s+)?(voice|style|tone)|refresh\s+(my\s+)?(voice|style|tone)|update\s+(my\s+)?(voice|style))[!?.\s]*$/i.test(text.trim());
+}
+
+function isCarouselCommand(text: string): boolean {
+  return /^(\/carousel|carousel|new\s+carousel|start\s+carousel)[!?.\s]*$/i.test(text.trim());
+}
+
+function isAccountsCommand(text: string): boolean {
+  return /^(\/accounts|accounts|my\s+accounts|list\s+accounts|connected\s+accounts)[!?.\s]*$/i.test(text.trim());
+}
+
+function parseUseAccountCommand(text: string): string | null {
+  const m = text.trim().match(/^(?:\/use|use|switch\s+to|post\s+as)\s+@?([A-Za-z0-9._-]+)[!?.\s]*$/i);
+  return m ? m[1].trim() : null;
+}
+
+function isCarouselFinishCommand(text: string): boolean {
+  return /^(done|finish|finalize|ready|publish|that['’]?s\s+all)[!?.\s]*$/i.test(text.trim());
+}
+
 type ProfileField = { field: 'brand_name' | 'niche' | 'tone'; value: string };
 
 function parseProfileUpdate(text: string): ProfileField | null {
@@ -499,14 +615,22 @@ function parseProfileUpdate(text: string): ProfileField | null {
 async function handleHelp(from: string) {
   const accountUrl = `${APP_URL}/account?phone=${encodeURIComponent(from)}`;
   await sendText(from,
-    `🤖 *Here's what I can do:*\n\n` +
-    `📸 *Create a post*\nSend any text, photo, video, or voice note — I write the caption and prepare your post for review.\n\n` +
-    `✅ *Approve / Edit / Discard*\nAfter each draft, tap the buttons to publish, refine, or bin it.\n\n` +
-    `🗓️ *Schedule*\nWhile a draft is waiting, reply with a time:\n"Post tomorrow at 9am" · "Schedule for Friday 3pm"\n\n` +
-    `✏️ *Edit your profile*\n"Change my tone to casual"\n"Update niche to fitness"\n"Set brand name to ..."\n\n` +
-    `📊 *Check your queue*\nSend: *status*\n\n` +
-    `🚫 *Cancel a scheduled post*\nSend: *cancel scheduled*\n\n` +
-    `🔗 *Web dashboard*\n${accountUrl}`
+    `🤖 *Kreya commands*\n\n` +
+    `*✨ Create*\n` +
+    `🎙️ Voice note, photo, video, or one line → I draft the caption.\n` +
+    `🎞️ */carousel* → drop 2–10 photos, then *done*.\n` +
+    `🧠 */style* → re-read your last 50 IG captions to refresh my tone.\n\n` +
+    `*📝 On a draft*\n` +
+    `Tap ✅ Approve · ✏️ Edit · 🗑️ Discard.\n` +
+    `Reply *1*, *2*, *3* to swap caption variant.\n` +
+    `"Post tomorrow at 9am" / "Friday 3pm" → schedule it.\n\n` +
+    `*🛠️ Manage*\n` +
+    `*status* — see your queue.\n` +
+    `*accounts* — list connected Instagram accounts.\n` +
+    `*use @handle* — switch which account I post to.\n` +
+    `*cancel scheduled* — drop the next scheduled post.\n` +
+    `"Change my tone to casual" / "Update niche to fitness" / "Set brand name to ..."\n\n` +
+    `🔗 ${accountUrl}`
   );
 }
 
@@ -536,6 +660,217 @@ async function handleStatus(from: string) {
   });
 
   await sendText(from, `📋 *Your queue (${posts.length})*\n\n${lines.join('\n\n')}`);
+}
+
+async function handleLearnStyle(from: string) {
+  const { data: account } = await getSupabase()
+    .from('instagram_accounts')
+    .select('instagram_user_id, access_token, account_name')
+    .in('whatsapp_phone', phoneVariants(from))
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!account?.access_token || !account.instagram_user_id) {
+    const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+    await sendText(from, `📸 Connect Instagram first so I can read your past captions:\n\n${connectUrl}`);
+    return;
+  }
+
+  await sendText(from, `🧠 Reading your last 50 captions from *@${account.account_name}* to learn your voice...`);
+  const result = await learnStyleFromInstagram(from, account.instagram_user_id, account.access_token);
+  if (result.ok) {
+    await sendText(from, `✨ Voice updated — analyzed ${result.captionsFound} past captions. Your next post will sound more like you.`);
+  } else if (result.captionsFound < 3) {
+    await sendText(from, `🤔 I need at least 3 captions to learn from. *@${account.account_name}* has ${result.captionsFound} so far — post a few more, then try again.`);
+  } else {
+    await sendText(from, `⚠️ Couldn't update your voice profile right now — try again in a minute.`);
+  }
+}
+
+async function handleListAccounts(from: string) {
+  const supabase = getSupabase();
+  const { data: accounts } = await supabase
+    .from('instagram_accounts')
+    .select('account_name, is_active, token_expires_at')
+    .in('whatsapp_phone', phoneVariants(from))
+    .order('account_name');
+
+  if (!accounts?.length) {
+    const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+    await sendText(from, `📸 No Instagram accounts connected yet.\n\nConnect one:\n${connectUrl}`);
+    return;
+  }
+
+  const lines = accounts.map(a => {
+    const days = a.token_expires_at
+      ? Math.ceil((new Date(a.token_expires_at).getTime() - Date.now()) / 86_400_000)
+      : null;
+    const expiry = days !== null ? ` _(${days}d)_` : '';
+    const marker = a.is_active ? '*●*' : '○';
+    return `${marker} @${a.account_name}${expiry}`;
+  });
+
+  const manageUrl = `${APP_URL}/connect?phone=${encodeURIComponent(from)}`;
+  const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+  await sendText(
+    from,
+    `📸 *Connected accounts*\n\n${lines.join('\n')}\n\n*●* = active (where I post)\n\n*Switch:* "use @handle"\n*Add another:* ${connectUrl}\n*Manage:* ${manageUrl}`,
+  );
+}
+
+async function handleUseAccount(from: string, handle: string) {
+  const supabase = getSupabase();
+  const target = handle.toLowerCase();
+  const { data: accounts } = await supabase
+    .from('instagram_accounts')
+    .select('instagram_user_id, account_name, is_active')
+    .in('whatsapp_phone', phoneVariants(from));
+
+  if (!accounts?.length) {
+    await sendText(from, '📸 No accounts connected. Send *accounts* to see options.');
+    return;
+  }
+
+  const match = accounts.find(a => a.account_name.toLowerCase() === target);
+  if (!match) {
+    const choices = accounts.map(a => `• @${a.account_name}`).join('\n');
+    await sendText(from, `🤔 No *@${handle}* on your phone.\n\nConnected:\n${choices}`);
+    return;
+  }
+
+  if (match.is_active) {
+    await sendText(from, `✓ *@${match.account_name}* is already the active account.`);
+    return;
+  }
+
+  await supabase
+    .from('instagram_accounts')
+    .update({ is_active: false })
+    .in('whatsapp_phone', phoneVariants(from))
+    .neq('instagram_user_id', match.instagram_user_id);
+
+  await supabase
+    .from('instagram_accounts')
+    .update({ is_active: true })
+    .eq('instagram_user_id', match.instagram_user_id);
+
+  await sendText(from, `✓ Switched — I'll post to *@${match.account_name}* from now on.`);
+}
+
+async function handleCarouselStart(from: string) {
+  const supabase = getSupabase();
+  // Discard any existing pending draft so the collection lane is clean
+  const { data: stale } = await supabase
+    .from('pending_posts').select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  await supabase.from('pending_posts').insert({
+    whatsapp_phone: from,
+    state: 'collecting_carousel',
+    media_items: [],
+    caption: '',
+  });
+
+  await sendText(
+    from,
+    "🎞️ *Carousel mode*\n\nSend 2–10 photos one by one. Type *done* when you're ready, or *cancel* to bail.",
+  );
+}
+
+async function handleCarouselAppend(from: string, post: { id: string; media_items: CarouselItem[] | null }, message: { image?: { id?: string; mime_type?: string } }) {
+  const items: CarouselItem[] = post.media_items ?? [];
+  if (items.length >= 10) {
+    await sendText(from, "⚠️ Carousels max out at 10 photos. Type *done* to publish what you've got.");
+    return;
+  }
+
+  const mediaId = message.image?.id;
+  const mimeType = message.image?.mime_type ?? 'image/jpeg';
+  if (!mediaId) {
+    await sendText(from, '📎 Couldn\'t read that photo — try sending it again.');
+    return;
+  }
+
+  let url: string;
+  try {
+    url = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    await sendText(from, '📎 Couldn\'t download that photo — try again.');
+    return;
+  }
+
+  const next = [...items, { url, is_video: false }];
+  await getSupabase()
+    .from('pending_posts')
+    .update({ media_items: next })
+    .eq('id', post.id);
+
+  const remaining = 10 - next.length;
+  const tail = remaining === 0
+    ? 'That\'s the max — type *done* to publish.'
+    : remaining === 1
+      ? 'Room for 1 more, or type *done* to publish.'
+      : `Send up to ${remaining} more, or type *done* to publish.`;
+  await sendText(from, `✅ Photo *${next.length}* added. ${tail}`);
+}
+
+async function handleCarouselFinish(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
+  const items: CarouselItem[] = post.media_items ?? [];
+  if (items.length < 2) {
+    await sendText(from, '⚠️ A carousel needs at least 2 photos. Send another, or type *cancel*.');
+    return;
+  }
+
+  await sendText(from, '✍️ Writing caption for your carousel…');
+
+  const [profileContext, recentCaptions] = await Promise.all([
+    getProfileContextForPhone(from),
+    getRecentCaptions(),
+  ]);
+  const variants = await generateCaptionVariants(
+    `[Carousel of ${items.length} photos. Write a single caption that frames the whole set; do not number or itemize each slide.]`,
+    profileContext ?? undefined,
+    recentCaptions,
+  );
+  const caption = variants[0] ?? '';
+
+  await getSupabase()
+    .from('pending_posts')
+    .update({
+      state: 'pending_approval',
+      caption,
+      image_url: items[0].url,
+    })
+    .eq('id', post.id);
+
+  if (variants.length > 1) {
+    const { error } = await getSupabase()
+      .from('pending_posts')
+      .update({ caption_variants: variants })
+      .eq('id', post.id);
+    if (error) console.warn('[caption_variants update]', error.message);
+  }
+
+  await sendText(from, `🎞️ Carousel ready — *${items.length} slides*. First slide previewed below.`);
+  await sendPostPreview(from, items[0].url, caption, post.id, false);
+
+  if (variants.length > 1) {
+    const others = variants.slice(1).map((v, i) => {
+      const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+      return `*${i + 2}.* ${trimmed}`;
+    }).join('\n\n');
+    await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+  }
+}
+
+async function handleCarouselCancel(from: string, post: { id: string }) {
+  await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
+  await sendText(from, '🗑️ Carousel cancelled.');
 }
 
 async function handleCancelScheduled(from: string) {
