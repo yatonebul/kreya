@@ -57,6 +57,12 @@ ALTER TABLE pending_posts
   ADD COLUMN IF NOT EXISTS caption_variants JSONB;
 
 
+-- 8. user_profiles — voice/style learned from the user's past Instagram captions.
+-- Augments profile_context (which holds the brand/niche/tone the user typed in onboarding).
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS learned_style TEXT;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

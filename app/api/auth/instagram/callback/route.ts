@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendText } from '@/lib/whatsapp-send';
+import { learnStyleFromInstagram } from '@/lib/style-memory';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
@@ -113,6 +114,19 @@ export async function GET(request: NextRequest) {
         whatsappPhone,
         `✅ *@${meData.username}* connected!\n\nYou're all set — send me a message, photo, video, or voice note and I'll create your next Instagram post. 🚀`
       ).catch(() => {});
+    }
+
+    // 6. Learn the user's voice from their last 50 captions (fire-and-forget — don't block the redirect)
+    if (whatsappPhone) {
+      const phone = whatsappPhone;
+      const igUserId = meData.id as string;
+      const token = accessToken as string;
+      after(async () => {
+        const result = await learnStyleFromInstagram(phone, igUserId, token);
+        if (result.ok) {
+          await sendText(phone, `🧠 I read your last ${result.captionsFound} captions to learn your voice. Future posts will sound more like you.`).catch(() => {});
+        }
+      });
     }
 
     const phoneParam = whatsappPhone ? `&phone=${encodeURIComponent(whatsappPhone)}` : '';

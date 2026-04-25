@@ -67,6 +67,7 @@
     "whatsapp_media": "lib/whatsapp-media.ts",
     "caption_generator": "lib/caption-generator.ts",
     "image_generator": "lib/image-generator.ts",
+    "style_memory": "lib/style-memory.ts",
     "onboarding": "lib/whatsapp-onboarding.ts",
     "schedule_parser": "lib/schedule-parser.ts",
     "transcribe": "lib/transcribe.ts",
@@ -79,7 +80,7 @@
   "database_schema": {
     "pending_posts": "id, whatsapp_phone, caption, caption_variants (jsonb, 3 alternates), image_url, user_image_url, image_source (user|ai), is_video, sibling_id, state (pending_approval|in_edit|scheduled|published|discarded), scheduled_for, ig_post_id, ig_post_url, created_at",
     "instagram_accounts": "id, account_name, instagram_user_id, access_token, token_expires_at, is_active",
-    "user_profiles": "id, whatsapp_phone, brand_name, niche, tone, profile_context, onboarding_step (1-4), created_at",
+    "user_profiles": "id, whatsapp_phone, brand_name, niche, tone, profile_context, learned_style (Haiku-summarized voice from past IG captions), onboarding_step (1-4), created_at",
     "social_audit_log": "general audit log"
   },
 
@@ -117,11 +118,11 @@
 
   "completed_this_session": [
     "Strategy doc: docs/strategy-chat-first-social-os.md (chat-first social OS vision + phase 1 plan)",
-    "Caption variants v1 — generateCaptionVariants returns 3 angles (hook/story/CTA) in one Sonnet 4.6 call. Stored in pending_posts.caption_variants jsonb. User replies bare 1/2/3 to swap active caption."
+    "Caption variants v1 — generateCaptionVariants returns 3 angles (hook/story/CTA) in one Sonnet 4.6 call. Stored in pending_posts.caption_variants jsonb. User replies bare 1/2/3 to swap active caption.",
+    "Style memory v0 — lib/style-memory.ts pulls last 50 IG captions via Graph API, summarizes voice via Haiku into user_profiles.learned_style. Triggered fire-and-forget after OAuth callback; refresh on demand via WA command 'learn my style'. getProfileContextForPhone concatenates brand profile + learned style for every caption call."
   ],
 
   "next_session_ideas": [
-    "Style memory v0 — pull last 50 IG captions on OAuth, summarize into user_profiles.profile_context",
     "Carousel + Reels support — extend pending_posts with media_items array",
     "24h post-mortem cron — pull IG insights, send WA digest with top metric + suggestion",
     "URL repurposing — TikTok/IG/tweet link → re-encoded media + rewritten caption",

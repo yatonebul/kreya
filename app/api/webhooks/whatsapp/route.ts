@@ -2,6 +2,7 @@ import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
+import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
@@ -118,6 +119,7 @@ async function processWebhook(body: any) {
         if (isHelpCommand(txt))       { await handleHelp(from);                               return; }
         if (isStatusCheck(txt))       { await handleStatus(from);                             return; }
         if (isCancelScheduled(txt))   { await handleCancelScheduled(from);                    return; }
+        if (isLearnStyleCommand(txt)) { await handleLearnStyle(from);                         return; }
         const profileEdit = parseProfileUpdate(txt);
         if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
       }
@@ -525,6 +527,10 @@ function isCancelScheduled(text: string): boolean {
   return /\b(cancel|remove|delete|discard)\s+(my\s+)?(next\s+)?(scheduled|upcoming)\s*(post)?\b/i.test(text.trim());
 }
 
+function isLearnStyleCommand(text: string): boolean {
+  return /^(\/style|learn\s+(my\s+)?(voice|style|tone)|refresh\s+(my\s+)?(voice|style|tone)|update\s+(my\s+)?(voice|style))[!?.\s]*$/i.test(text.trim());
+}
+
 type ProfileField = { field: 'brand_name' | 'niche' | 'tone'; value: string };
 
 function parseProfileUpdate(text: string): ProfileField | null {
@@ -549,6 +555,7 @@ async function handleHelp(from: string) {
     `✏️ *Edit your profile*\n"Change my tone to casual"\n"Update niche to fitness"\n"Set brand name to ..."\n\n` +
     `📊 *Check your queue*\nSend: *status*\n\n` +
     `🚫 *Cancel a scheduled post*\nSend: *cancel scheduled*\n\n` +
+    `🧠 *Refresh my voice*\nSend: *learn my style* — I'll re-read your last 50 IG captions and match your tone better.\n\n` +
     `🔗 *Web dashboard*\n${accountUrl}`
   );
 }
@@ -579,6 +586,31 @@ async function handleStatus(from: string) {
   });
 
   await sendText(from, `📋 *Your queue (${posts.length})*\n\n${lines.join('\n\n')}`);
+}
+
+async function handleLearnStyle(from: string) {
+  const { data: account } = await getSupabase()
+    .from('instagram_accounts')
+    .select('instagram_user_id, access_token, account_name')
+    .in('whatsapp_phone', phoneVariants(from))
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!account?.access_token || !account.instagram_user_id) {
+    const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+    await sendText(from, `📸 Connect Instagram first so I can read your past captions:\n\n${connectUrl}`);
+    return;
+  }
+
+  await sendText(from, `🧠 Reading your last 50 captions from *@${account.account_name}* to learn your voice...`);
+  const result = await learnStyleFromInstagram(from, account.instagram_user_id, account.access_token);
+  if (result.ok) {
+    await sendText(from, `✨ Voice updated — analyzed ${result.captionsFound} past captions. Your next post will sound more like you.`);
+  } else if (result.captionsFound < 3) {
+    await sendText(from, `🤔 I need at least 3 captions to learn from. *@${account.account_name}* has ${result.captionsFound} so far — post a few more, then try again.`);
+  } else {
+    await sendText(from, `⚠️ Couldn't update your voice profile right now — try again in a minute.`);
+  }
 }
 
 async function handleCancelScheduled(from: string) {
