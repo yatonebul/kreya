@@ -11,6 +11,7 @@ import { CancelScheduledButton } from '@/app/_components/cancel-scheduled-button
 import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
 import { WaButton } from '@/app/_components/wa-button';
 import { FirstPostCard } from '@/app/_components/first-post-card';
+import { RefreshVoiceButton } from '@/app/_components/refresh-voice-button';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -249,6 +250,35 @@ export default async function AccountPage({
           ))}
         </div>
 
+        {/* Brand profile — promoted above Instagram because it controls every caption */}
+        <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>Brand profile</h2>
+              <span
+                className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
+                style={{
+                  fontFamily: 'var(--font-space-mono)',
+                  color: 'var(--mint)',
+                  background: 'rgba(0,229,160,0.10)',
+                  border: '1px solid rgba(0,229,160,0.35)',
+                }}
+              >
+                Drives every caption
+              </span>
+            </div>
+            <RefreshVoiceButton phone={queryId} />
+          </div>
+          <BrandEditForm
+            phone={queryId}
+            initial={{
+              brand_name: profile?.brand_name ?? '',
+              niche:      profile?.niche      ?? '',
+              tone:       profile?.tone       ?? '',
+            }}
+          />
+        </section>
+
         {/* Instagram */}
         <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
           <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>Instagram</h2>
@@ -290,19 +320,6 @@ export default async function AccountPage({
             <LinkPhoneForm email={sessionId} />
           </section>
         )}
-
-        {/* Brand profile */}
-        <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
-          <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>Brand profile</h2>
-          <BrandEditForm
-            phone={queryId}
-            initial={{
-              brand_name: profile?.brand_name ?? '',
-              niche:      profile?.niche      ?? '',
-              tone:       profile?.tone       ?? '',
-            }}
-          />
-        </section>
 
         {/* Scheduled posts */}
         {(scheduled?.length ?? 0) > 0 && (
