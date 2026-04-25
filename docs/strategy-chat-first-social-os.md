@@ -200,29 +200,30 @@ Hybrid: flat SaaS + metered AI add-ons (per video-minute repurpose, per generate
 - Schema: `pending_posts`, `instagram_accounts`, `user_profiles`, `social_audit_log`
 
 ### Known broken / blocking gaps (fix first)
-1. **Scheduled publish cron disabled** — Vercel Hobby blocks every-5min. Move to Supabase `pg_cron` calling an internal endpoint with `CRON_SECRET`. Unblocks an existing feature already in the UI.
-2. **IG publish hardcoded to `nepostnuto`** — `instagram-publish.ts` ignores the user. Add a `whatsapp_phone → instagram_user_id` mapping (FK on `instagram_accounts`) and select the active account per message. This is the single biggest blocker to onboarding any second user.
+1. ⏳ **Scheduled publish cron disabled** — Vercel Hobby blocks every-5min. Will be fixed by user via Supabase `pg_cron` (afternoon, separate session).
+2. ✅ **Multi-account routing** — already shipped. `lib/instagram-publish.ts:21–26` looks up the active account by `whatsapp_phone`; OAuth callback writes the mapping (`migrations.sql` block 4).
 
 ### Phase 1 — high-leverage additions on top of what exists (2 weeks)
 
-**Step 1 (day 1) — Fix scheduling cron**
+**Step 1 (day 1) — Fix scheduling cron** ⏳ user, this afternoon
 - `pg_cron` job → `pg_net.http_post` to `/api/cron/publish-scheduled` with bearer `CRON_SECRET`
-- Lock rows with `UPDATE … WHERE state='scheduled' AND scheduled_for <= now() RETURNING …` inside a transaction (Postgres is single-shot — no separate queue worker needed at this scale)
+- Lock rows with `UPDATE … WHERE state='scheduled' AND scheduled_for <= now() RETURNING …` inside a transaction
 
-**Step 2 (day 2–3) — Multi-account routing**
-- Add `instagram_accounts.whatsapp_phone` (or junction table for multi-IG-per-user)
-- Replace hardcoded account lookup in `instagram-publish.ts`
-- Connect flow already exists at `app/connect` — wire it to write the mapping on OAuth callback
+**Step 2 — Multi-account routing** ✅ already shipped (pre-existing)
 
-**Step 3 (day 3–4) — Caption variants (3 options)**
-- Update `caption-generator.ts` to return 3 variants in one call (one prompt, structured output)
-- Send WA `interactive` button message (already supported in `message_types_handled`) with 3 caption choices
-- Persist all 3 in `pending_posts.caption_variants jsonb`; user pick promotes one to `caption`
+**Step 3 — Caption variants (3 options)** ✅ shipped this session — commit `1d0c989`
+- `generateCaptionVariants` returns 3 angles (hook/story/CTA) in one Sonnet 4.6 call
+- Stored in `pending_posts.caption_variants jsonb`
+- User replies bare `1`/`2`/`3` to swap the active caption; preview re-sent
+- Sibling AI-image flow keeps single-caption behavior
+- Migration is non-blocking — variants persisted via follow-up update so old DB schema degrades gracefully
 
-**Step 4 (day 5–7) — Style memory v0**
-- On IG OAuth, pull last 50 captions via Graph API
-- Summarize tone via Claude (one-shot, cached) into `user_profiles.profile_context` (column already exists)
-- Inject as cached system prompt — Anthropic prompt caching saves real money once it's hot
+**Step 4 — Style memory v0** ✅ shipped this session — commit `de1e18f`
+- `lib/style-memory.ts` pulls last 50 IG captions via Graph API, summarizes voice with Haiku 4.5 into `user_profiles.learned_style`
+- Triggered fire-and-forget (`next/server` `after`) from OAuth callback — does not block the redirect
+- WA command `learn my style` (also `refresh tone`, `/style`) re-runs analysis on demand
+- `getProfileContextForPhone` concatenates brand profile + learned style for every caption call
+- Schema-tolerant fallback: works on legacy DB until migration runs
 - Highest-leverage AI upgrade: every caption gets noticeably more on-brand for ~1 day of work
 
 **Step 5 (day 8–10) — Carousel + Reels**
@@ -248,3 +249,11 @@ TikTok/LinkedIn publishing, public API, AI cost metering for billing.
 
 ### Build first today
 **Step 1 (cron fix) + Step 2 (multi-account).** Together they unblock onboarding any user beyond the founder account and fix a feature the UI already advertises. Step 3 (caption variants) is the next-best-ROI day of work after that.
+
+### Required to flip new features on
+Run these in Supabase SQL editor (idempotent):
+```sql
+ALTER TABLE pending_posts  ADD COLUMN IF NOT EXISTS caption_variants JSONB;
+ALTER TABLE user_profiles  ADD COLUMN IF NOT EXISTS learned_style    TEXT;
+```
+Both already in `supabase/migrations.sql` (blocks 7 + 8). Code degrades gracefully if not run, but variants won't persist and learned style won't save until they exist.
