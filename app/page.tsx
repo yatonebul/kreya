@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { PhoneForm } from './_components/phone-form';
 import { EmailForm } from './_components/email-form';
+import { ChatPreview } from './_components/chat-preview';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '';
@@ -52,7 +53,9 @@ export default async function Home() {
       </nav>
 
       {/* Hero */}
-      <section className="flex flex-col items-center justify-center flex-1 text-center px-6 pt-16 pb-24 gap-8">
+      <section className="flex-1 px-6 lg:px-12 pt-12 lg:pt-16 pb-24 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.05fr,1fr] gap-12 lg:gap-16 items-center">
+          <div className="flex flex-col items-center lg:items-start text-center lg:text-left gap-7">
         <span
           className="inline-flex items-center gap-2 text-xs tracking-widest uppercase px-3 py-1 rounded-full"
           style={{ fontFamily: 'var(--font-space-mono)', background: 'var(--surf3)', color: 'var(--mint)' }}
@@ -62,7 +65,7 @@ export default async function Home() {
         </span>
 
         <h1
-          className="text-5xl md:text-7xl font-extrabold leading-[1.05] max-w-3xl"
+          className="text-5xl md:text-6xl xl:text-7xl font-extrabold leading-[1.05] max-w-2xl"
           style={{ fontFamily: 'var(--font-syne)' }}
         >
           Speak it.{' '}
@@ -70,7 +73,7 @@ export default async function Home() {
         </h1>
 
         <p
-          className="text-lg md:text-xl max-w-xl leading-relaxed"
+          className="text-base md:text-lg max-w-xl leading-relaxed"
           style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}
         >
           Voice-note your idea on WhatsApp. Kreya writes the caption in your voice and publishes to Instagram — in under{' '}
@@ -78,7 +81,7 @@ export default async function Home() {
         </p>
 
         {/* Platform badges — Instagram is live; others are colored ghosts under "Coming next" */}
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center lg:items-start gap-3">
           <div
             className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full"
             style={{
@@ -109,14 +112,14 @@ export default async function Home() {
             </span>
           </div>
 
-          <div className="flex flex-col items-center gap-2 mt-1">
+          <div className="flex flex-col items-center lg:items-start gap-2 mt-1">
             <span
               className="text-[10px] tracking-[0.22em] uppercase"
               style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}
             >
               Coming next
             </span>
-            <div className="flex flex-wrap items-center justify-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-1.5">
               {[
                 { name: 'TikTok',   color: '#FF6B8A' },
                 { name: 'LinkedIn', color: '#5E35FF' },
@@ -171,6 +174,13 @@ export default async function Home() {
               Drop your number — I&apos;ll WhatsApp you the link.
             </p>
             <PhoneForm />
+          </div>
+        </div>
+          </div>
+
+          {/* Right column — chat preview phone mock */}
+          <div className="w-full flex justify-center lg:justify-end mt-4 lg:mt-0">
+            <ChatPreview />
           </div>
         </div>
       </section>
