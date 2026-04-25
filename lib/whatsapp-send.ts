@@ -73,6 +73,30 @@ export async function sendInviteTemplate(to: string): Promise<boolean> {
   }
 }
 
+// Post-publish engagement loop — three quick-reply buttons that keep the
+// creator in the chat instead of ending the conversation on a flat 'live!'
+// message. Button IDs are routed in the webhook (handleButtonReply).
+export async function sendPostPublishedActions(to: string, postUrl: string | undefined, postLabel: string) {
+  const linkLine = postUrl ? `\n\n🔗 ${postUrl}` : '';
+  const body = `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep the streak going — what's next?`;
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: 'next_post',     title: '➕ Next post' } },
+          { type: 'reply', reply: { id: 'schedule_next', title: '📅 Schedule one' } },
+          { type: 'reply', reply: { id: 'refresh_voice', title: '🧠 Refresh voice' } },
+        ],
+      },
+    },
+  });
+}
+
 // postId is encoded in each button ID so replying to any historical preview
 // always acts on the correct post, not the latest one.
 export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string, isVideo = false) {

@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -351,6 +351,23 @@ async function getRecentCaptions(): Promise<string[]> {
 }
 
 async function handleButtonReply(from: string, action: string, postId: string | null) {
+  // Engagement-loop actions sent after publish — no pending post is required.
+  if (action === 'next_post') {
+    await sendText(from, "✨ I'm ready — voice-note, photo, or one line and I'll write your next post.");
+    return;
+  }
+  if (action === 'schedule_next') {
+    await sendText(
+      from,
+      "📅 Send your next draft, then reply with a time:\n\n• \"post tomorrow at 9am\"\n• \"schedule for Friday 3pm\"\n• \"best time this week\"",
+    );
+    return;
+  }
+  if (action === 'refresh_voice') {
+    await handleLearnStyle(from);
+    return;
+  }
+
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
   if (!post) {
@@ -394,9 +411,8 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }
 
-    const linkLine = result.postUrl ? `\n\n🔗 ${result.postUrl}` : '';
     const postLabel = post.is_video ? 'video' : 'post';
-    await sendText(from, `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep creating — every post builds your audience. 🚀`);
+    await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
