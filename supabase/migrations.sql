@@ -86,6 +86,22 @@ ALTER TABLE pending_posts
   ADD COLUMN IF NOT EXISTS media_items JSONB;
 
 
+-- 11. instagram_accounts — multi-account-per-phone support.
+--     org_id is a leftover NOT NULL column from an earlier multi-tenant
+--     scaffolding iteration. It blocks new IG connections (UI shows a DB
+--     error on a fresh OAuth). Code never reads it; service-role-key access
+--     bypasses RLS, so dropping the constraint is safe.
+ALTER TABLE instagram_accounts ALTER COLUMN org_id DROP NOT NULL;
+
+
+-- 12. user_profiles — pricing plan stub for future paywalls.
+--     'free' allows one connected IG account; 'pro' / 'agency' will allow
+--     multiple. The OAuth callback / UI does NOT enforce yet — column is
+--     here so the gate can be flipped without another migration.
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

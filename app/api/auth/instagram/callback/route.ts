@@ -82,8 +82,23 @@ export async function GET(request: NextRequest) {
     const meData = await meRes.json();
     if (!meData.id) throw new Error('Could not fetch user info');
 
-    // 4. Upsert token + phone in Supabase (manual check avoids missing unique constraint)
+    // 4. Upsert token + phone in Supabase (manual check avoids missing unique constraint).
+    //    Whoever just completed OAuth becomes the active account for that phone — any
+    //    sibling rows (other IGs already linked to the same phone) are demoted to
+    //    is_active=false. The user can flip the active one back on /connect.
     const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
+
+    if (whatsappPhone) {
+      const phoneSearch = whatsappPhone.startsWith('+')
+        ? [whatsappPhone, whatsappPhone.slice(1)]
+        : [whatsappPhone, `+${whatsappPhone}`];
+      await getSupabase()
+        .from('instagram_accounts')
+        .update({ is_active: false })
+        .in('whatsapp_phone', phoneSearch)
+        .neq('instagram_user_id', meData.id);
+    }
+
     const { data: existing } = await getSupabase()
       .from('instagram_accounts').select('id').eq('instagram_user_id', meData.id).maybeSingle();
 

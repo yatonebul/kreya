@@ -121,6 +121,9 @@ async function processWebhook(body: any) {
         if (isCancelScheduled(txt))   { await handleCancelScheduled(from);                    return; }
         if (isLearnStyleCommand(txt)) { await handleLearnStyle(from);                         return; }
         if (isCarouselCommand(txt))   { await handleCarouselStart(from);                      return; }
+        if (isAccountsCommand(txt))   { await handleListAccounts(from);                       return; }
+        const useHandle = parseUseAccountCommand(txt);
+        if (useHandle)                { await handleUseAccount(from, useHandle);               return; }
         const profileEdit = parseProfileUpdate(txt);
         if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
       }
@@ -582,6 +585,15 @@ function isCarouselCommand(text: string): boolean {
   return /^(\/carousel|carousel|new\s+carousel|start\s+carousel)[!?.\s]*$/i.test(text.trim());
 }
 
+function isAccountsCommand(text: string): boolean {
+  return /^(\/accounts|accounts|my\s+accounts|list\s+accounts|connected\s+accounts)[!?.\s]*$/i.test(text.trim());
+}
+
+function parseUseAccountCommand(text: string): string | null {
+  const m = text.trim().match(/^(?:\/use|use|switch\s+to|post\s+as)\s+@?([A-Za-z0-9._-]+)[!?.\s]*$/i);
+  return m ? m[1].trim() : null;
+}
+
 function isCarouselFinishCommand(text: string): boolean {
   return /^(done|finish|finalize|ready|publish|that['’]?s\s+all)[!?.\s]*$/i.test(text.trim());
 }
@@ -614,6 +626,8 @@ async function handleHelp(from: string) {
     `"Post tomorrow at 9am" / "Friday 3pm" → schedule it.\n\n` +
     `*🛠️ Manage*\n` +
     `*status* — see your queue.\n` +
+    `*accounts* — list connected Instagram accounts.\n` +
+    `*use @handle* — switch which account I post to.\n` +
     `*cancel scheduled* — drop the next scheduled post.\n` +
     `"Change my tone to casual" / "Update niche to fitness" / "Set brand name to ..."\n\n` +
     `🔗 ${accountUrl}`
@@ -671,6 +685,76 @@ async function handleLearnStyle(from: string) {
   } else {
     await sendText(from, `⚠️ Couldn't update your voice profile right now — try again in a minute.`);
   }
+}
+
+async function handleListAccounts(from: string) {
+  const supabase = getSupabase();
+  const { data: accounts } = await supabase
+    .from('instagram_accounts')
+    .select('account_name, is_active, token_expires_at')
+    .in('whatsapp_phone', phoneVariants(from))
+    .order('account_name');
+
+  if (!accounts?.length) {
+    const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+    await sendText(from, `📸 No Instagram accounts connected yet.\n\nConnect one:\n${connectUrl}`);
+    return;
+  }
+
+  const lines = accounts.map(a => {
+    const days = a.token_expires_at
+      ? Math.ceil((new Date(a.token_expires_at).getTime() - Date.now()) / 86_400_000)
+      : null;
+    const expiry = days !== null ? ` _(${days}d)_` : '';
+    const marker = a.is_active ? '*●*' : '○';
+    return `${marker} @${a.account_name}${expiry}`;
+  });
+
+  const manageUrl = `${APP_URL}/connect?phone=${encodeURIComponent(from)}`;
+  const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+  await sendText(
+    from,
+    `📸 *Connected accounts*\n\n${lines.join('\n')}\n\n*●* = active (where I post)\n\n*Switch:* "use @handle"\n*Add another:* ${connectUrl}\n*Manage:* ${manageUrl}`,
+  );
+}
+
+async function handleUseAccount(from: string, handle: string) {
+  const supabase = getSupabase();
+  const target = handle.toLowerCase();
+  const { data: accounts } = await supabase
+    .from('instagram_accounts')
+    .select('instagram_user_id, account_name, is_active')
+    .in('whatsapp_phone', phoneVariants(from));
+
+  if (!accounts?.length) {
+    await sendText(from, '📸 No accounts connected. Send *accounts* to see options.');
+    return;
+  }
+
+  const match = accounts.find(a => a.account_name.toLowerCase() === target);
+  if (!match) {
+    const choices = accounts.map(a => `• @${a.account_name}`).join('\n');
+    await sendText(from, `🤔 No *@${handle}* on your phone.\n\nConnected:\n${choices}`);
+    return;
+  }
+
+  if (match.is_active) {
+    await sendText(from, `✓ *@${match.account_name}* is already the active account.`);
+    return;
+  }
+
+  await supabase
+    .from('instagram_accounts')
+    .update({ is_active: false })
+    .in('whatsapp_phone', phoneVariants(from))
+    .neq('instagram_user_id', match.instagram_user_id);
+
+  await supabase
+    .from('instagram_accounts')
+    .update({ is_active: true })
+    .eq('instagram_user_id', match.instagram_user_id);
+
+  await sendText(from, `✓ Switched — I'll post to *@${match.account_name}* from now on.`);
 }
 
 async function handleCarouselStart(from: string) {
