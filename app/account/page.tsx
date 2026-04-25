@@ -12,6 +12,7 @@ import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
 import { WaButton } from '@/app/_components/wa-button';
 import { FirstPostCard } from '@/app/_components/first-post-card';
 import { RefreshVoiceButton } from '@/app/_components/refresh-voice-button';
+import { TokenRenewalBanner } from '@/app/_components/token-renewal-banner';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -223,6 +224,12 @@ export default async function AccountPage({
           <LogoutButton />
         </div>
       </nav>
+
+      <TokenRenewalBanner
+        days={igDays}
+        connectUrl={connectUrl}
+        accountName={igAccount?.account_name ?? null}
+      />
 
       <div className="flex-1 px-6 md:px-12 py-10 pb-28 md:pb-10 max-w-2xl mx-auto w-full flex flex-col gap-8">
 
