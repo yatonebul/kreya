@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
+import { WaButton } from '@/app/_components/wa-button';
 
 function getSupabase() {
   return createClient(
@@ -73,12 +75,15 @@ export default async function ConnectPage({
         <a href="/" className="text-xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>
           Kreya
         </a>
-        <span className="text-xs tracking-widest uppercase" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
-          {isPersonalized ? 'Your Account' : 'Connections'}
-        </span>
+        <div className="flex items-center gap-3">
+          <WaButton />
+          <span className="text-xs tracking-widest uppercase hidden md:inline" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+            {isPersonalized ? 'Your Account' : 'Connections'}
+          </span>
+        </div>
       </nav>
 
-      <div className="flex-1 px-6 md:px-12 py-12 max-w-2xl mx-auto w-full flex flex-col gap-6">
+      <div className="flex-1 px-6 md:px-12 py-12 pb-28 md:pb-12 max-w-2xl mx-auto w-full flex flex-col gap-6">
 
         {/* Toast */}
         {params.connected && (
@@ -192,6 +197,8 @@ export default async function ConnectPage({
         )}
 
       </div>
+
+      <MobileBottomNav fallbackHref="#" showLogout={false} />
     </main>
   );
 }

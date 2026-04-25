@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
+import { WaButton } from '@/app/_components/wa-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -123,12 +125,13 @@ export default async function DashboardPage() {
           Kreya
         </a>
         <div className="flex items-center gap-4">
+          <WaButton />
           <a href="/connect" className="text-sm" style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)' }}>Connections</a>
-          <span className="text-xs tracking-widest uppercase" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>Dashboard</span>
+          <span className="text-xs tracking-widest uppercase hidden md:inline" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>Dashboard</span>
         </div>
       </nav>
 
-      <div className="flex-1 px-6 md:px-12 py-10 max-w-5xl mx-auto w-full flex flex-col gap-10">
+      <div className="flex-1 px-6 md:px-12 py-10 pb-28 md:pb-10 max-w-5xl mx-auto w-full flex flex-col gap-10">
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -171,6 +174,8 @@ export default async function DashboardPage() {
         </section>
 
       </div>
+
+      <MobileBottomNav fallbackHref="/connect" showLogout={false} />
     </main>
   );
 }
