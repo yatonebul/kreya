@@ -184,52 +184,67 @@ Hybrid: flat SaaS + metered AI add-ons (per video-minute repurpose, per generate
 
 ---
 
-## 9. Phase 1 — first implementation steps
+## 9. What's already shipped vs what to build next
 
-Ship the foundation that everything else hangs off. Two-week target.
+### Already in repo (do not rebuild)
+- WA webhook + media handling — `app/api/webhooks/whatsapp/route.ts`, `lib/whatsapp-media.ts`
+- IG publish (single account) — `lib/instagram-publish.ts`
+- Caption gen (Sonnet 4.6) — `lib/caption-generator.ts`
+- AI image gen (Pollinations) — `lib/image-generator.ts`
+- Voice → post (Groq Whisper) — `lib/transcribe.ts`
+- NL schedule parsing (Haiku) — `lib/schedule-parser.ts`
+- Onboarding wizard (brand → niche → tone) — `lib/whatsapp-onboarding.ts`
+- Edit flow (refinement + media swap) — handled in webhook route
+- Token refresh cron — `app/api/cron/refresh-instagram-tokens/route.ts`
+- Web companion — `app/connect`, `app/dashboard`, `app/account`, `app/admin`
+- Schema: `pending_posts`, `instagram_accounts`, `user_profiles`, `social_audit_log`
 
-### Step 1 — Schema + workspaces (day 1–2)
-- Tables: `workspaces`, `members`, `social_accounts`, `posts`, `scheduled_posts`, `media_assets`, `ai_usage`
-- RLS per workspace
-- Migration + seed in Supabase
+### Known broken / blocking gaps (fix first)
+1. **Scheduled publish cron disabled** — Vercel Hobby blocks every-5min. Move to Supabase `pg_cron` calling an internal endpoint with `CRON_SECRET`. Unblocks an existing feature already in the UI.
+2. **IG publish hardcoded to `nepostnuto`** — `instagram-publish.ts` ignores the user. Add a `whatsapp_phone → instagram_user_id` mapping (FK on `instagram_accounts`) and select the active account per message. This is the single biggest blocker to onboarding any second user.
 
-### Step 2 — WhatsApp ingestion (day 2–4)
-- WA Cloud API webhook → `/api/wa/webhook` Edge Function
-- Verify signature, dedup by `wa_message_id`
-- Persist message + media to Storage
-- Enqueue for processing
+### Phase 1 — high-leverage additions on top of what exists (2 weeks)
 
-### Step 3 — Conversational composer (day 4–6)
-- Claude Haiku 4.5 for fast caption draft (3 variants)
-- Reply with rich preview card (image + 3 caption buttons)
-- State machine per chat thread: `received → drafting → previewing → confirmed → scheduled/posted`
+**Step 1 (day 1) — Fix scheduling cron**
+- `pg_cron` job → `pg_net.http_post` to `/api/cron/publish-scheduled` with bearer `CRON_SECRET`
+- Lock rows with `UPDATE … WHERE state='scheduled' AND scheduled_for <= now() RETURNING …` inside a transaction (Postgres is single-shot — no separate queue worker needed at this scale)
 
-### Step 4 — IG publish (day 6–8)
-- Meta OAuth flow (Business/Creator only) — web companion route
-- Token storage + refresh worker
-- Container → publish for Feed (single image first, carousel + Reels next)
-- Reply to chat with permalink on success
+**Step 2 (day 2–3) — Multi-account routing**
+- Add `instagram_accounts.whatsapp_phone` (or junction table for multi-IG-per-user)
+- Replace hardcoded account lookup in `instagram-publish.ts`
+- Connect flow already exists at `app/connect` — wire it to write the mapping on OAuth callback
 
-### Step 5 — Scheduling (day 8–10)
-- NL parse via Claude tool-call → `run_at` timestamp
-- `scheduled_posts` cron worker (60s tick, `FOR UPDATE SKIP LOCKED`)
-- Confirmation card with [Edit] [Cancel] quick-replies
+**Step 3 (day 3–4) — Caption variants (3 options)**
+- Update `caption-generator.ts` to return 3 variants in one call (one prompt, structured output)
+- Send WA `interactive` button message (already supported in `message_types_handled`) with 3 caption choices
+- Persist all 3 in `pending_posts.caption_variants jsonb`; user pick promotes one to `caption`
 
-### Step 6 — Style memory v0 (day 10–12)
-- On account connect, pull last 50 captions
-- Embed + summarize into a "style profile" record
-- Inject as cached system prompt on every caption call
+**Step 4 (day 5–7) — Style memory v0**
+- On IG OAuth, pull last 50 captions via Graph API
+- Summarize tone via Claude (one-shot, cached) into `user_profiles.profile_context` (column already exists)
+- Inject as cached system prompt — Anthropic prompt caching saves real money once it's hot
+- Highest-leverage AI upgrade: every caption gets noticeably more on-brand for ~1 day of work
 
-### Step 7 — Minimal web companion (day 12–14)
-- `/connect` (Meta OAuth), `/calendar` (read-only), `/billing` (Stripe)
-- PWA install, brand tokens applied
-- Mobile-first, no creation flows here — chat owns those
+**Step 5 (day 8–10) — Carousel + Reels**
+- Schema: `pending_posts.media_items jsonb[]` (or new `post_media` child table) — keep `image_url` for back-compat
+- WA: detect "send N images in 60s" as a carousel intent; ask "carousel or single?"
+- IG: extend `instagram-publish.ts` with carousel container + Reels media type
+
+**Step 6 (day 11–12) — 24h post-mortem**
+- New cron: 24h after `published`, fetch IG insights, send WA message: "Top metric + one suggestion"
+- Stores baseline in `post_metrics` table → fuels best-time + style memory v2 later
+
+**Step 7 (day 13–14) — Repurposing (wow feature, cheap to ship)**
+- Detect URL in WA message (TikTok / IG / Tweet)
+- yt-dlp on a worker → re-encode 9:16 with ffmpeg → store in `user-media` bucket
+- Run existing caption generator with "rewrite for our brand" prefix
+- Feeds straight into the existing `pending_posts` flow — zero new UX
 
 ### Defer to phase 2
-Voice → post, repurpose, group-chat workspaces, A/B testing, voice clone, analytics post-mortem.
+Group-chat workspaces (bigger schema change: workspaces/members), team approvals, A/B testing in Stories, voice persona clone, agency white-label.
 
 ### Defer to phase 3
-Multi-platform (TikTok/LinkedIn), agency white-label, public API.
+TikTok/LinkedIn publishing, public API, AI cost metering for billing.
 
-### What to build first today
-**Step 1 + Step 2.** Schema and ingestion are blocking everything else and have zero dependency on AI provider choice or IG approval timeline (Meta app review is 1–2 weeks — start that in parallel on day 1).
+### Build first today
+**Step 1 (cron fix) + Step 2 (multi-account).** Together they unblock onboarding any user beyond the founder account and fix a feature the UI already advertises. Step 3 (caption variants) is the next-best-ROI day of work after that.
