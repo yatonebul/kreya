@@ -8,9 +8,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.
 const SCOPES = [
   'instagram_business_basic',
   'instagram_business_content_publish',
-  'instagram_business_manage_messages',
-  'instagram_business_manage_insights',
-  'instagram_business_manage_comments',
 ].join(',');
 
 function getSupabase() {
