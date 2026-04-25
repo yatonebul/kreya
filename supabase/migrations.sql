@@ -52,6 +52,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_phone ON waitlist_entries(phone) 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist_entries(email) WHERE email IS NOT NULL;
 
 
+-- 7. pending_posts — 3 caption variants per draft (user picks 1/2/3 to swap)
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS caption_variants JSONB;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

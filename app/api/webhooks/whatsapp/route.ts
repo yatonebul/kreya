@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateCaption, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
+import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { publishToInstagram } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
@@ -139,6 +139,27 @@ async function processWebhook(body: any) {
       const pendingApproval = await getPostByState(from, 'pending_approval');
       if (pendingApproval && messageType === 'text') {
         const text: string = message.text.body;
+
+        // Variant swap — bare "1"/"2"/"3" picks an alternate caption
+        const variantPick = text.trim().match(/^([123])$/);
+        const variants = pendingApproval.caption_variants as string[] | null;
+        if (variantPick && Array.isArray(variants) && variants.length >= Number(variantPick[1])) {
+          const idx = Number(variantPick[1]) - 1;
+          const newCaption = variants[idx];
+          if (newCaption && newCaption !== pendingApproval.caption) {
+            await getSupabase()
+              .from('pending_posts')
+              .update({ caption: newCaption })
+              .eq('id', pendingApproval.id);
+            await sendPostPreview(from, pendingApproval.image_url, newCaption, pendingApproval.id, pendingApproval.is_video ?? false);
+            return;
+          }
+          if (newCaption === pendingApproval.caption) {
+            await sendText(from, `That's already the active caption — tap *Approve* to post, or reply with the other number to swap.`);
+            return;
+          }
+        }
+
         if (hasScheduleIntent(text)) {
           const scheduleTime = await parseScheduleTime(text);
           if (scheduleTime && scheduleTime > new Date()) {
@@ -221,11 +242,15 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     getRecentCaptions(),
     !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
   ]);
-  const caption = await generateCaption(
-    prompt || (isVideo ? '[No description — write a punchy, original caption for a video post. Do not reference any specific product, topic or theme from recent posts.]' : '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]'),
-    profileContext ?? undefined,
-    recentCaptions
-  );
+  const captionPrompt = prompt || (isVideo
+    ? '[No description — write a punchy, original caption for a video post. Do not reference any specific product, topic or theme from recent posts.]'
+    : '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]');
+
+  // Sibling AI flow shares one caption across both posts; variants only in the standard single-post flow.
+  const variants = wantsAiAlso
+    ? [await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions)]
+    : await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions);
+  const caption = variants[0] ?? '';
 
   const imageUrl = userMediaUrl ?? buildImageUrl(imagePromptText!, 'realistic');
 
@@ -253,6 +278,16 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     .single();
 
   if (!primaryPost) return;
+
+  // Store variants for later swap (graceful: if column not yet migrated, the
+  // update fails silently and the user just won't see the swap follow-up).
+  if (variants.length > 1) {
+    const { error: variantsErr } = await getSupabase()
+      .from('pending_posts')
+      .update({ caption_variants: variants })
+      .eq('id', primaryPost.id);
+    if (variantsErr) console.warn('[caption_variants update]', variantsErr.message);
+  }
 
   // If user sent a photo AND asked for AI version — generate sibling post
   if (wantsAiAlso && imagePromptText) {
@@ -283,6 +318,14 @@ async function handleNewPost(from: string, message: any, messageType: string) {
   }
 
   await sendPostPreview(from, imageUrl, caption, primaryPost.id, isVideo);
+
+  if (variants.length > 1) {
+    const others = variants.slice(1).map((v, i) => {
+      const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+      return `*${i + 2}.* ${trimmed}`;
+    }).join('\n\n');
+    await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+  }
 }
 
 async function getPostById(id: string) {

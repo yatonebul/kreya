@@ -77,7 +77,7 @@
   },
 
   "database_schema": {
-    "pending_posts": "id, whatsapp_phone, caption, image_url, user_image_url, image_source (user|ai), is_video, sibling_id, state (pending_approval|in_edit|scheduled|published|discarded), scheduled_for, ig_post_id, ig_post_url, created_at",
+    "pending_posts": "id, whatsapp_phone, caption, caption_variants (jsonb, 3 alternates), image_url, user_image_url, image_source (user|ai), is_video, sibling_id, state (pending_approval|in_edit|scheduled|published|discarded), scheduled_for, ig_post_id, ig_post_url, created_at",
     "instagram_accounts": "id, account_name, instagram_user_id, access_token, token_expires_at, is_active",
     "user_profiles": "id, whatsapp_phone, brand_name, niche, tone, profile_context, onboarding_step (1-4), created_at",
     "social_audit_log": "general audit log"
@@ -111,35 +111,26 @@
   ],
 
   "known_limitations": {
-    "scheduling": "publish-scheduled cron removed (Vercel Hobby plan — every-5min not allowed). Scheduled posts won't auto-publish until Pro plan or alternative cron.",
-    "instagram_multi_user": "instagram-publish.ts hardcoded to 'nepostnuto' account — not multi-user yet",
+    "scheduling": "publish-scheduled cron removed (Vercel Hobby plan — every-5min not allowed). Scheduled posts won't auto-publish until Pro plan or alternative cron (e.g. Supabase pg_cron + pg_net).",
     "music_collaborators": "Not available via Instagram Graph API — app-only features"
   },
 
   "completed_this_session": [
-    "Fixed Vercel deployment (was stuck on old commit — cron job caused build failures)",
-    "Consolidated to single Vercel project: kreya-github.vercel.app",
-    "Fixed photo upload — user's actual photo now shown in preview (not AI-generated)",
-    "Fixed edit flow — sending photo during edit keeps caption, only swaps image",
-    "Fixed video/GIF previews — text header used instead of broken image header",
-    "Fixed edit refinement — isVideo passed to sendPostPreview in all paths",
-    "Context-aware edit prompts and live messages (video vs image)",
-    "Better caption fallback when no description given (prevents copying recent post themes)",
-    "Voice note support via Groq Whisper — send voice → get Instagram post",
-    "Removed debug echo message"
+    "Strategy doc: docs/strategy-chat-first-social-os.md (chat-first social OS vision + phase 1 plan)",
+    "Caption variants v1 — generateCaptionVariants returns 3 angles (hook/story/CTA) in one Sonnet 4.6 call. Stored in pending_posts.caption_variants jsonb. User replies bare 1/2/3 to swap active caption."
   ],
 
   "next_session_ideas": [
-    "Multi-user Instagram support (map whatsapp_phone to instagram account)",
-    "Caption variants (show 3 options, user picks one)",
-    "WhatsApp help command (/help or 'help')",
-    "Profile update via WhatsApp ('update my tone to...')",
-    "Scheduled post publishing workaround (external cron or Supabase pg_cron)",
-    "Dashboard improvements"
+    "Style memory v0 — pull last 50 IG captions on OAuth, summarize into user_profiles.profile_context",
+    "Carousel + Reels support — extend pending_posts with media_items array",
+    "24h post-mortem cron — pull IG insights, send WA digest with top metric + suggestion",
+    "URL repurposing — TikTok/IG/tweet link → re-encoded media + rewritten caption",
+    "Scheduled cron via Supabase pg_cron + pg_net.http_post (Vercel Hobby workaround)",
+    "Group-chat workspaces (phase 2)"
   ],
 
   "metadata": {
-    "last_updated": "2026-04-20",
-    "version": "2.0"
+    "last_updated": "2026-04-25",
+    "version": "2.1"
   }
 }
