@@ -10,6 +10,7 @@ import { OnboardingWizard } from '@/app/_components/onboarding-wizard';
 import { CancelScheduledButton } from '@/app/_components/cancel-scheduled-button';
 import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
 import { WaButton } from '@/app/_components/wa-button';
+import { FirstPostCard } from '@/app/_components/first-post-card';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -332,17 +333,15 @@ export default async function AccountPage({
           </section>
         )}
 
-        {/* Recent posts grid */}
-        <section className="flex flex-col gap-4">
-          <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
-            Recent posts
-            <span className="text-sm font-normal ml-2" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>last 9</span>
-          </h2>
-          {(posts?.length ?? 0) === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-              No posts yet — send Kreya a message on WhatsApp to create your first one.
-            </p>
-          ) : (
+        {/* Recent posts grid — first-run replaces the section with a rich activation card */}
+        {(posts?.length ?? 0) === 0 ? (
+          <FirstPostCard />
+        ) : (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
+              Recent posts
+              <span className="text-sm font-normal ml-2" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>last 9</span>
+            </h2>
             <div className="grid grid-cols-3 gap-1.5">
               {posts!.map(post => (
                 <a
@@ -368,8 +367,8 @@ export default async function AccountPage({
                 </a>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
       </div>
 
