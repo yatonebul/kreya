@@ -135,7 +135,7 @@ async function processWebhook(body: any) {
         }
       }
 
-      // If a draft is waiting — check for schedule intent first, then resend
+      // If a draft is waiting — check for schedule intent first, then offer choice
       const pendingApproval = await getPostByState(from, 'pending_approval');
       if (pendingApproval && messageType === 'text') {
         const text: string = message.text.body;
@@ -149,9 +149,18 @@ async function processWebhook(body: any) {
             return;
           }
         }
-        await sendText(from, '👆 Your draft is still waiting:');
+        // Show draft with clear instructions — user must explicitly discard to start fresh
+        await sendText(from, '👆 You have an unfinished post. Tap *Discard* to start a new one, or *Approve* to post this:');
         await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id, pendingApproval.is_video ?? false);
         return;
+      }
+
+      // For media (image/video/audio): auto-discard any stale pending drafts before creating new
+      if (['image', 'video', 'audio', 'document'].includes(messageType) && pendingApproval) {
+        await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', pendingApproval.id);
+        if (pendingApproval.sibling_id) {
+          await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', pendingApproval.sibling_id);
+        }
       }
 
       await handleNewPost(from, message, messageType);
@@ -219,6 +228,14 @@ async function handleNewPost(from: string, message: any, messageType: string) {
   );
 
   const imageUrl = userMediaUrl ?? buildImageUrl(imagePromptText!, 'realistic');
+
+  // Discard any stale pending_approval before creating new post
+  const { data: staleDrafts } = await getSupabase()
+    .from('pending_posts').select('id, sibling_id').eq('whatsapp_phone', from).eq('state', 'pending_approval');
+  for (const d of staleDrafts ?? []) {
+    await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
 
   // Create the primary post
   const { data: primaryPost } = await getSupabase()
@@ -312,13 +329,22 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     }
 
     await sendText(from, '⏳ Publishing to Instagram...');
-    const result = await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
+    let result;
+    try {
+      result = await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
+    } catch (err: any) {
+      if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
+        const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+        await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
+        return;
+      }
+      throw err;
+    }
 
     await getSupabase().from('pending_posts')
       .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
       .eq('id', post.id);
 
-    // Discard sibling if this was a photo-vs-AI choice
     if (post.sibling_id) {
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }

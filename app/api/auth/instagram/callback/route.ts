@@ -81,20 +81,31 @@ export async function GET(request: NextRequest) {
     const meData = await meRes.json();
     if (!meData.id) throw new Error('Could not fetch user info');
 
-    // 4. Upsert token + phone in Supabase
+    // 4. Upsert token + phone in Supabase (manual check avoids missing unique constraint)
     const expiresAt = new Date(Date.now() + (longData.expires_in ?? 5184000) * 1000).toISOString();
-    const { error: dbError } = await getSupabase()
-      .from('instagram_accounts')
-      .upsert({
+    const { data: existing } = await getSupabase()
+      .from('instagram_accounts').select('id').eq('instagram_user_id', meData.id).maybeSingle();
+
+    if (existing) {
+      const { error: dbError } = await getSupabase().from('instagram_accounts').update({
+        account_name: meData.username,
+        access_token: accessToken,
+        token_expires_at: expiresAt,
+        is_active: true,
+        ...(whatsappPhone ? { whatsapp_phone: whatsappPhone } : {}),
+      }).eq('id', existing.id);
+      if (dbError) throw new Error(`DB error: ${dbError.message}`);
+    } else {
+      const { error: dbError } = await getSupabase().from('instagram_accounts').insert({
         account_name: meData.username,
         instagram_user_id: meData.id,
         access_token: accessToken,
         token_expires_at: expiresAt,
         is_active: true,
         ...(whatsappPhone ? { whatsapp_phone: whatsappPhone } : {}),
-      }, { onConflict: 'account_name' });
-
-    if (dbError) throw new Error(`DB error: ${dbError.message}`);
+      });
+      if (dbError) throw new Error(`DB error: ${dbError.message}`);
+    }
 
     // 5. Notify user via WhatsApp
     if (whatsappPhone) {
