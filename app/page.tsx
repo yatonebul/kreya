@@ -1,13 +1,18 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { PhoneForm } from './_components/phone-form';
 import { EmailForm } from './_components/email-form';
+import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '';
 const waDirectLink = WA_NUMBER
   ? `https://wa.me/${WA_NUMBER.replace('+', '')}?text=Hi+Kreya!`
   : '#';
 
-export default function Home() {
+export default async function Home() {
+  const jar     = await cookies();
+  const token   = jar.get(SESSION_COOKIE)?.value;
+  const session = token ? await verifySession(token) : null;
   return (
     <main className="flex flex-col min-h-screen" style={{ background: 'var(--dark)' }}>
 
@@ -17,20 +22,32 @@ export default function Home() {
           Kreya
         </span>
         <div className="flex items-center gap-2">
-          <Link
-            href="/login"
-            className="text-sm px-4 py-2 rounded-full font-medium transition-opacity hover:opacity-80"
-            style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)' }}
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/register"
-            className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-90"
-            style={{ fontFamily: 'var(--font-dm-sans)', background: 'var(--coral)', color: '#fff' }}
-          >
-            Get access
-          </Link>
+          {session ? (
+            <Link
+              href="/account"
+              className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-90"
+              style={{ fontFamily: 'var(--font-dm-sans)', background: 'var(--coral)', color: '#fff' }}
+            >
+              My dashboard →
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-sm px-4 py-2 rounded-full font-medium transition-opacity hover:opacity-80"
+                style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--muted)' }}
+              >
+                Sign in
+              </Link>
+              <Link
+                href="/register"
+                className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-90"
+                style={{ fontFamily: 'var(--font-dm-sans)', background: 'var(--coral)', color: '#fff' }}
+              >
+                Get access
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 
