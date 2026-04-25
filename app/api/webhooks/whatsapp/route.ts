@@ -194,7 +194,7 @@ async function processWebhook(body: any) {
           }
         }
         // Show draft with clear instructions — user must explicitly discard to start fresh
-        await sendText(from, '👆 You have an unfinished post. Tap *Discard* to start a new one, or *Approve* to post this:');
+        await sendText(from, '👆 Still got a draft on the line — tap *Approve* to post it, or *Discard* to start fresh:');
         await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id, pendingApproval.is_video ?? false);
         return;
       }
@@ -603,16 +603,20 @@ function parseProfileUpdate(text: string): ProfileField | null {
 async function handleHelp(from: string) {
   const accountUrl = `${APP_URL}/account?phone=${encodeURIComponent(from)}`;
   await sendText(from,
-    `🤖 *Here's what I can do:*\n\n` +
-    `📸 *Create a post*\nSend any text, photo, video, or voice note — I write the caption and prepare your post for review.\n\n` +
-    `🎞️ *Carousel*\nSend: */carousel* — then drop 2–10 photos and type *done*.\n\n` +
-    `✅ *Approve / Edit / Discard*\nAfter each draft, tap the buttons to publish, refine, or bin it.\n\n` +
-    `🗓️ *Schedule*\nWhile a draft is waiting, reply with a time:\n"Post tomorrow at 9am" · "Schedule for Friday 3pm"\n\n` +
-    `✏️ *Edit your profile*\n"Change my tone to casual"\n"Update niche to fitness"\n"Set brand name to ..."\n\n` +
-    `📊 *Check your queue*\nSend: *status*\n\n` +
-    `🚫 *Cancel a scheduled post*\nSend: *cancel scheduled*\n\n` +
-    `🧠 *Refresh my voice*\nSend: *learn my style* — I'll re-read your last 50 IG captions and match your tone better.\n\n` +
-    `🔗 *Web dashboard*\n${accountUrl}`
+    `🤖 *Kreya commands*\n\n` +
+    `*✨ Create*\n` +
+    `🎙️ Voice note, photo, video, or one line → I draft the caption.\n` +
+    `🎞️ */carousel* → drop 2–10 photos, then *done*.\n` +
+    `🧠 */style* → re-read your last 50 IG captions to refresh my tone.\n\n` +
+    `*📝 On a draft*\n` +
+    `Tap ✅ Approve · ✏️ Edit · 🗑️ Discard.\n` +
+    `Reply *1*, *2*, *3* to swap caption variant.\n` +
+    `"Post tomorrow at 9am" / "Friday 3pm" → schedule it.\n\n` +
+    `*🛠️ Manage*\n` +
+    `*status* — see your queue.\n` +
+    `*cancel scheduled* — drop the next scheduled post.\n` +
+    `"Change my tone to casual" / "Update niche to fitness" / "Set brand name to ..."\n\n` +
+    `🔗 ${accountUrl}`
   );
 }
 
