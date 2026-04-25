@@ -404,7 +404,12 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     }
 
     await getSupabase().from('pending_posts')
-      .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null })
+      .update({
+        state: 'published',
+        ig_post_id: result.postId,
+        ig_post_url: result.postUrl ?? null,
+        published_at: new Date().toISOString(),
+      })
       .eq('id', post.id);
 
     if (post.sibling_id) {

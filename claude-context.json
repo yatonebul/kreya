@@ -78,7 +78,7 @@
   },
 
   "database_schema": {
-    "pending_posts": "id, whatsapp_phone, caption, caption_variants (jsonb, 3 alternates), image_url, user_image_url, image_source (user|ai), is_video, sibling_id, state (pending_approval|in_edit|scheduled|published|discarded), scheduled_for, ig_post_id, ig_post_url, created_at",
+    "pending_posts": "id, whatsapp_phone, caption, caption_variants (jsonb, 3 alternates), image_url, user_image_url, image_source (user|ai), is_video, sibling_id, state (pending_approval|in_edit|scheduled|published|discarded), scheduled_for, ig_post_id, ig_post_url, published_at, post_mortem_sent_at, created_at",
     "instagram_accounts": "id, account_name, instagram_user_id, access_token, token_expires_at, is_active",
     "user_profiles": "id, whatsapp_phone, brand_name, niche, tone, profile_context, learned_style (Haiku-summarized voice from past IG captions), onboarding_step (1-4), created_at",
     "social_audit_log": "general audit log"

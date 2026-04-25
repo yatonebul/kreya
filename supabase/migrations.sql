@@ -63,9 +63,60 @@ ALTER TABLE user_profiles
   ADD COLUMN IF NOT EXISTS learned_style TEXT;
 
 
+-- 9. pending_posts — 24h post-mortem support.
+--    published_at        — actual publish timestamp (separate from created_at,
+--                          which is the original draft time).
+--    post_mortem_sent_at — set when the 24h digest WhatsApp goes out, so the
+--                          cron job is idempotent.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS published_at        TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS post_mortem_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_pending_posts_post_mortem
+  ON pending_posts (state, published_at)
+  WHERE state = 'published' AND post_mortem_sent_at IS NULL;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
+
+
+-- ============================================================
+-- pg_cron schedules (Vercel Hobby blocks every-5min cron, so we
+-- run the time-sensitive jobs from Supabase via pg_cron + pg_net).
+-- Run once per project. Replace BASE_URL and CRON_SECRET below.
+-- ============================================================
+--
+-- 1) ENABLE EXTENSIONS (Database → Extensions, or run SQL):
+--    CREATE EXTENSION IF NOT EXISTS pg_cron;
+--    CREATE EXTENSION IF NOT EXISTS pg_net;
+--
+-- 2) SCHEDULE: publish due drafts every minute
+-- SELECT cron.schedule(
+--   'kreya-publish-scheduled',
+--   '* * * * *',
+--   $$
+--   SELECT net.http_get(
+--     url := 'https://kreya-github.vercel.app/api/cron/publish-scheduled',
+--     headers := '{"Authorization":"Bearer YOUR_CRON_SECRET"}'::jsonb
+--   );
+--   $$
+-- );
+--
+-- 3) SCHEDULE: 24h post-mortem digests, hourly
+-- SELECT cron.schedule(
+--   'kreya-post-mortem',
+--   '0 * * * *',
+--   $$
+--   SELECT net.http_get(
+--     url := 'https://kreya-github.vercel.app/api/cron/post-mortem',
+--     headers := '{"Authorization":"Bearer YOUR_CRON_SECRET"}'::jsonb
+--   );
+--   $$
+-- );
+--
+-- To inspect:   SELECT * FROM cron.job;
+-- To remove:    SELECT cron.unschedule('kreya-post-mortem');
 
 
 -- Skip onboarding for an existing user (replace number as needed)

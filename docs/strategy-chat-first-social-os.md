@@ -231,9 +231,11 @@ Hybrid: flat SaaS + metered AI add-ons (per video-minute repurpose, per generate
 - WA: detect "send N images in 60s" as a carousel intent; ask "carousel or single?"
 - IG: extend `instagram-publish.ts` with carousel container + Reels media type
 
-**Step 6 (day 11–12) — 24h post-mortem**
-- New cron: 24h after `published`, fetch IG insights, send WA message: "Top metric + one suggestion"
-- Stores baseline in `post_metrics` table → fuels best-time + style memory v2 later
+**Step 6 — 24h post-mortem** ✅ shipped this session
+- `lib/instagram-insights.ts` fetches `reach/views/likes/comments/saved` via the IG Graph Insights endpoint and produces a heuristic takeaway (save-rate / comment-rate / like-rate gates).
+- `app/api/cron/post-mortem/route.ts` finds posts published 22–48h ago without a digest, looks up the user's active IG token, formats a WhatsApp message, and stamps `post_mortem_sent_at` for idempotency.
+- `published_at` set on both manual approve and the scheduled-publish cron paths so the worker has a real timestamp to filter by.
+- Schedule via `pg_cron` (template + auth in `supabase/migrations.sql`).
 
 **Step 7 (day 13–14) — Repurposing (wow feature, cheap to ship)**
 - Detect URL in WA message (TikTok / IG / Tweet)
