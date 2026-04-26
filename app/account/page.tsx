@@ -168,10 +168,10 @@ export default async function AccountPage({
   const phones  = dataPhone ? [dataPhone, `+${dataPhone}`] : [];
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const [{ data: profile }, { data: igAccount }, { data: posts }, { data: scheduled }] = await Promise.all([
+  const [{ data: phoneProfile }, { data: igAccount }, { data: posts }, { data: scheduled }] = await Promise.all([
     supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', queryId).maybeSingle(),
     phones.length
-      ? supabase.from('instagram_accounts').select('account_name, token_expires_at').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle()
+      ? supabase.from('instagram_accounts').select('account_name, token_expires_at, brand_name, niche, tone').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle()
       : Promise.resolve({ data: null }),
     dataPhone
       ? supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
@@ -200,10 +200,19 @@ export default async function AccountPage({
         .order('created_at', { ascending: false })
     : { data: [] };
 
-  const brandName  = profile?.brand_name ?? (isEmailSession ? sessionId : 'Your account');
+  // Per-account brand profile takes priority once an IG is connected.
+  // Phone-level user_profiles is the legacy fallback (and the source for
+  // pre-connect onboarding data).
+  const profile = {
+    brand_name: igAccount?.brand_name ?? phoneProfile?.brand_name ?? null,
+    niche:      igAccount?.niche      ?? phoneProfile?.niche      ?? null,
+    tone:       igAccount?.tone       ?? phoneProfile?.tone       ?? null,
+  };
+  const profileSource: 'account' | 'phone' = igAccount?.brand_name ? 'account' : 'phone';
+  const brandName  = profile.brand_name ?? (isEmailSession ? sessionId : 'Your account');
 
   // New user with no brand profile yet → show onboarding wizard
-  if (!profile?.brand_name) {
+  if (!profile.brand_name) {
     return <OnboardingWizard phone={queryId} />;
   }
   const igDays     = daysUntil(igAccount?.token_expires_at ?? null);
@@ -257,21 +266,27 @@ export default async function AccountPage({
           ))}
         </div>
 
-        {/* Brand profile — promoted above Instagram because it controls every caption */}
+        {/* Brand profile — promoted above Instagram because it controls every caption.
+            When an IG account is active, the profile is per-account; we badge that fact so
+            multi-account users can tell whose voice they're editing. */}
         <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>Brand profile</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
+                {profileSource === 'account' && igAccount ? `@${igAccount.account_name} brand` : 'Brand profile'}
+              </h2>
               <span
                 className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
                 style={{
                   fontFamily: 'var(--font-space-mono)',
-                  color: 'var(--mint)',
-                  background: 'rgba(0,229,160,0.10)',
-                  border: '1px solid rgba(0,229,160,0.35)',
+                  color: profileSource === 'account' ? 'var(--mint)' : 'var(--gold)',
+                  background: profileSource === 'account' ? 'rgba(0,229,160,0.10)' : 'rgba(255,209,102,0.10)',
+                  border: profileSource === 'account'
+                    ? '1px solid rgba(0,229,160,0.35)'
+                    : '1px solid rgba(255,209,102,0.35)',
                 }}
               >
-                Drives every caption
+                {profileSource === 'account' ? 'Per-account voice' : 'Account-wide default'}
               </span>
             </div>
             <RefreshVoiceButton phone={queryId} />
@@ -279,9 +294,9 @@ export default async function AccountPage({
           <BrandEditForm
             phone={queryId}
             initial={{
-              brand_name: profile?.brand_name ?? '',
-              niche:      profile?.niche      ?? '',
-              tone:       profile?.tone       ?? '',
+              brand_name: profile.brand_name ?? '',
+              niche:      profile.niche      ?? '',
+              tone:       profile.tone       ?? '',
             }}
           />
         </section>

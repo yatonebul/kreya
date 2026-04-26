@@ -39,5 +39,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'failed' }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, captionsFound: result.captionsFound, account: account.account_name });
+  return NextResponse.json({
+    ok: true,
+    captionsFound: result.captionsFound,
+    account: account.account_name,
+    suggestedNiche: result.suggestedNiche,
+    suggestedTone: result.suggestedTone,
+  });
 }

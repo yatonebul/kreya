@@ -1,6 +1,6 @@
 import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendText } from '@/lib/whatsapp-send';
+import { sendBrandSuggestion, sendText } from '@/lib/whatsapp-send';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
@@ -115,7 +115,16 @@ export async function GET(request: NextRequest) {
       }).eq('id', existing.id);
       if (updateErr) throw new Error(`Failed to update account: ${updateErr.message}`);
     } else {
-      // New account: demote siblings first, then insert
+      // New account: demote siblings first, then insert.
+      // Backfill brand fields from user_profiles so the new IG inherits the
+      // user's onboarding brand setup as a starting point — they can refine
+      // per-account later via /account or 'set niche=...' commands.
+      let backfill: {
+        brand_name?: string | null;
+        niche?: string | null;
+        tone?: string | null;
+        profile_context?: string | null;
+      } = {};
       if (whatsappPhone) {
         const phoneSearch = whatsappPhone.startsWith('+')
           ? [whatsappPhone, whatsappPhone.slice(1)]
@@ -132,6 +141,13 @@ export async function GET(request: NextRequest) {
           });
           throw new Error(`Failed to demote siblings: ${demoteErr.message}`);
         }
+
+        const { data: phoneProfile } = await getSupabase()
+          .from('user_profiles')
+          .select('brand_name, niche, tone, profile_context')
+          .eq('whatsapp_phone', whatsappPhone)
+          .maybeSingle();
+        if (phoneProfile) backfill = phoneProfile;
       }
 
       const insertData: any = {
@@ -140,6 +156,7 @@ export async function GET(request: NextRequest) {
         access_token: accessToken,
         token_expires_at: expiresAt,
         is_active: true,
+        ...backfill,
       };
       if (whatsappPhone) {
         insertData.whatsapp_phone = whatsappPhone;
@@ -157,27 +174,40 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 5. Only notify on new account (not reconnect). Learn style in background and include in message.
+    // 5. Only notify on new account (not reconnect). Learn style in background
+    //    and follow up with a one-tap brand suggestion if the AI inferred a niche/tone.
     if (whatsappPhone && !existing) {
       const phone = whatsappPhone;
       const igUserId = meData.id as string;
       const token = accessToken as string;
+      const username = meData.username as string;
 
       after(async () => {
-        let styleMsg = '';
+        await sendText(
+          phone,
+          `✅ *@${username}* connected!\n\nYou're all set — send me a message, photo, video, or voice note and I'll create your next Instagram post. 🚀`,
+        ).catch(() => {});
+
         try {
           const result = await learnStyleFromInstagram(phone, igUserId, token);
-          if (result.ok && result.captionsFound > 0) {
-            styleMsg = `\n\n🧠 I read your last ${result.captionsFound} captions to learn your voice. Future posts will sound like you.`;
+          if (!result.ok || result.captionsFound === 0) return;
+
+          await sendText(
+            phone,
+            `🧠 I read your last ${result.captionsFound} captions to learn @${username}'s voice. Future posts will sound like you.`,
+          ).catch(() => {});
+
+          if (result.suggestedNiche || result.suggestedTone) {
+            await sendBrandSuggestion(
+              phone,
+              result.account ?? username,
+              result.suggestedNiche,
+              result.suggestedTone,
+            ).catch(() => {});
           }
         } catch (err) {
           console.error('[IG callback style learn error]', err);
         }
-
-        await sendText(
-          phone,
-          `✅ *@${meData.username}* connected!${styleMsg}\n\nYou're all set — send me a message, photo, video, or voice note and I'll create your next Instagram post. 🚀`
-        ).catch(() => {});
       });
     }
 
