@@ -102,6 +102,20 @@ ALTER TABLE user_profiles
   ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 
 
+-- 13. instagram_accounts — per-account brand profile.
+--     Multi-account users (one phone, multiple IGs) need separate
+--     niche/tone/voice per account, otherwise one IG's voice bleeds into
+--     captions for the others. user_profiles columns stay as the global
+--     default; instagram_accounts columns override per-account when present.
+--     Backfilled on OAuth connect from user_profiles row for the same phone.
+ALTER TABLE instagram_accounts
+  ADD COLUMN IF NOT EXISTS brand_name      TEXT,
+  ADD COLUMN IF NOT EXISTS niche           TEXT,
+  ADD COLUMN IF NOT EXISTS tone            TEXT,
+  ADD COLUMN IF NOT EXISTS profile_context TEXT,
+  ADD COLUMN IF NOT EXISTS learned_style   TEXT;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

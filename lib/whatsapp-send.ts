@@ -73,6 +73,43 @@ export async function sendInviteTemplate(to: string): Promise<boolean> {
   }
 }
 
+// AI-suggested niche/tone after voice learning. Encodes the suggestion in
+// the button id so the webhook can apply it without re-fetching captions.
+// Niche/tone may contain spaces; we URI-encode and keep it short (WA caps
+// button id at 256 chars). Title is capped at 20 chars by WhatsApp.
+export async function sendBrandSuggestion(
+  to: string,
+  accountName: string,
+  niche: string | undefined,
+  tone: string | undefined,
+) {
+  if (!niche && !tone) return;
+  const parts: string[] = [];
+  if (niche) parts.push(`niche → *${niche}*`);
+  if (tone)  parts.push(`tone → *${tone}*`);
+  const body =
+    `🪞 Based on @${accountName}'s captions, your voice reads as:\n\n` +
+    parts.map((p) => `• ${p}`).join('\n') +
+    `\n\nUpdate the brand profile so future posts match this?`;
+
+  const id = `apply_brand:${encodeURIComponent(niche ?? '')}:${encodeURIComponent(tone ?? '')}`;
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: id.slice(0, 256), title: '✅ Yes, update' } },
+          { type: 'reply', reply: { id: 'skip_brand_update',  title: '👌 Skip' } },
+        ],
+      },
+    },
+  });
+}
+
 // Post-publish engagement loop — three quick-reply buttons that keep the
 // creator in the chat instead of ending the conversation on a flat 'live!'
 // message. Button IDs are routed in the webhook (handleButtonReply).

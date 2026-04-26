@@ -74,26 +74,3 @@ export async function handleOnboarding(from: string, messageType: string, text?:
   return false;
 }
 
-export async function getProfileContextForPhone(phone: string): Promise<string | null> {
-  const supabase = getSupabase();
-  // Try the augmented schema first; fall back to legacy if learned_style column doesn't exist yet.
-  const { data, error } = await supabase
-    .from('user_profiles')
-    .select('profile_context, learned_style')
-    .eq('whatsapp_phone', phone)
-    .maybeSingle();
-
-  if (error) {
-    const { data: legacy } = await supabase
-      .from('user_profiles')
-      .select('profile_context')
-      .eq('whatsapp_phone', phone)
-      .maybeSingle();
-    return legacy?.profile_context ?? null;
-  }
-  if (!data) return null;
-  const parts: string[] = [];
-  if (data.profile_context) parts.push(data.profile_context);
-  if (data.learned_style) parts.push(`Voice / writing style learned from past Instagram posts:\n${data.learned_style}`);
-  return parts.length ? parts.join('\n\n') : null;
-}

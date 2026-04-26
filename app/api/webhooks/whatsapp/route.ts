@@ -4,11 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
-import { handleOnboarding, getProfileContextForPhone } from '@/lib/whatsapp-onboarding';
+import { handleOnboarding } from '@/lib/whatsapp-onboarding';
+import { getProfileContextForPhone, updateActiveBrandProfile } from '@/lib/brand-profile';
 import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
 import { adminUrlToken } from '@/lib/session';
 
@@ -391,6 +392,32 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleLearnStyle(from);
     return;
   }
+  if (action === 'apply_brand') {
+    // postId here is "<encoded-niche>:<encoded-tone>" — decoded into updates.
+    const [encNiche, encTone] = (postId ?? '').split(':');
+    const niche = encNiche ? decodeURIComponent(encNiche) : undefined;
+    const tone  = encTone  ? decodeURIComponent(encTone)  : undefined;
+    if (!niche && !tone) {
+      await sendText(from, "Hmm, I couldn't read the suggestion. Try /refresh voice and I'll send a new one.");
+      return;
+    }
+    const result = await updateActiveBrandProfile(from, {
+      ...(niche ? { niche } : {}),
+      ...(tone  ? { tone  } : {}),
+    });
+    if (!result.ok) {
+      await sendText(from, `Couldn't update brand profile: ${result.error ?? 'unknown error'}.`);
+      return;
+    }
+    const target = result.account_name ? `@${result.account_name}` : 'your profile';
+    const summary = [niche && `niche → *${niche}*`, tone && `tone → *${tone}*`].filter(Boolean).join('\n• ');
+    await sendText(from, `✅ Updated ${target}:\n\n• ${summary}\n\nFuture captions will follow this. Type *brand* to view or edit.`);
+    return;
+  }
+  if (action === 'skip_brand_update') {
+    await sendText(from, "👌 Got it — keeping your brand profile as-is. You can always edit it on /account or with `set niche=...`.");
+    return;
+  }
 
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
@@ -680,6 +707,14 @@ async function handleLearnStyle(from: string) {
   const result = await learnStyleFromInstagram(from, account.instagram_user_id, account.access_token);
   if (result.ok) {
     await sendText(from, `✨ Voice updated — analyzed ${result.captionsFound} past captions. Your next post will sound more like you.`);
+    if (result.suggestedNiche || result.suggestedTone) {
+      await sendBrandSuggestion(
+        from,
+        result.account ?? account.account_name,
+        result.suggestedNiche,
+        result.suggestedTone,
+      ).catch(() => {});
+    }
   } else if (result.captionsFound < 3) {
     await sendText(from, `🤔 I need at least 3 captions to learn from. *@${account.account_name}* has ${result.captionsFound} so far — post a few more, then try again.`);
   } else {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 type Status = { kind: 'idle' | 'loading' | 'ok' | 'err'; msg?: string };
 
-export function RefreshVoiceButton({ phone }: { phone: string }) {
+export function RefreshVoiceButton({ phone, accountId }: { phone: string; accountId?: string }) {
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
   async function refresh() {
@@ -13,7 +13,7 @@ export function RefreshVoiceButton({ phone }: { phone: string }) {
       const res = await fetch('/api/style/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, ...(accountId ? { account_id: accountId } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
