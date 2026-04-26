@@ -1,10 +1,10 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption } from '@/lib/caption-generator';
+import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -424,6 +424,18 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await sendText(from, "👌 Got it — keeping your brand profile as-is. You can always edit it on /account or with `set niche=...`.");
     return;
   }
+  if (action === 'spin_skip') {
+    await sendText(from, "👌 Got it. Send another voice note whenever you're ready for the next post.");
+    return;
+  }
+  if (action === 'spin_carousel' && postId) {
+    await handleSpinCarousel(from, postId);
+    return;
+  }
+  if (action === 'spin_reel' && postId) {
+    await handleSpinReelScript(from, postId);
+    return;
+  }
 
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
@@ -492,6 +504,11 @@ async function handleButtonReply(from: string, action: string, postId: string | 
         ? 'Reel'
         : 'post';
     await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
+
+    // Phase B repurpose offer — spin the same idea into another surface
+    // so the creator can multiply one voice note into a week of content.
+    const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
+    await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
@@ -808,6 +825,105 @@ async function handleUseAccount(from: string, handle: string) {
     .eq('instagram_user_id', match.instagram_user_id);
 
   await sendText(from, `✓ Switched — I'll post to *@${match.account_name}* from now on.`);
+}
+
+// ── Phase B repurpose handlers ──────────────────────────────────────
+// Take a published post and spin it into another surface. Source post
+// caption + brand context goes into a Sonnet generator; the returned
+// structure is rendered into a fresh pending draft (carousel) or a
+// text storyboard (reel script). Drafts get parent_post_id pointing
+// back to the source so analytics can aggregate ideas across surfaces.
+
+async function handleSpinCarousel(from: string, sourcePostId: string) {
+  const supabase = getSupabase();
+  const source = await getPostById(sourcePostId);
+  if (!source) {
+    await sendText(from, "I couldn't find that post anymore — try a fresh one.");
+    return;
+  }
+
+  await sendText(from, '🖼️ Spinning your idea into a 5-slide carousel — this takes ~30 seconds...');
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateCarouselSpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't generate the carousel — try /carousel to build one manually.");
+    return;
+  }
+
+  // One AI image per slide. detectStyle is photorealistic-by-default
+  // unless the prompt mentions something like "illustration" or "logo".
+  const mediaItems: CarouselItem[] = spin.slides.map(s => ({
+    url: buildImageUrl(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt)),
+    is_video: false,
+  }));
+
+  // Discard any other pending drafts so the new carousel has the lane to itself
+  const { data: stale } = await supabase
+    .from('pending_posts')
+    .select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption: spin.caption,
+      image_url: mediaItems[0].url,
+      image_source: 'ai',
+      is_video: false,
+      surface: 'carousel',
+      state: 'pending_approval',
+      media_items: mediaItems,
+      parent_post_id: sourcePostId,
+    })
+    .select('id')
+    .single();
+  if (!post) {
+    await sendText(from, '⚠️ Saved the carousel but had trouble creating the draft — try again.');
+    return;
+  }
+
+  await sendText(
+    from,
+    `📑 *Carousel storyboard:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
+  );
+  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'feed');
+}
+
+async function handleSpinReelScript(from: string, sourcePostId: string) {
+  const source = await getPostById(sourcePostId);
+  if (!source) {
+    await sendText(from, "I couldn't find that post anymore — try a fresh one.");
+    return;
+  }
+
+  await sendText(from, '🎬 Sketching a 12-second Reel storyboard you can film today...');
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateReelScriptSpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't write the script — try again.");
+    return;
+  }
+
+  const scriptLines = spin.scenes
+    .map((sc, i) => `*Scene ${i + 1} (~4s)*\n📷 ${sc.visual}\n🎙️ "${sc.voiceover}"\n💬 _${sc.textOverlay}_`)
+    .join('\n\n');
+
+  await sendText(
+    from,
+    `🎬 *Reel storyboard*\n\n` +
+    `🪝 *Hook:* "${spin.hook}"\n\n` +
+    `${scriptLines}\n\n` +
+    `📝 *Caption:*\n${spin.caption}\n\n` +
+    `Film it on your phone (vertical, 9:16). When you're done, send the video back here and I'll post it as a Reel with this caption already loaded. 🚀`,
+  );
 }
 
 async function handleCarouselStart(from: string) {

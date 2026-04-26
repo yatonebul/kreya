@@ -126,3 +126,102 @@ export async function refineCaption(
 
   return msg.content[0].type === 'text' ? msg.content[0].text.trim() : currentCaption;
 }
+
+export type CarouselSpin = {
+  caption: string;
+  slides: { headline: string; body: string; imagePrompt: string }[];
+};
+
+// Turns a published post into a 5-slide narrative carousel. The original
+// caption is the seed: we re-tell the same idea with a hook → setup →
+// payoff → key insight → CTA arc, each slide getting a headline (10-15
+// chars max so it fits any aspect), body (1 line), and an image prompt
+// for cinematic background art.
+export async function generateCarouselSpin(
+  sourceCaption: string,
+  profileContext?: string,
+): Promise<CarouselSpin | null> {
+  const system =
+    `${buildSystem(profileContext, 'carousel')}\n\n` +
+    `Return ONLY a JSON object — no prose, no markdown, no code fences.\n` +
+    `Shape: { "caption": string, "slides": [ { "headline": string, "body": string, "imagePrompt": string } x5 ] }\n` +
+    `- 5 slides exactly. Arc: hook → setup → payoff → insight → CTA.\n` +
+    `- headline: 10-15 chars max, all-caps optional, designed to read on a 1080x1080 image.\n` +
+    `- body: ONE short line (under 90 chars), expands the headline.\n` +
+    `- imagePrompt: one cinematic background scene per slide. People shown from behind / silhouette only — never close-up faces. No text inside the image (the headline overlay handles that).\n` +
+    `- caption: the IG carousel caption itself, ~200 chars body + 3-5 hashtags. Hooks readers to swipe.`;
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1200,
+    system,
+    messages: [{
+      role: 'user',
+      content: `Source post caption (turn this into a 5-slide carousel):\n\n${sourceCaption}\n\nReturn the JSON.`,
+    }],
+  });
+
+  const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed?.caption &&
+      Array.isArray(parsed.slides) &&
+      parsed.slides.length === 5 &&
+      parsed.slides.every((s: any) => typeof s.headline === 'string' && typeof s.body === 'string' && typeof s.imagePrompt === 'string')
+    ) {
+      return parsed as CarouselSpin;
+    }
+  } catch {}
+  return null;
+}
+
+export type ReelSpin = {
+  hook: string;
+  scenes: { visual: string; voiceover: string; textOverlay: string }[];
+  caption: string;
+};
+
+// Storyboard for the user to film. We deliberately keep this AS TEXT
+// (no draft created) because IG Reels need real video and we can't
+// AI-generate video at quality yet — the highest-leverage repurpose is
+// a structured 12-second script the creator can shoot on their phone in
+// 2 minutes. After they film and send the video back, the standard
+// /post → preview → approve flow handles publishing.
+export async function generateReelScriptSpin(
+  sourceCaption: string,
+  profileContext?: string,
+): Promise<ReelSpin | null> {
+  const system =
+    `${buildSystem(profileContext, 'reels')}\n\n` +
+    `Return ONLY a JSON object — no prose, no markdown, no code fences.\n` +
+    `Shape: { "hook": string, "scenes": [ { "visual": string, "voiceover": string, "textOverlay": string } x3 ], "caption": string }\n` +
+    `- hook: the first 3 words spoken on camera or shown as a text overlay. Has to stop a thumb mid-scroll.\n` +
+    `- 3 scenes total, ~4 seconds each (12s Reel). Each scene: visual (what the camera shows), voiceover (what the creator says, in their natural voice), textOverlay (1-3 word kinetic caption).\n` +
+    `- caption: the Reel caption (under 125 chars body + max 3 hashtags). Hook-led.`;
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 800,
+    system,
+    messages: [{
+      role: 'user',
+      content: `Source post caption (turn this into a 12-second Reel storyboard the creator can film today):\n\n${sourceCaption}\n\nReturn the JSON.`,
+    }],
+  });
+
+  const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed?.hook &&
+      parsed?.caption &&
+      Array.isArray(parsed.scenes) &&
+      parsed.scenes.length === 3 &&
+      parsed.scenes.every((s: any) => typeof s.visual === 'string' && typeof s.voiceover === 'string' && typeof s.textOverlay === 'string')
+    ) {
+      return parsed as ReelSpin;
+    }
+  } catch {}
+  return null;
+}

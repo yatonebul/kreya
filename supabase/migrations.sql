@@ -129,6 +129,16 @@ UPDATE pending_posts SET surface = 'carousel' WHERE surface IS NULL AND media_it
 UPDATE pending_posts SET surface = 'feed'     WHERE surface IS NULL;
 
 
+-- 15. pending_posts — repurpose lineage.
+--     parent_post_id links a draft back to the published post it was
+--     spun off from (e.g. Carousel generated from a Feed photo). Lets
+--     post-mortem aggregate "this idea performed X across all surfaces"
+--     and prevents the user from infinitely spinning the same thing.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS parent_post_id UUID REFERENCES pending_posts(id);
+CREATE INDEX IF NOT EXISTS idx_pending_posts_parent ON pending_posts(parent_post_id) WHERE parent_post_id IS NOT NULL;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
