@@ -116,6 +116,19 @@ ALTER TABLE instagram_accounts
   ADD COLUMN IF NOT EXISTS learned_style   TEXT;
 
 
+-- 14. pending_posts — explicit IG surface tag.
+--     'feed' (single image), 'reels' (video, also share_to_feed by default),
+--     'carousel' (multi-slide), or 'story' (future). Lets analytics and
+--     post-mortem split Reel-vs-Feed performance, and lets the
+--     repurposing engine know what each generated draft is targeting.
+--     Backfill: any existing video row → 'reels', else null defaulted to 'feed' on read.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS surface TEXT;
+UPDATE pending_posts SET surface = 'reels'    WHERE surface IS NULL AND is_video = TRUE;
+UPDATE pending_posts SET surface = 'carousel' WHERE surface IS NULL AND media_items IS NOT NULL AND jsonb_array_length(media_items) > 1;
+UPDATE pending_posts SET surface = 'feed'     WHERE surface IS NULL;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
