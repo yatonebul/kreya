@@ -208,8 +208,27 @@ export default async function AccountPage({
   // ?ig=<id>. Multi-account users can switch via the AccountSwitcher
   // tabs which set ?ig — that's the "viewed" account whose brand profile
   // gets edited.
+  //
+  // Self-heal: if the user has connected IG accounts but none is marked
+  // is_active (residual state from the demote-then-failed-insert OAuth
+  // bug), auto-promote the most recently connected one. Otherwise the
+  // IG section + publishing + refresh-voice all incorrectly report
+  // "Not connected" even though valid accounts exist.
   const accounts = allAccounts ?? [];
-  const activeAccount = accounts.find(a => a.is_active) ?? null;
+  let activeAccount = accounts.find(a => a.is_active) ?? null;
+  if (!activeAccount && accounts.length > 0) {
+    const newest = [...accounts].sort((a, b) => {
+      const at = a.token_expires_at ? Date.parse(a.token_expires_at) : 0;
+      const bt = b.token_expires_at ? Date.parse(b.token_expires_at) : 0;
+      return bt - at;
+    })[0];
+    await supabase
+      .from('instagram_accounts')
+      .update({ is_active: true })
+      .eq('id', newest.id);
+    newest.is_active = true;
+    activeAccount = newest;
+  }
   const viewedAccount = rawIgId
     ? accounts.find(a => a.id === rawIgId) ?? activeAccount
     : activeAccount;
