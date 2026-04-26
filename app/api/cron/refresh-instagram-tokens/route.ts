@@ -21,14 +21,17 @@ export async function GET(request: NextRequest) {
 
   const supabase = getSupabase();
 
-  // Fetch all active accounts whose token expires within 15 days
+  // Refresh tokens 30 days before expiry. IG long-lived tokens last 60 days
+  // and the refresh endpoint requires the token to be at least 24h old —
+  // running weekly with a 30-day cushion gives multiple retry windows
+  // before any user-visible failure. We refresh every connected account
+  // (not just is_active) so an inactive sibling doesn't silently rot.
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + 15);
+  cutoff.setDate(cutoff.getDate() + 30);
 
   const { data: accounts, error } = await supabase
     .from('instagram_accounts')
-    .select('account_name, access_token, token_expires_at, whatsapp_phone')
-    .eq('is_active', true)
+    .select('id, account_name, access_token, token_expires_at, whatsapp_phone')
     .lt('token_expires_at', cutoff.toISOString());
 
   if (error) {
@@ -58,19 +61,21 @@ export async function GET(request: NextRequest) {
       await supabase
         .from('instagram_accounts')
         .update({ access_token: data.access_token, token_expires_at: expiresAt })
-        .eq('account_name', account.account_name);
+        .eq('id', account.id);
 
       console.log(`[token-refresh] ${account.account_name} refreshed → expires ${expiresAt}`);
       results.push({ account: account.account_name, status: 'refreshed' });
     } catch (err: any) {
       console.error(`[token-refresh] ${account.account_name} failed:`, err.message);
 
-      // Notify user via WhatsApp if phone is known
+      // Only nag the user once per account when refresh actually fails
+      // (token revoked, network error, etc.) — successful auto-refresh
+      // stays silent so we don't spam them with "all good" pings.
       if (account.whatsapp_phone) {
         const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(account.whatsapp_phone)}`;
         await sendText(
           account.whatsapp_phone,
-          `⚠️ Your Instagram (@${account.account_name}) connection needs to be renewed.\n\nTap here to reconnect:\n${reconnectUrl}`
+          `⚠️ Couldn't auto-renew your Instagram (@${account.account_name}) connection.\n\nTap here to reconnect once:\n${reconnectUrl}`
         ).catch(() => {});
       }
 

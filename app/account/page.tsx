@@ -9,6 +9,7 @@ import { PendingPosts } from '@/app/_components/pending-posts';
 import { OnboardingWizard } from '@/app/_components/onboarding-wizard';
 import { CancelScheduledButton } from '@/app/_components/cancel-scheduled-button';
 import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
+import { ComposeCta } from '@/app/_components/compose-cta';
 import { WaButton } from '@/app/_components/wa-button';
 import { FirstPostCard } from '@/app/_components/first-post-card';
 import { RefreshVoiceButton } from '@/app/_components/refresh-voice-button';
@@ -435,7 +436,7 @@ export default async function AccountPage({
                   style={{ paddingBottom: '100%', background: 'var(--surf3)', display: 'block' }}
                 >
                   {post.image_url && !post.is_video ? (
-                    <img src={post.image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={post.image_url} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-2xl">
                       {post.is_video ? '🎬' : '🖼️'}
@@ -458,6 +459,13 @@ export default async function AccountPage({
         fallbackHref={connectUrl}
         fallbackColor={igAccount ? 'var(--mint)' : 'var(--coral)'}
         fallbackLabel="Instagram"
+      />
+      <ComposeCta
+        prompt={
+          igAccount
+            ? `Hi Kreya! Make me a post about `
+            : 'Hi Kreya! '
+        }
       />
     </main>
   );
