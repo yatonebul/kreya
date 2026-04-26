@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendText } from '@/lib/whatsapp-send';
 
 function getSupabase() {
   return createClient(
@@ -63,6 +64,15 @@ export async function POST(request: NextRequest) {
       newActive = sibling.account_name;
     }
   }
+
+  // Notify user via WhatsApp so they have a paper trail
+  const promoMsg = newActive
+    ? `\n\n@${newActive} is now active for new posts.`
+    : '\n\nNo other accounts linked. Reconnect anytime at /connect.';
+  await sendText(
+    phone,
+    `🔌 *@${target.account_name}* disconnected.\n\nPosts already published stay on Instagram.${promoMsg}`,
+  ).catch(() => {});
 
   return NextResponse.json({ ok: true, disconnected: target.account_name, new_active: newActive });
 }

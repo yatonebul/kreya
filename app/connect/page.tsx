@@ -29,6 +29,9 @@ async function getAllAccounts() {
 
 function humanizeIgError(raw: string): string {
   const s = decodeURIComponent(raw).toLowerCase();
+  if (s.includes('missing_phone')) {
+    return "We couldn't tell which WhatsApp number to link this Instagram to. Open the link from your WhatsApp message, or message Kreya on WhatsApp first.";
+  }
   if (s.includes('insufficient developer role') || s.includes('developer role')) {
     return "Your Instagram account isn't on our access list yet. Make sure your account is a Business or Creator account, then contact us to get added.";
   }
@@ -38,10 +41,13 @@ function humanizeIgError(raw: string): string {
   if (s.includes('permission')) {
     return "Permission denied by Instagram. Make sure you're using a Business or Creator account, not a personal one.";
   }
+  if (s.includes('failed to save account') || s.includes('failed to demote')) {
+    return "Connection succeeded with Instagram but we couldn't save it on our side. Try again — if this persists, reach out and we'll fix it manually.";
+  }
   if (s.includes('token') || s.includes('oauth') || s.includes('session')) {
     return "Instagram connection expired. Please try connecting again.";
   }
-  if (s.includes('null value') || s.includes('not-null') || s.includes('violates')) {
+  if (s.includes('null value') || s.includes('not-null') || s.includes('violates') || s.includes('duplicate')) {
     return "We hit a database snag finishing the connection. The team has been notified — try again in a minute, or reach out if it persists.";
   }
   return decodeURIComponent(raw);
@@ -79,7 +85,16 @@ export default async function ConnectPage({
         <a href="/" className="text-xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>
           Kreya
         </a>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {isPersonalized && (
+            <a
+              href={`/account?phone=${encodeURIComponent(phone)}`}
+              className="text-sm px-4 py-2 rounded-full transition-opacity hover:opacity-80"
+              style={{ background: 'var(--surf2)', color: 'var(--mint)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)' }}
+            >
+              → Dashboard
+            </a>
+          )}
           <WaButton />
           <span className="text-xs tracking-widest uppercase hidden md:inline" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
             {isPersonalized ? 'Your Account' : 'Connections'}
@@ -137,13 +152,13 @@ export default async function ConnectPage({
                     className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
                     style={{ background: 'var(--surf3)', boxShadow: activeRing }}
                   >
-                    <div className="flex flex-col gap-0.5 min-w-0">
+                    <div className="flex flex-col gap-1 min-w-0 flex-1">
                       <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-dm-sans)' }}>
                         @{acc.account_name}
                       </span>
-                      <span className="text-xs truncate" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
-                        ID {acc.instagram_user_id} · <TokenBadge days={days} />
-                      </span>
+                      <div className="text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+                        <TokenBadge days={days} />
+                      </div>
                     </div>
                     {phone ? (
                       <AccountRowActions
