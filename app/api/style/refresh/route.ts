@@ -11,15 +11,25 @@ function phoneVariants(phone: string): string[] {
 }
 
 export async function POST(request: NextRequest) {
-  const { phone } = await request.json().catch(() => ({}));
+  const { phone, account_id } = await request.json().catch(() => ({}));
   if (!phone) return NextResponse.json({ error: 'phone required' }, { status: 400 });
 
-  const { data: account } = await getSupabase()
-    .from('instagram_accounts')
-    .select('instagram_user_id, access_token, account_name')
-    .in('whatsapp_phone', phoneVariants(phone))
-    .eq('is_active', true)
-    .maybeSingle();
+  // If account_id is provided, target that specific account (multi-account
+  // /account switcher). Otherwise default to the active account.
+  const accountQuery = account_id
+    ? getSupabase()
+        .from('instagram_accounts')
+        .select('instagram_user_id, access_token, account_name')
+        .eq('id', account_id)
+        .in('whatsapp_phone', phoneVariants(phone))
+        .maybeSingle()
+    : getSupabase()
+        .from('instagram_accounts')
+        .select('instagram_user_id, access_token, account_name')
+        .in('whatsapp_phone', phoneVariants(phone))
+        .eq('is_active', true)
+        .maybeSingle();
+  const { data: account } = await accountQuery;
 
   if (!account?.access_token || !account.instagram_user_id) {
     return NextResponse.json(

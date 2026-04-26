@@ -12,6 +12,7 @@ import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
 import { WaButton } from '@/app/_components/wa-button';
 import { FirstPostCard } from '@/app/_components/first-post-card';
 import { RefreshVoiceButton } from '@/app/_components/refresh-voice-button';
+import { AccountSwitcher } from '@/app/_components/account-switcher';
 import { TokenRenewalBanner } from '@/app/_components/token-renewal-banner';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
@@ -77,9 +78,9 @@ function StateBadge({ state }: { state: string }) {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ phone?: string; email?: string }>;
+  searchParams: Promise<{ phone?: string; email?: string; ig?: string }>;
 }) {
-  const { phone: rawPhone, email: rawEmail } = await searchParams;
+  const { phone: rawPhone, email: rawEmail, ig: rawIgId } = await searchParams;
 
   // Accept either ?phone= (WhatsApp users) or ?email= (email users)
   const urlIdentifier = rawPhone
@@ -168,11 +169,14 @@ export default async function AccountPage({
   const phones  = dataPhone ? [dataPhone, `+${dataPhone}`] : [];
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const [{ data: phoneProfile }, { data: igAccount }, { data: posts }, { data: scheduled }] = await Promise.all([
+  const [{ data: phoneProfile }, { data: allAccounts }, { data: posts }, { data: scheduled }] = await Promise.all([
     supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', queryId).maybeSingle(),
     phones.length
-      ? supabase.from('instagram_accounts').select('account_name, token_expires_at, brand_name, niche, tone').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle()
-      : Promise.resolve({ data: null }),
+      ? supabase.from('instagram_accounts')
+          .select('id, account_name, token_expires_at, brand_name, niche, tone, is_active')
+          .in('whatsapp_phone', phones)
+          .order('account_name')
+      : Promise.resolve({ data: [] as Array<{ id: string; account_name: string; token_expires_at: string | null; brand_name: string | null; niche: string | null; tone: string | null; is_active: boolean }> }),
     dataPhone
       ? supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
           .eq('whatsapp_phone', dataPhone).eq('state', 'published')
@@ -200,21 +204,33 @@ export default async function AccountPage({
         .order('created_at', { ascending: false })
     : { data: [] };
 
+  // Active account is the default focus when /account is opened without
+  // ?ig=<id>. Multi-account users can switch via the AccountSwitcher
+  // tabs which set ?ig — that's the "viewed" account whose brand profile
+  // gets edited.
+  const accounts = allAccounts ?? [];
+  const activeAccount = accounts.find(a => a.is_active) ?? null;
+  const viewedAccount = rawIgId
+    ? accounts.find(a => a.id === rawIgId) ?? activeAccount
+    : activeAccount;
+
   // Per-account brand profile takes priority once an IG is connected.
   // Phone-level user_profiles is the legacy fallback (and the source for
   // pre-connect onboarding data).
   const profile = {
-    brand_name: igAccount?.brand_name ?? phoneProfile?.brand_name ?? null,
-    niche:      igAccount?.niche      ?? phoneProfile?.niche      ?? null,
-    tone:       igAccount?.tone       ?? phoneProfile?.tone       ?? null,
+    brand_name: viewedAccount?.brand_name ?? phoneProfile?.brand_name ?? null,
+    niche:      viewedAccount?.niche      ?? phoneProfile?.niche      ?? null,
+    tone:       viewedAccount?.tone       ?? phoneProfile?.tone       ?? null,
   };
-  const profileSource: 'account' | 'phone' = igAccount?.brand_name ? 'account' : 'phone';
+  const profileSource: 'account' | 'phone' = viewedAccount?.brand_name ? 'account' : 'phone';
   const brandName  = profile.brand_name ?? (isEmailSession ? sessionId : 'Your account');
 
   // New user with no brand profile yet → show onboarding wizard
   if (!profile.brand_name) {
     return <OnboardingWizard phone={queryId} />;
   }
+  // Active is what the rest of the page (token banner, etc.) cares about.
+  const igAccount = activeAccount;
   const igDays     = daysUntil(igAccount?.token_expires_at ?? null);
   const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(dataPhone ?? queryId)}`;
 
@@ -267,13 +283,14 @@ export default async function AccountPage({
         </div>
 
         {/* Brand profile — promoted above Instagram because it controls every caption.
-            When an IG account is active, the profile is per-account; we badge that fact so
-            multi-account users can tell whose voice they're editing. */}
+            For multi-account users, AccountSwitcher tabs let them pick which IG's
+            brand profile they're editing. The badge tells them whether they're
+            editing per-account voice or the legacy account-wide default. */}
         <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
-                {profileSource === 'account' && igAccount ? `@${igAccount.account_name} brand` : 'Brand profile'}
+                {profileSource === 'account' && viewedAccount ? `@${viewedAccount.account_name} brand` : 'Brand profile'}
               </h2>
               <span
                 className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
@@ -289,10 +306,17 @@ export default async function AccountPage({
                 {profileSource === 'account' ? 'Per-account voice' : 'Account-wide default'}
               </span>
             </div>
-            <RefreshVoiceButton phone={queryId} />
+            <RefreshVoiceButton phone={queryId} accountId={viewedAccount?.id} />
           </div>
+          {accounts.length > 1 && (
+            <AccountSwitcher
+              accounts={accounts.map(a => ({ id: a.id, account_name: a.account_name, is_active: a.is_active }))}
+              selectedId={viewedAccount?.id ?? null}
+            />
+          )}
           <BrandEditForm
             phone={queryId}
+            accountId={viewedAccount?.id}
             initial={{
               brand_name: profile.brand_name ?? '',
               niche:      profile.niche      ?? '',

@@ -11,7 +11,15 @@ const FIELD_LABELS: Record<keyof Profile, string> = {
   tone:       'Posting style',
 };
 
-export function BrandEditForm({ phone, initial }: { phone: string; initial: Profile }) {
+export function BrandEditForm({
+  phone,
+  initial,
+  accountId,
+}: {
+  phone: string;
+  initial: Profile;
+  accountId?: string;
+}) {
   const router = useRouter();
   const [values, setValues] = useState<Profile>(initial);
   const [editing, setEditing] = useState<keyof Profile | null>(null);
@@ -31,7 +39,11 @@ export function BrandEditForm({ phone, initial }: { phone: string; initial: Prof
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, [field]: draft.trim() }),
+        body: JSON.stringify({
+          phone,
+          [field]: draft.trim(),
+          ...(accountId ? { account_id: accountId } : {}),
+        }),
       });
       if (res.ok) {
         setValues(v => ({ ...v, [field]: draft.trim() }));

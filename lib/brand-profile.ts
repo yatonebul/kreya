@@ -73,6 +73,40 @@ export async function getProfileContextForPhone(phone: string): Promise<string |
   return parts.length ? parts.join('\n\n') : null;
 }
 
+// Writes brand updates to a *specific* IG account by id, regardless of
+// which one is active. Used by the /account page when the user is editing
+// a non-active account via the account switcher.
+export async function updateAccountBrandProfileById(
+  accountId: string,
+  updates: Partial<Pick<BrandFields, 'brand_name' | 'niche' | 'tone' | 'learned_style'>>,
+): Promise<{ ok: boolean; account_name?: string; error?: string }> {
+  const supabase = getSupabase();
+
+  const { data: account } = await supabase
+    .from('instagram_accounts')
+    .select('id, account_name, brand_name, niche, tone')
+    .eq('id', accountId)
+    .maybeSingle();
+  if (!account) return { ok: false, error: 'account not found' };
+
+  const merged = {
+    brand_name: updates.brand_name ?? account.brand_name ?? '',
+    niche:      updates.niche      ?? account.niche      ?? '',
+    tone:       updates.tone       ?? account.tone       ?? '',
+  };
+  const patch: BrandFields = { ...updates };
+  if (merged.brand_name && merged.niche && merged.tone) {
+    patch.profile_context = buildProfileContext(merged.brand_name, merged.niche, merged.tone);
+  }
+
+  const { error } = await supabase
+    .from('instagram_accounts')
+    .update(patch)
+    .eq('id', account.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, account_name: account.account_name };
+}
+
 // Writes brand updates to the active IG account row when one exists,
 // otherwise writes to user_profiles (e.g. pre-connect onboarding).
 // Rebuilds profile_context if any of brand_name/niche/tone change.
