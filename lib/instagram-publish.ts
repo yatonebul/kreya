@@ -7,12 +7,15 @@ function getSupabase() {
   );
 }
 
+export type PublishSurface = 'feed' | 'reels';
+
 export async function publishToInstagram(
   whatsappPhone: string,
   caption: string,
   mediaUrl: string,
-  isVideo = false
-): Promise<{ postId: string; status: string; postUrl?: string }> {
+  isVideo = false,
+  surface: PublishSurface = isVideo ? 'reels' : 'feed',
+): Promise<{ postId: string; status: string; postUrl?: string; surface: PublishSurface }> {
   try {
     const phones = whatsappPhone.startsWith('+')
       ? [whatsappPhone, whatsappPhone.slice(1)]
@@ -33,11 +36,16 @@ export async function publishToInstagram(
     }
 
     // 1. Create media container
-    console.log(`Creating Instagram ${isVideo ? 'Reel' : 'photo'} container...`);
+    const isReel = surface === 'reels' && isVideo;
+    console.log(`Creating Instagram ${isReel ? 'Reel' : isVideo ? 'video' : 'photo'} container...`);
     const containerParams = new URLSearchParams({ caption, access_token: accessToken });
     if (isVideo) {
       containerParams.set('media_type', 'REELS');
       containerParams.set('video_url', mediaUrl);
+      // share_to_feed=true keeps the Reel visible on the user's grid as
+      // well as the Reels tab. This matches default Buffer/Hootsuite
+      // behaviour and is what almost every creator wants.
+      if (isReel) containerParams.set('share_to_feed', 'true');
     } else {
       containerParams.set('image_url', mediaUrl);
     }
@@ -101,16 +109,16 @@ export async function publishToInstagram(
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
-      details: { post_id: publishData.id, caption, source: 'whatsapp', is_video: isVideo, whatsapp_phone: whatsappPhone },
+      details: { post_id: publishData.id, caption, source: 'whatsapp', is_video: isVideo, surface, whatsapp_phone: whatsappPhone },
     });
 
-    return { postId: publishData.id, status: 'success', postUrl };
+    return { postId: publishData.id, status: 'success', postUrl, surface };
   } catch (error: any) {
     console.error('Instagram publishing failed:', error.message);
     await getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'failed',
-      details: { error: error.message, source: 'whatsapp', whatsapp_phone: whatsappPhone },
+      details: { error: error.message, source: 'whatsapp', surface, whatsapp_phone: whatsappPhone },
     });
     throw error;
   }

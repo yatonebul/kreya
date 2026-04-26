@@ -269,14 +269,18 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     getRecentCaptions(),
     !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
   ]);
+  // Surface routing: any video → Reels (IG no longer has standalone Feed
+  // video). Photos and AI-generated images stay on Feed.
+  const surface: 'feed' | 'reels' = isVideo ? 'reels' : 'feed';
+
   const captionPrompt = prompt || (isVideo
-    ? '[No description — write a punchy, original caption for a video post. Do not reference any specific product, topic or theme from recent posts.]'
+    ? '[No description — write a punchy, original Reel caption. Do not reference any specific product, topic or theme from recent posts.]'
     : '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]');
 
   // Sibling AI flow shares one caption across both posts; variants only in the standard single-post flow.
   const variants = wantsAiAlso
-    ? [await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions)]
-    : await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions);
+    ? [await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions, surface)]
+    : await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions, surface);
   const caption = variants[0] ?? '';
 
   const imageUrl = userMediaUrl ?? buildImageUrl(imagePromptText!, 'realistic');
@@ -299,6 +303,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
       user_image_url: userMediaUrl,
       image_source: userMediaUrl ? 'user' : 'ai',
       is_video: isVideo,
+      surface,
       state: 'pending_approval',
     })
     .select('id')
@@ -327,6 +332,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
         image_url: aiImageUrl,
         image_source: 'ai',
         is_video: false,
+        surface: 'feed',
         sibling_id: primaryPost.id,
         state: 'pending_approval',
       })
@@ -443,13 +449,21 @@ async function handleButtonReply(from: string, action: string, postId: string | 
 
     const carouselItems: CarouselItem[] | null = Array.isArray(post.media_items) ? post.media_items : null;
     const isCarousel = carouselItems !== null && carouselItems.length > 1;
+    const postSurface: 'feed' | 'reels' = post.surface === 'reels' ? 'reels' : (post.is_video ? 'reels' : 'feed');
 
-    await sendText(from, isCarousel ? `⏳ Publishing carousel (${carouselItems.length} slides)...` : '⏳ Publishing to Instagram...');
+    await sendText(
+      from,
+      isCarousel
+        ? `⏳ Publishing carousel (${carouselItems.length} slides)...`
+        : postSurface === 'reels'
+          ? '⏳ Publishing your Reel to Instagram...'
+          : '⏳ Publishing to Instagram...',
+    );
     let result;
     try {
       result = isCarousel
         ? await publishCarouselToInstagram(from, post.caption, carouselItems)
-        : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false);
+        : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
     } catch (err: any) {
       if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
         const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
@@ -472,7 +486,11 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }
 
-    const postLabel = post.is_video ? 'video' : 'post';
+    const postLabel = isCarousel
+      ? 'carousel'
+      : postSurface === 'reels'
+        ? 'Reel'
+        : 'post';
     await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
 
   } else if (action === 'edit') {
@@ -807,6 +825,7 @@ async function handleCarouselStart(from: string) {
   await supabase.from('pending_posts').insert({
     whatsapp_phone: from,
     state: 'collecting_carousel',
+    surface: 'carousel',
     media_items: [],
     caption: '',
   });

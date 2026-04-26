@@ -4,14 +4,34 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
 const BASE_SYSTEM = 'You are a social media copywriter. Output ONLY the Instagram caption text — nothing else. No notes, no team instructions, no "---" separators, no headers, no meta-commentary. The output will be copy-pasted directly to Instagram as-is.';
 
-function buildSystem(profileContext?: string) {
-  return profileContext ? `${BASE_SYSTEM}\n\n${profileContext}` : BASE_SYSTEM;
+export type CaptionSurface = 'feed' | 'reels' | 'carousel';
+
+const SURFACE_GUIDE: Record<CaptionSurface, string> = {
+  feed:
+    'Format: 1 strong opening line, then 2-4 short lines, then 3-5 relevant hashtags. ' +
+    'Length: aim for 150-300 characters of body copy.',
+  reels:
+    'This is a Reel caption — Reels live or die on the first 3 words. ' +
+    'Format: punchy hook in the very first line (a question, a contradiction, a number, or a curiosity gap) — keep total body under 125 characters. ' +
+    'No long explanations: the video carries the story, the caption only earns the tap. ' +
+    'End with 3 relevant hashtags max.',
+  carousel:
+    'This is a carousel caption (multiple slides). ' +
+    'Format: hook line that promises the payoff inside the carousel, then a 1-line tease of what slides 2-N reveal, then 3-5 hashtags. ' +
+    'Keep body under 220 characters — the slides carry the depth, not the caption.',
+};
+
+function buildSystem(profileContext?: string, surface: CaptionSurface = 'feed') {
+  const parts = [BASE_SYSTEM, SURFACE_GUIDE[surface]];
+  if (profileContext) parts.push(profileContext);
+  return parts.join('\n\n');
 }
 
 export async function generateCaption(
   prompt: string,
   profileContext?: string,
-  recentCaptions?: string[]
+  recentCaptions?: string[],
+  surface: CaptionSurface = 'feed',
 ): Promise<string> {
   const recentBlock = recentCaptions?.length
     ? `\n\nRecent posts (avoid repeating same themes, phrases, hashtags):\n${recentCaptions.map(c => `- ${c.slice(0, 100)}`).join('\n')}`
@@ -19,11 +39,11 @@ export async function generateCaption(
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 400,
-    system: buildSystem(profileContext),
+    max_tokens: surface === 'reels' ? 220 : 400,
+    system: buildSystem(profileContext, surface),
     messages: [{
       role: 'user',
-      content: `Write an engaging Instagram caption for: "${prompt}". Include 3-5 relevant hashtags.${recentBlock}`,
+      content: `Write an engaging Instagram ${surface === 'reels' ? 'Reel' : 'caption'} for: "${prompt}".${recentBlock}`,
     }],
   });
 
@@ -36,16 +56,17 @@ export async function generateCaption(
 export async function generateCaptionVariants(
   prompt: string,
   profileContext?: string,
-  recentCaptions?: string[]
+  recentCaptions?: string[],
+  surface: CaptionSurface = 'feed',
 ): Promise<string[]> {
   const recentBlock = recentCaptions?.length
     ? `\n\nRecent posts (avoid repeating themes/phrases/hashtags):\n${recentCaptions.map(c => `- ${c.slice(0, 100)}`).join('\n')}`
     : '';
 
   const variantSystem =
-    `${buildSystem(profileContext)}\n\n` +
+    `${buildSystem(profileContext, surface)}\n\n` +
     `Return ONLY a JSON array of exactly 3 strings — no prose, no markdown, no code fences. ` +
-    `Each string is a complete Instagram caption with 3-5 hashtags. ` +
+    `Each string is a complete Instagram ${surface === 'reels' ? 'Reel caption' : 'caption'}. ` +
     `The 3 variants MUST take genuinely different angles:\n` +
     `1) hook-led — opens with a question or curiosity gap\n` +
     `2) story-led — anecdote or emotional moment\n` +
@@ -53,11 +74,11 @@ export async function generateCaptionVariants(
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 900,
+    max_tokens: surface === 'reels' ? 600 : 900,
     system: variantSystem,
     messages: [{
       role: 'user',
-      content: `Write 3 distinct Instagram caption variants for: "${prompt}".${recentBlock}\n\nFormat: ["caption1", "caption2", "caption3"]`,
+      content: `Write 3 distinct Instagram ${surface === 'reels' ? 'Reel captions' : 'caption variants'} for: "${prompt}".${recentBlock}\n\nFormat: ["caption1", "caption2", "caption3"]`,
     }],
   });
 

@@ -136,12 +136,24 @@ export async function sendPostPublishedActions(to: string, postUrl: string | und
 
 // postId is encoded in each button ID so replying to any historical preview
 // always acts on the correct post, not the latest one.
-export async function sendPostPreview(to: string, imageUrl: string, caption: string, postId: string, isVideo = false) {
+export async function sendPostPreview(
+  to: string,
+  imageUrl: string,
+  caption: string,
+  postId: string,
+  isVideo = false,
+  surface: 'feed' | 'reels' = isVideo ? 'reels' : 'feed',
+) {
   await sendText(to, `🎙️ *Your voice:*\n\n${caption}`);
 
+  const isReel = surface === 'reels';
   const header = isVideo
-    ? { type: 'text', text: '🎬 Video ready to post' }
+    ? { type: 'text', text: isReel ? '🎬 Reel preview — ready' : '🎬 Video ready to post' }
     : { type: 'image', image: { link: imageUrl } };
+
+  const body = isReel
+    ? 'Ready to post this Reel to Instagram?\n\nIt will show on your Reels tab AND your grid.'
+    : 'Ready to post this to Instagram?';
 
   return wa({
     messaging_product: 'whatsapp',
@@ -150,7 +162,7 @@ export async function sendPostPreview(to: string, imageUrl: string, caption: str
     interactive: {
       type: 'button',
       header,
-      body: { text: 'Ready to post this to Instagram?' },
+      body: { text: body },
       footer: { text: 'Tip: Edit lets you change caption, style, or image' },
       action: {
         buttons: [
