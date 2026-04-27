@@ -126,6 +126,38 @@ export async function sendBrandSuggestion(
   });
 }
 
+// DM auto-reply approval card — same shape as sendCommentApproval but
+// routed through dm_send / dm_skip handlers since IG comment replies
+// and IG DM sends use different Graph API endpoints.
+export async function sendDmApproval(
+  to: string,
+  eventId: string,
+  accountName: string | null,
+  messageText: string,
+  draftReply: string,
+) {
+  const accountTag = accountName ? `@${accountName}` : 'your account';
+  const body =
+    `📨 *New DM to ${accountTag}*\n\n` +
+    `_"${messageText.slice(0, 220)}"_\n\n` +
+    `🤖 *Draft reply:*\n${draftReply}`;
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `dm_send:${eventId}`, title: '✅ Send DM' } },
+          { type: 'reply', reply: { id: `dm_skip:${eventId}`, title: '👋 Skip' } },
+        ],
+      },
+    },
+  });
+}
+
 // Engagement auto-reply approval card. Surfaces a stranger's comment
 // + an AI-drafted brand-voice reply with [Send / Edit / Skip]. Edit
 // flow currently maps to Skip + ask user to reply manually — full

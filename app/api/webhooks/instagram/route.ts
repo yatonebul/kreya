@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateCommentReply, classifyComment } from '@/lib/comment-reply';
-import { sendCommentApproval } from '@/lib/whatsapp-send';
+import { sendCommentApproval, sendDmApproval } from '@/lib/whatsapp-send';
 import { getActiveBrandProfile } from '@/lib/brand-profile';
 
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN ?? process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
@@ -124,6 +124,85 @@ export async function POST(request: NextRequest) {
           row.id,
           account.account_name,
           handle ?? 'someone',
+          text,
+          reply,
+        ).catch(() => {});
+      }
+    }
+
+    // DM auto-reply — Meta delivers messages on the `messaging` field.
+    // Same architecture as comments: idempotency on ig_message_id,
+    // classify, drop spam, draft, send WA approval card.
+    for (const msg of entry.messaging ?? []) {
+      const igMessageId = msg?.message?.mid as string | undefined;
+      const senderPsid  = msg?.sender?.id as string | undefined;
+      const igUserId    = entry.id as string | undefined;
+      const text        = msg?.message?.text as string | undefined;
+
+      if (!igMessageId || !senderPsid || !igUserId || !text) continue;
+      // Skip echoes of replies we just sent.
+      if (msg?.message?.is_echo) continue;
+      if (senderPsid === igUserId) continue;
+
+      const { data: existing } = await supabase
+        .from('ig_dm_events')
+        .select('id')
+        .eq('ig_message_id', igMessageId)
+        .maybeSingle();
+      if (existing) continue;
+
+      const { data: account } = await supabase
+        .from('instagram_accounts')
+        .select('whatsapp_phone, account_name, access_token')
+        .eq('instagram_user_id', igUserId)
+        .maybeSingle();
+      if (!account?.whatsapp_phone) {
+        await supabase.from('ig_dm_events').insert({
+          ig_message_id: igMessageId,
+          instagram_user_id: igUserId,
+          sender_psid: senderPsid,
+          message_text: text,
+          status: 'skipped',
+        });
+        continue;
+      }
+
+      const classification = await classifyComment(text);
+      if (classification === 'spam') {
+        await supabase.from('ig_dm_events').insert({
+          ig_message_id: igMessageId,
+          instagram_user_id: igUserId,
+          sender_psid: senderPsid,
+          message_text: text,
+          classification: 'spam',
+          status: 'spam',
+          resolved_at: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      const brand = await getActiveBrandProfile(account.whatsapp_phone);
+      const reply = await generateCommentReply(text, classification, brand.profile_context ?? undefined, brand.learned_style ?? undefined);
+
+      const { data: row } = await supabase
+        .from('ig_dm_events')
+        .insert({
+          ig_message_id: igMessageId,
+          instagram_user_id: igUserId,
+          sender_psid: senderPsid,
+          message_text: text,
+          classification,
+          generated_reply: reply,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (row) {
+        await sendDmApproval(
+          account.whatsapp_phone,
+          row.id,
+          account.account_name,
           text,
           reply,
         ).catch(() => {});
