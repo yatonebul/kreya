@@ -126,6 +126,40 @@ export async function sendBrandSuggestion(
   });
 }
 
+// Engagement auto-reply approval card. Surfaces a stranger's comment
+// + an AI-drafted brand-voice reply with [Send / Edit / Skip]. Edit
+// flow currently maps to Skip + ask user to reply manually — full
+// edit-in-place is a Phase D.5.
+export async function sendCommentApproval(
+  to: string,
+  eventId: string,
+  accountName: string | null,
+  commenter: string,
+  commentText: string,
+  draftReply: string,
+) {
+  const accountTag = accountName ? `@${accountName}` : 'your account';
+  const body =
+    `💬 *New comment on ${accountTag}*\n\n` +
+    `From *@${commenter}*:\n_"${commentText.slice(0, 220)}"_\n\n` +
+    `🤖 *Draft reply:*\n${draftReply}`;
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `comment_send:${eventId}`, title: '✅ Send reply' } },
+          { type: 'reply', reply: { id: `comment_skip:${eventId}`, title: '👋 Skip' } },
+        ],
+      },
+    },
+  });
+}
+
 // Sent right after a publish succeeds — offers to repurpose the just-
 // published idea into other surfaces. Source surface determines what
 // makes sense:
@@ -139,11 +173,15 @@ export async function sendRepurposeOffer(
   postId: string,
   sourceSurface: 'feed' | 'reels' | 'carousel',
 ) {
-  const buttons: { type: 'reply'; reply: { id: string; title: string } }[] = [];
+  // WA caps button messages at 3 buttons. Always offer Story (most
+  // creators undersell their idea by not also putting it on Stories)
+  // plus one of Carousel/Reel depending on what the source isn't.
+  const buttons: { type: 'reply'; reply: { id: string; title: string } }[] = [
+    { type: 'reply', reply: { id: `spin_story:${postId}`, title: '🌅 Story' } },
+  ];
   if (sourceSurface !== 'carousel') {
     buttons.push({ type: 'reply', reply: { id: `spin_carousel:${postId}`, title: '🖼️ Carousel' } });
-  }
-  if (sourceSurface !== 'reels') {
+  } else {
     buttons.push({ type: 'reply', reply: { id: `spin_reel:${postId}`, title: '🎬 Reel script' } });
   }
   buttons.push({ type: 'reply', reply: { id: 'spin_skip', title: '👌 Not now' } });

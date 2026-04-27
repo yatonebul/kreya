@@ -7,7 +7,120 @@ function getSupabase() {
   );
 }
 
-export type PublishSurface = 'feed' | 'reels';
+export type PublishSurface = 'feed' | 'reels' | 'story';
+
+// Posts a reply to an existing IG comment via the Graph API. The
+// caller is responsible for the access_token lookup since this is
+// also called from background webhook handlers where the active-user
+// context isn't available.
+export async function postCommentReply(
+  igCommentId: string,
+  message: string,
+  accessToken: string,
+): Promise<{ id: string }> {
+  const params = new URLSearchParams({ message, access_token: accessToken });
+  const res = await fetch(
+    `https://graph.instagram.com/v21.0/${igCommentId}/replies`,
+    { method: 'POST', body: params },
+  );
+  const data = await res.json();
+  if (!data.id) {
+    throw new Error(`Comment reply failed: ${JSON.stringify(data)}`);
+  }
+  return { id: data.id };
+}
+
+// Stories live for 24h, are vertical 9:16, and have NO caption field —
+// the "caption" in IG Stories is the text overlay burned into the
+// image itself. We bake the overlay text into the image prompt so the
+// AI generator returns an image with the hook readable on it; for v1
+// that's accurate enough for most creators, and avoids the operational
+// cost of Sharp-based composition + Supabase Storage hosting.
+export async function publishStoryToInstagram(
+  whatsappPhone: string,
+  mediaUrl: string,
+  isVideo = false,
+): Promise<{ postId: string; status: string; postUrl?: string; surface: 'story' }> {
+  try {
+    const phones = whatsappPhone.startsWith('+')
+      ? [whatsappPhone, whatsappPhone.slice(1)]
+      : [whatsappPhone, `+${whatsappPhone}`];
+
+    const { data: account } = await getSupabase()
+      .from('instagram_accounts')
+      .select('access_token, instagram_user_id')
+      .in('whatsapp_phone', phones)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    const accessToken = account?.access_token;
+    const igUserId = account?.instagram_user_id;
+    if (!accessToken || !igUserId) {
+      throw new Error('No Instagram account connected for this user');
+    }
+
+    const params = new URLSearchParams({ media_type: 'STORIES', access_token: accessToken });
+    if (isVideo) params.set('video_url', mediaUrl);
+    else params.set('image_url', mediaUrl);
+
+    const containerRes = await fetch(
+      `https://graph.instagram.com/v21.0/${igUserId}/media`,
+      { method: 'POST', body: params },
+    );
+    const containerData = await containerRes.json();
+    if (!containerData.id) {
+      const errCode = containerData?.error?.code;
+      if (errCode === 190 || errCode === 102) {
+        throw new Error(`INSTAGRAM_TOKEN_EXPIRED: ${JSON.stringify(containerData)}`);
+      }
+      throw new Error(`Story container error: ${JSON.stringify(containerData)}`);
+    }
+
+    if (isVideo) {
+      let attempts = 0;
+      while (attempts < 24) {
+        await new Promise(r => setTimeout(r, 5000));
+        const statusRes = await fetch(
+          `https://graph.instagram.com/v21.0/${containerData.id}?fields=status_code&access_token=${accessToken}`,
+        );
+        const { status_code } = await statusRes.json();
+        if (status_code === 'FINISHED') break;
+        if (status_code === 'ERROR') throw new Error('Story video processing failed on Meta side');
+        attempts++;
+      }
+    } else {
+      await new Promise(r => setTimeout(r, 4000));
+    }
+
+    const publishRes = await fetch(
+      `https://graph.instagram.com/v21.0/${igUserId}/media_publish?creation_id=${containerData.id}&access_token=${accessToken}`,
+      { method: 'POST' },
+    );
+    const publishData = await publishRes.json();
+    if (!publishData.id) throw new Error(`Story publish error: ${JSON.stringify(publishData)}`);
+
+    const permalinkRes = await fetch(
+      `https://graph.instagram.com/v21.0/${publishData.id}?fields=permalink&access_token=${accessToken}`,
+    );
+    const permalinkData = await permalinkRes.json();
+
+    await getSupabase().from('social_audit_log').insert({
+      action: 'publish_instagram_story',
+      status: 'success',
+      details: { post_id: publishData.id, source: 'whatsapp', is_video: isVideo, whatsapp_phone: whatsappPhone },
+    });
+
+    return { postId: publishData.id, status: 'success', postUrl: permalinkData.permalink, surface: 'story' };
+  } catch (error: any) {
+    console.error('Instagram story publishing failed:', error.message);
+    await getSupabase().from('social_audit_log').insert({
+      action: 'publish_instagram_story',
+      status: 'failed',
+      details: { error: error.message, source: 'whatsapp', whatsapp_phone: whatsappPhone },
+    });
+    throw error;
+  }
+}
 
 export async function publishToInstagram(
   whatsappPhone: string,

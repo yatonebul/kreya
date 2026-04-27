@@ -1,0 +1,135 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { generateCommentReply, classifyComment } from '@/lib/comment-reply';
+import { sendCommentApproval } from '@/lib/whatsapp-send';
+import { getActiveBrandProfile } from '@/lib/brand-profile';
+
+const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN ?? process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+// Meta webhook verification — happens once when you wire up the URL
+// in App Dashboard → Webhooks → Instagram → Subscribe to comments.
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const mode      = searchParams.get('hub.mode');
+  const token     = searchParams.get('hub.verify_token');
+  const challenge = searchParams.get('hub.challenge');
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    return new NextResponse(challenge, { status: 200 });
+  }
+  return new NextResponse('Forbidden', { status: 403 });
+}
+
+// Comment events arrive as { object:'instagram', entry:[{ id, time, changes:[{ field:'comments', value:{...} }] }] }
+// value contains: id (comment id), text, from {id, username}, media {id, ad_id?}.
+//
+// MVP flow: store the event for idempotency, classify with Haiku, drop
+// spam, otherwise draft a brand-voice reply and send to the owner's WA
+// for one-tap approval. Approval handler in the WA webhook posts the
+// reply via the IG Graph API.
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  if (!body || body.object !== 'instagram') {
+    return NextResponse.json({ ok: true }); // ack so Meta doesn't retry
+  }
+
+  const supabase = getSupabase();
+
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      if (change.field !== 'comments') continue;
+      const v = change.value;
+      const igCommentId = v?.id as string | undefined;
+      const igMediaId   = v?.media?.id as string | undefined;
+      const igUserId    = entry.id as string | undefined; // recipient account id
+      const text        = v?.text as string | undefined;
+      const fromId      = v?.from?.id as string | undefined;
+      const handle      = v?.from?.username as string | undefined;
+
+      if (!igCommentId || !igUserId || !text) continue;
+
+      // Skip if commenter IS the account owner (avoid replying to ourselves)
+      if (fromId && fromId === igUserId) continue;
+
+      // Idempotency — UNIQUE on ig_comment_id makes a duplicate POST a no-op
+      const { data: existing } = await supabase
+        .from('ig_comment_events')
+        .select('id')
+        .eq('ig_comment_id', igCommentId)
+        .maybeSingle();
+      if (existing) continue;
+
+      // Look up which user owns this IG account so we know whose WA to ping
+      const { data: account } = await supabase
+        .from('instagram_accounts')
+        .select('whatsapp_phone, account_name, access_token, brand_name, niche, tone, profile_context')
+        .eq('instagram_user_id', igUserId)
+        .maybeSingle();
+      if (!account?.whatsapp_phone) {
+        await supabase.from('ig_comment_events').insert({
+          ig_comment_id: igCommentId,
+          ig_media_id: igMediaId,
+          instagram_user_id: igUserId,
+          commenter_handle: handle,
+          comment_text: text,
+          status: 'skipped',
+        });
+        continue;
+      }
+
+      const classification = await classifyComment(text);
+      if (classification === 'spam') {
+        await supabase.from('ig_comment_events').insert({
+          ig_comment_id: igCommentId,
+          ig_media_id: igMediaId,
+          instagram_user_id: igUserId,
+          commenter_handle: handle,
+          comment_text: text,
+          classification: 'spam',
+          status: 'spam',
+          resolved_at: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      // Draft reply using account's per-account brand voice (account
+      // columns override phone-level user_profiles).
+      const brand = await getActiveBrandProfile(account.whatsapp_phone);
+      const reply = await generateCommentReply(text, classification, brand.profile_context ?? undefined, brand.learned_style ?? undefined);
+
+      const { data: row } = await supabase
+        .from('ig_comment_events')
+        .insert({
+          ig_comment_id: igCommentId,
+          ig_media_id: igMediaId,
+          instagram_user_id: igUserId,
+          commenter_handle: handle,
+          comment_text: text,
+          classification,
+          generated_reply: reply,
+          status: 'pending',
+        })
+        .select('id')
+        .single();
+
+      if (row) {
+        await sendCommentApproval(
+          account.whatsapp_phone,
+          row.id,
+          account.account_name,
+          handle ?? 'someone',
+          text,
+          reply,
+        ).catch(() => {});
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true });
+}
