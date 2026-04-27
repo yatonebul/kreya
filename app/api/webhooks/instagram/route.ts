@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateCommentReply, classifyComment } from '@/lib/comment-reply';
-import { sendCommentApproval, sendDmApproval } from '@/lib/whatsapp-send';
+import { sendCommentApproval, sendDmApproval, sendEngagementOptIn } from '@/lib/whatsapp-send';
 import { getActiveBrandProfile } from '@/lib/brand-profile';
 
 const VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN ?? process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
@@ -65,10 +65,12 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       if (existing) continue;
 
-      // Look up which user owns this IG account so we know whose WA to ping
+      // Look up which user owns this IG account so we know whose WA to ping.
+      // Also pull engagement flags so we can short-circuit when auto-reply
+      // is opt-out for this account (saves Haiku calls + WA noise).
       const { data: account } = await supabase
         .from('instagram_accounts')
-        .select('whatsapp_phone, account_name, access_token, brand_name, niche, tone, profile_context')
+        .select('whatsapp_phone, account_name, access_token, brand_name, niche, tone, profile_context, comment_autoreply_enabled, engagement_offered_at')
         .eq('instagram_user_id', igUserId)
         .maybeSingle();
       if (!account?.whatsapp_phone) {
@@ -80,6 +82,29 @@ export async function POST(request: NextRequest) {
           comment_text: text,
           status: 'skipped',
         });
+        continue;
+      }
+
+      // Engagement gate — if the user hasn't opted in for comment
+      // auto-reply, we audit the event but stop here (no Haiku, no WA
+      // approval card). On the very first event we send a one-shot
+      // setup prompt so they can opt in if they want.
+      if (!account.comment_autoreply_enabled) {
+        await supabase.from('ig_comment_events').insert({
+          ig_comment_id: igCommentId,
+          ig_media_id: igMediaId,
+          instagram_user_id: igUserId,
+          commenter_handle: handle,
+          comment_text: text,
+          status: 'skipped',
+          resolved_at: new Date().toISOString(),
+        });
+        if (!account.engagement_offered_at) {
+          await sendEngagementOptIn(account.whatsapp_phone, igUserId, account.account_name).catch(() => {});
+          await supabase.from('instagram_accounts').update({
+            engagement_offered_at: new Date().toISOString(),
+          }).eq('instagram_user_id', igUserId);
+        }
         continue;
       }
 
@@ -153,7 +178,7 @@ export async function POST(request: NextRequest) {
 
       const { data: account } = await supabase
         .from('instagram_accounts')
-        .select('whatsapp_phone, account_name, access_token')
+        .select('whatsapp_phone, account_name, access_token, dm_autoreply_enabled, engagement_offered_at')
         .eq('instagram_user_id', igUserId)
         .maybeSingle();
       if (!account?.whatsapp_phone) {
@@ -164,6 +189,26 @@ export async function POST(request: NextRequest) {
           message_text: text,
           status: 'skipped',
         });
+        continue;
+      }
+
+      // Same opt-in gate as comments — DMs default OFF since DM
+      // auto-reply is the most personal of the engagement features.
+      if (!account.dm_autoreply_enabled) {
+        await supabase.from('ig_dm_events').insert({
+          ig_message_id: igMessageId,
+          instagram_user_id: igUserId,
+          sender_psid: senderPsid,
+          message_text: text,
+          status: 'skipped',
+          resolved_at: new Date().toISOString(),
+        });
+        if (!account.engagement_offered_at) {
+          await sendEngagementOptIn(account.whatsapp_phone, igUserId, account.account_name).catch(() => {});
+          await supabase.from('instagram_accounts').update({
+            engagement_offered_at: new Date().toISOString(),
+          }).eq('instagram_user_id', igUserId);
+        }
         continue;
       }
 

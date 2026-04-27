@@ -15,6 +15,7 @@ import { FirstPostCard } from '@/app/_components/first-post-card';
 import { RefreshVoiceButton } from '@/app/_components/refresh-voice-button';
 import { AccountSwitcher } from '@/app/_components/account-switcher';
 import { LoraTrainingPanel } from '@/app/_components/lora-training-panel';
+import { EngagementToggles } from '@/app/_components/engagement-toggles';
 import { SurfaceStats } from '@/app/_components/surface-stats';
 import { TokenRenewalBanner } from '@/app/_components/token-renewal-banner';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
@@ -176,10 +177,10 @@ export default async function AccountPage({
     supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', queryId).maybeSingle(),
     phones.length
       ? supabase.from('instagram_accounts')
-          .select('id, account_name, token_expires_at, brand_name, niche, tone, is_active, lora_status, lora_trained_at')
+          .select('id, account_name, token_expires_at, brand_name, niche, tone, is_active, lora_status, lora_trained_at, dm_autoreply_enabled, comment_autoreply_enabled')
           .in('whatsapp_phone', phones)
           .order('account_name')
-      : Promise.resolve({ data: [] as Array<{ id: string; account_name: string; token_expires_at: string | null; brand_name: string | null; niche: string | null; tone: string | null; is_active: boolean; lora_status: string | null; lora_trained_at: string | null }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; account_name: string; token_expires_at: string | null; brand_name: string | null; niche: string | null; tone: string | null; is_active: boolean; lora_status: string | null; lora_trained_at: string | null; dm_autoreply_enabled: boolean; comment_autoreply_enabled: boolean }> }),
     dataPhone
       ? supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
           .eq('whatsapp_phone', dataPhone).eq('state', 'published')
@@ -378,6 +379,17 @@ export default async function AccountPage({
             accountName={viewedAccount.account_name}
             status={(viewedAccount.lora_status as 'training' | 'ready' | 'failed' | null) ?? null}
             trainedAt={viewedAccount.lora_trained_at ?? null}
+          />
+        )}
+
+        {/* Auto-reply engagement toggles — per-account, default OFF. */}
+        {viewedAccount && (
+          <EngagementToggles
+            phone={queryId}
+            accountId={viewedAccount.id}
+            accountName={viewedAccount.account_name}
+            dmEnabled={!!viewedAccount.dm_autoreply_enabled}
+            commentEnabled={!!viewedAccount.comment_autoreply_enabled}
           />
         )}
 
