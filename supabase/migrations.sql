@@ -175,6 +175,16 @@ ALTER TABLE instagram_accounts
   ADD COLUMN IF NOT EXISTS lora_training_id   TEXT;                    -- Replicate training run id for status polling
 
 
+-- 18. user_profiles — idle-creator nudge timestamp.
+--     last_idle_nudge_at is set every time we WhatsApp a user with
+--     "haven't posted in N days, here are 3 ideas" so the daily cron
+--     can rate-limit (max one nudge per ~5 days even if the user stays
+--     idle). NULL means never nudged.
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS last_idle_nudge_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_user_profiles_last_nudge ON user_profiles(last_idle_nudge_at);
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
