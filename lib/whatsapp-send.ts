@@ -110,6 +110,44 @@ export async function sendBrandSuggestion(
   });
 }
 
+// Sent right after a publish succeeds — offers to repurpose the just-
+// published idea into other surfaces. Source surface determines what
+// makes sense:
+//   feed photo → carousel (deeper version) + reel script (film it)
+//   reel       → carousel (extract narrative)
+//   carousel   → reel script (one-liner version)
+// Button ids encode the source post id so the handler can fetch the
+// caption and brand voice without extra round-trips.
+export async function sendRepurposeOffer(
+  to: string,
+  postId: string,
+  sourceSurface: 'feed' | 'reels' | 'carousel',
+) {
+  const buttons: { type: 'reply'; reply: { id: string; title: string } }[] = [];
+  if (sourceSurface !== 'carousel') {
+    buttons.push({ type: 'reply', reply: { id: `spin_carousel:${postId}`, title: '🖼️ Carousel' } });
+  }
+  if (sourceSurface !== 'reels') {
+    buttons.push({ type: 'reply', reply: { id: `spin_reel:${postId}`, title: '🎬 Reel script' } });
+  }
+  buttons.push({ type: 'reply', reply: { id: 'spin_skip', title: '👌 Not now' } });
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text:
+          '🔁 *Repurpose this idea?*\n\n' +
+          'I can spin the same idea into a different format — keeps your week of content flowing from one voice note.',
+      },
+      action: { buttons },
+    },
+  });
+}
+
 // Post-publish engagement loop — three quick-reply buttons that keep the
 // creator in the chat instead of ending the conversation on a flat 'live!'
 // message. Button IDs are routed in the webhook (handleButtonReply).
