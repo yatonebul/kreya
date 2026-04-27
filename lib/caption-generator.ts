@@ -21,8 +21,29 @@ const SURFACE_GUIDE: Record<CaptionSurface, string> = {
     'Keep body under 220 characters — the slides carry the depth, not the caption.',
 };
 
+// Hashtag intelligence: a balanced mix beats keyword-stuffing. Volume
+// tiers (high = 1M+ posts → reach, medium = 50-500k → niche depth,
+// low = under 50k → discoverability with low competition). Models tend
+// to pick ALL high-volume tags by default, which buries the post; we
+// explicitly steer them.
+const HASHTAG_GUIDE_BY_SURFACE: Record<CaptionSurface, string> = {
+  feed:
+    'Hashtags: include exactly 5 — mix 1 broad/high-volume tag for reach, ' +
+    '2 mid-volume niche tags (1k-500k posts), and 2 low-volume specific tags. ' +
+    'Skip generic catch-alls (#love, #insta, #photooftheday). All hashtags ' +
+    'on a single line at the end of the caption.',
+  reels:
+    'Hashtags: 3 max, all niche-specific (medium or low volume). ' +
+    'Reels surface via watch-time / completion, not hashtag flood. ' +
+    'Skip generic catch-alls.',
+  carousel:
+    'Hashtags: 4-5 — same volume mix as feed (1 broad + 2 mid + 2 low). ' +
+    'Carousels reward hashtag specificity since they index slowly. ' +
+    'Skip generic catch-alls.',
+};
+
 function buildSystem(profileContext?: string, surface: CaptionSurface = 'feed') {
-  const parts = [BASE_SYSTEM, SURFACE_GUIDE[surface]];
+  const parts = [BASE_SYSTEM, SURFACE_GUIDE[surface], HASHTAG_GUIDE_BY_SURFACE[surface]];
   if (profileContext) parts.push(profileContext);
   return parts.join('\n\n');
 }

@@ -14,6 +14,8 @@ import { WaButton } from '@/app/_components/wa-button';
 import { FirstPostCard } from '@/app/_components/first-post-card';
 import { RefreshVoiceButton } from '@/app/_components/refresh-voice-button';
 import { AccountSwitcher } from '@/app/_components/account-switcher';
+import { LoraTrainingPanel } from '@/app/_components/lora-training-panel';
+import { SurfaceStats } from '@/app/_components/surface-stats';
 import { TokenRenewalBanner } from '@/app/_components/token-renewal-banner';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
@@ -174,10 +176,10 @@ export default async function AccountPage({
     supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', queryId).maybeSingle(),
     phones.length
       ? supabase.from('instagram_accounts')
-          .select('id, account_name, token_expires_at, brand_name, niche, tone, is_active')
+          .select('id, account_name, token_expires_at, brand_name, niche, tone, is_active, lora_status, lora_trained_at')
           .in('whatsapp_phone', phones)
           .order('account_name')
-      : Promise.resolve({ data: [] as Array<{ id: string; account_name: string; token_expires_at: string | null; brand_name: string | null; niche: string | null; tone: string | null; is_active: boolean }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; account_name: string; token_expires_at: string | null; brand_name: string | null; niche: string | null; tone: string | null; is_active: boolean; lora_status: string | null; lora_trained_at: string | null }> }),
     dataPhone
       ? supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
           .eq('whatsapp_phone', dataPhone).eq('state', 'published')
@@ -196,6 +198,25 @@ export default async function AccountPage({
         supabase.from('pending_posts').select('*', { count: 'exact', head: true }).eq('whatsapp_phone', dataPhone).eq('state', 'published').gte('created_at', monthAgo),
       ])
     : [{ count: 0 }, { count: 0 }];
+
+  // Surface mix for the last 30 days — feeds the SurfaceStats card so
+  // users see which IG surfaces they've used (and which they haven't).
+  const { data: surfaceRows } = dataPhone
+    ? await supabase
+        .from('pending_posts')
+        .select('surface')
+        .eq('whatsapp_phone', dataPhone)
+        .eq('state', 'published')
+        .gte('created_at', monthAgo)
+    : { data: [] };
+  const surfaceCounts: { surface: 'feed' | 'reels' | 'carousel' | 'story'; count: number }[] = [];
+  for (const row of surfaceRows ?? []) {
+    const s = (row.surface as string | null) ?? 'feed';
+    if (s !== 'feed' && s !== 'reels' && s !== 'carousel' && s !== 'story') continue;
+    const existing = surfaceCounts.find(c => c.surface === s);
+    if (existing) existing.count += 1;
+    else surfaceCounts.push({ surface: s as any, count: 1 });
+  }
 
   const { data: pendingPosts } = dataPhone
     ? await supabase.from('pending_posts')
@@ -302,6 +323,9 @@ export default async function AccountPage({
           ))}
         </div>
 
+        {/* Surface mix — Feed vs Reels vs Carousel vs Story split. */}
+        <SurfaceStats counts={surfaceCounts} />
+
         {/* Brand profile — promoted above Instagram because it controls every caption.
             For multi-account users, AccountSwitcher tabs let them pick which IG's
             brand profile they're editing. The badge tells them whether they're
@@ -344,6 +368,18 @@ export default async function AccountPage({
             }}
           />
         </section>
+
+        {/* Brand image style (LoRA) — per-account visual consistency.
+            Only renders when an IG account is connected. */}
+        {viewedAccount && (
+          <LoraTrainingPanel
+            phone={queryId}
+            accountId={viewedAccount.id}
+            accountName={viewedAccount.account_name}
+            status={(viewedAccount.lora_status as 'training' | 'ready' | 'failed' | null) ?? null}
+            trainedAt={viewedAccount.lora_trained_at ?? null}
+          />
+        )}
 
         {/* Instagram */}
         <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>

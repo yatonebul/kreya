@@ -5,7 +5,7 @@ import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCa
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, type CarouselItem } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions } from '@/lib/whatsapp-send';
-import { buildImageUrl, detectStyle } from '@/lib/image-generator';
+import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding } from '@/lib/whatsapp-onboarding';
@@ -288,7 +288,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     : await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions, surface);
   const caption = variants[0] ?? '';
 
-  const imageUrl = userMediaUrl ?? buildImageUrl(imagePromptText!, 'realistic');
+  const imageUrl = userMediaUrl ?? await buildBrandedImage(imagePromptText!, 'realistic', from);
 
   // Discard any stale pending_approval before creating new post
   const { data: staleDrafts } = await getSupabase()
@@ -328,7 +328,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
 
   // If user sent a photo AND asked for AI version — generate sibling post
   if (wantsAiAlso && imagePromptText) {
-    const aiImageUrl = buildImageUrl(imagePromptText, 'realistic');
+    const aiImageUrl = await buildBrandedImage(imagePromptText, 'realistic', from);
     const { data: aiPost } = await getSupabase()
       .from('pending_posts')
       .insert({
@@ -611,7 +611,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
       : Promise.resolve(pending.caption),
     isImageRequest && imagePrompt
-      ? Promise.resolve(buildImageUrl(imagePrompt, detectStyle(instruction)))
+      ? buildBrandedImage(imagePrompt, detectStyle(instruction), from)
       : Promise.resolve(pending.image_url),
   ]);
 
@@ -942,10 +942,14 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
 
   // One AI image per slide. detectStyle is photorealistic-by-default
   // unless the prompt mentions something like "illustration" or "logo".
-  const mediaItems: CarouselItem[] = spin.slides.map(s => ({
-    url: buildImageUrl(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt)),
-    is_video: false,
-  }));
+  // Brand LoRA flows in here too — when ready, every slide matches the
+  // user's feed aesthetic, not generic Flux-realistic.
+  const mediaItems: CarouselItem[] = await Promise.all(
+    spin.slides.map(async s => ({
+      url: await buildBrandedImage(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt), from),
+      is_video: false,
+    })),
+  );
 
   // Discard any other pending drafts so the new carousel has the lane to itself
   const { data: stale } = await supabase
@@ -1005,7 +1009,7 @@ async function handleSpinStory(from: string, sourcePostId: string) {
   // Vertical 9:16 image with the hook baked into the prompt so it appears
   // as overlay text. detectStyle picks photoreal vs illustration based
   // on prompt vocabulary.
-  const imageUrl = buildImageUrl(spin.imagePrompt, detectStyle(spin.imagePrompt));
+  const imageUrl = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from);
 
   // Discard conflicting drafts so the Story has a clean lane
   const { data: stale } = await supabase
