@@ -223,6 +223,21 @@ ALTER TABLE user_profiles
   ADD COLUMN IF NOT EXISTS journal_armed_at TIMESTAMPTZ;
 
 
+-- 22. instagram_accounts — per-account engagement auto-reply toggles.
+--     OFF by default (opt-in). When OFF, the IG webhook short-circuits
+--     before classification — saving Haiku calls + the noise of WA
+--     approval cards for users who don't want auto-engagement.
+--     Separated DM vs comments because some users want one but not
+--     the other (DM = personal, comments = public-facing).
+--     onboarding_offered_at is set the first time we ask the user
+--     "want me to draft replies?" so we don't keep asking after they
+--     ignored or declined the prompt once.
+ALTER TABLE instagram_accounts
+  ADD COLUMN IF NOT EXISTS dm_autoreply_enabled       BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS comment_autoreply_enabled  BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS engagement_offered_at      TIMESTAMPTZ;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);

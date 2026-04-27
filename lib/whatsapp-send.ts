@@ -126,6 +126,40 @@ export async function sendBrandSuggestion(
   });
 }
 
+// One-shot opt-in prompt sent the first time a comment or DM lands on
+// an account that hasn't enabled engagement yet. Buttons map to
+// engagement-flag mutations: enable both, comments only, or skip.
+// engagement_offered_at is stamped after this fires so we don't keep
+// asking on every event.
+export async function sendEngagementOptIn(
+  to: string,
+  igUserId: string,
+  accountName: string | null,
+) {
+  const accountTag = accountName ? `@${accountName}` : 'your account';
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text:
+          `📨 Someone just commented or DMed *${accountTag}*.\n\n` +
+          `Want me to draft replies in your brand voice? You'll always approve before anything sends — I never reply on my own.\n\n` +
+          `_(You can change this anytime: 'engagement on/off' on WA, or via /account.)_`,
+      },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `eng_on_all:${igUserId}`,      title: '✅ Yes, both' } },
+          { type: 'reply', reply: { id: `eng_on_comments:${igUserId}`, title: '💬 Comments only' } },
+          { type: 'reply', reply: { id: `eng_off:${igUserId}`,         title: '👋 No thanks' } },
+        ],
+      },
+    },
+  });
+}
+
 // DM auto-reply approval card — same shape as sendCommentApproval but
 // routed through dm_send / dm_skip handlers since IG comment replies
 // and IG DM sends use different Graph API endpoints.

@@ -135,6 +135,8 @@ async function processWebhook(body: any) {
         if (journalIdx !== null)      { await handleJournalUse(from, journalIdx);              return; }
         const searchTopic = parseSearchCommand(txt);
         if (searchTopic)              { await handleContentSearch(from, searchTopic);          return; }
+        const engCmd = parseEngagementCommand(txt);
+        if (engCmd)                   { await handleEngagementCommand(from, engCmd);            return; }
         const useHandle = parseUseAccountCommand(txt);
         if (useHandle)                { await handleUseAccount(from, useHandle);               return; }
         const profileEdit = parseProfileUpdate(txt);
@@ -504,6 +506,18 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleDmSkip(from, postId);
     return;
   }
+  if (action === 'eng_on_all' && postId) {
+    await handleEngagementToggle(from, postId, { dm: true,  comment: true  });
+    return;
+  }
+  if (action === 'eng_on_comments' && postId) {
+    await handleEngagementToggle(from, postId, { dm: false, comment: true  });
+    return;
+  }
+  if (action === 'eng_off' && postId) {
+    await handleEngagementToggle(from, postId, { dm: false, comment: false });
+    return;
+  }
 
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
@@ -736,6 +750,24 @@ function parseSearchCommand(text: string): string | null {
 
 function isJournalCommand(text: string): boolean {
   return /^(\/journal|journal\s+this|save\s+for\s+later)[!?.\s]*$/i.test(text.trim());
+}
+
+// Engagement toggle commands — match phrasings creators actually type.
+// Returns { feature: 'all' | 'dm' | 'comment', mode: 'on' | 'off' | 'status' } | null.
+function parseEngagementCommand(text: string): {
+  feature: 'all' | 'dm' | 'comment';
+  mode: 'on' | 'off' | 'status';
+} | null {
+  const t = text.trim().toLowerCase();
+  // Status check
+  if (/^(engagement\s+(status|state)|status\s+engagement|dm\s+autoreply\s+status|comment\s+autoreply\s+status)[!?.\s]*$/i.test(t)) {
+    return { feature: 'all', mode: 'status' };
+  }
+  const m = t.match(/^(engagement|dm\s+autoreply|comments?\s+autoreply|dm|comments?)\s+(on|off|enable|disable)[!?.\s]*$/i);
+  if (!m) return null;
+  const target = m[1].includes('dm') ? 'dm' : m[1].startsWith('comment') ? 'comment' : 'all';
+  const mode   = (m[2] === 'on' || m[2] === 'enable') ? 'on' : 'off';
+  return { feature: target, mode };
 }
 
 function isJournalListCommand(text: string): boolean {
@@ -1191,6 +1223,88 @@ async function handleDmSkip(from: string, eventId: string) {
     resolved_at: new Date().toISOString(),
   }).eq('id', eventId).eq('status', 'pending');
   await sendText(from, '👌 Skipped. The DM stays unanswered on IG.');
+}
+
+// Applies the chosen flags to a single IG account. Called from the
+// 3-button eng_on_all / eng_on_comments / eng_off flow that fires
+// the first time an event lands on an opt-out account.
+async function handleEngagementToggle(
+  from: string,
+  igUserId: string,
+  flags: { dm: boolean; comment: boolean },
+) {
+  const supabase = getSupabase();
+  const { error, data } = await supabase
+    .from('instagram_accounts')
+    .update({
+      dm_autoreply_enabled:      flags.dm,
+      comment_autoreply_enabled: flags.comment,
+      engagement_offered_at:     new Date().toISOString(),
+    })
+    .eq('instagram_user_id', igUserId)
+    .in('whatsapp_phone', phoneVariants(from))
+    .select('account_name')
+    .maybeSingle();
+
+  if (error || !data) {
+    await sendText(from, "⚠️ Couldn't update — that account may not be linked to this number.");
+    return;
+  }
+
+  const summary = flags.dm && flags.comment
+    ? '✅ *Both DMs and comments* will get drafted replies for approval.'
+    : flags.comment
+      ? '💬 *Comments only* — DMs stay quiet.'
+      : '👋 *Auto-reply off.* I won\'t draft anything; events stay in Vercel logs only.';
+  await sendText(from, `Got it for *@${data.account_name}*.\n\n${summary}\n\nFlip later with: \`engagement on\`, \`dm autoreply off\`, etc.`);
+}
+
+// Free-form WA commands — apply across all of the user's IG accounts
+// (multi-account users usually want the same engagement pref everywhere;
+// per-account control sits on /account UI).
+async function handleEngagementCommand(
+  from: string,
+  cmd: { feature: 'all' | 'dm' | 'comment'; mode: 'on' | 'off' | 'status' },
+) {
+  const supabase = getSupabase();
+  const { data: accounts } = await supabase
+    .from('instagram_accounts')
+    .select('account_name, dm_autoreply_enabled, comment_autoreply_enabled')
+    .in('whatsapp_phone', phoneVariants(from))
+    .order('account_name');
+
+  if (!accounts?.length) {
+    await sendText(from, '📸 Connect Instagram first on /connect, then engagement settings make sense.');
+    return;
+  }
+
+  if (cmd.mode === 'status') {
+    const lines = accounts.map(a =>
+      `• *@${a.account_name}*: DM ${a.dm_autoreply_enabled ? '✅ on' : '⚪️ off'} · Comments ${a.comment_autoreply_enabled ? '✅ on' : '⚪️ off'}`,
+    ).join('\n');
+    await sendText(
+      from,
+      `📊 *Engagement auto-reply status:*\n\n${lines}\n\nChange with: \`engagement on/off\`, \`dm autoreply on\`, \`comment autoreply off\`.`,
+    );
+    return;
+  }
+
+  const enable = cmd.mode === 'on';
+  const patch: Record<string, boolean | string> = { engagement_offered_at: new Date().toISOString() };
+  if (cmd.feature === 'all' || cmd.feature === 'dm')      patch.dm_autoreply_enabled      = enable;
+  if (cmd.feature === 'all' || cmd.feature === 'comment') patch.comment_autoreply_enabled = enable;
+
+  await supabase
+    .from('instagram_accounts')
+    .update(patch)
+    .in('whatsapp_phone', phoneVariants(from));
+
+  const what = cmd.feature === 'all' ? 'Both DM and comment' : cmd.feature === 'dm' ? 'DM' : 'Comment';
+  const verb = enable ? 'enabled' : 'disabled';
+  await sendText(
+    from,
+    `${enable ? '✅' : '👋'} *${what} auto-reply ${verb}* across ${accounts.length} account${accounts.length === 1 ? '' : 's'}.\n\nType \`engagement status\` anytime to see current settings.`,
+  );
 }
 
 async function handleDashboardLink(from: string) {
