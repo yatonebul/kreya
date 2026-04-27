@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
-import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, type CarouselItem } from '@/lib/instagram-publish';
+import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -11,6 +11,7 @@ import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding } from '@/lib/whatsapp-onboarding';
 import { getProfileContextForPhone, updateActiveBrandProfile } from '@/lib/brand-profile';
 import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
+import { findBestTimeForUser, nextOccurrenceOfBestTime, type BestTime } from '@/lib/best-time';
 import { adminUrlToken, createWaMagicToken } from '@/lib/session';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
@@ -128,6 +129,12 @@ async function processWebhook(body: any) {
         if (isLearnStyleCommand(txt)) { await handleLearnStyle(from);                         return; }
         if (isCarouselCommand(txt))   { await handleCarouselStart(from);                      return; }
         if (isAccountsCommand(txt))   { await handleListAccounts(from);                       return; }
+        if (isJournalListCommand(txt)){ await handleJournalList(from);                         return; }
+        if (isJournalCommand(txt))    { await handleJournalArm(from);                          return; }
+        const journalIdx = parseJournalUseCommand(txt);
+        if (journalIdx !== null)      { await handleJournalUse(from, journalIdx);              return; }
+        const searchTopic = parseSearchCommand(txt);
+        if (searchTopic)              { await handleContentSearch(from, searchTopic);          return; }
         const useHandle = parseUseAccountCommand(txt);
         if (useHandle)                { await handleUseAccount(from, useHandle);               return; }
         const profileEdit = parseProfileUpdate(txt);
@@ -193,12 +200,30 @@ async function processWebhook(body: any) {
         }
 
         if (hasScheduleIntent(text)) {
-          const scheduleTime = await parseScheduleTime(text);
+          // "best time" intent — resolve via past-insights aggregator
+          // before falling through to the natural-language parser.
+          const wantsBestTime = /\bbest\s*time\b/i.test(text);
+          let scheduleTime: Date | null = null;
+          let bestTimeMeta: BestTime | null = null;
+          if (wantsBestTime) {
+            bestTimeMeta = await findBestTimeForUser(from);
+            scheduleTime = nextOccurrenceOfBestTime(bestTimeMeta);
+          } else {
+            scheduleTime = await parseScheduleTime(text);
+          }
+
           if (scheduleTime && scheduleTime > new Date()) {
             await getSupabase().from('pending_posts')
               .update({ state: 'scheduled', scheduled_for: scheduleTime.toISOString() })
               .eq('id', pendingApproval.id);
-            await sendScheduledActions(from, formatScheduleConfirmation(scheduleTime));
+
+            const baseLabel = formatScheduleConfirmation(scheduleTime);
+            const label = bestTimeMeta?.source === 'history'
+              ? `${baseLabel} — your historical best slot (${bestTimeMeta.weekdayLabel} ${bestTimeMeta.hourLabel}, based on ${bestTimeMeta.sampleSize} past posts)`
+              : bestTimeMeta?.source === 'default'
+                ? `${baseLabel} — using a sensible default (Tue 7pm). I'll personalise once you have ~5 posts with insights.`
+                : baseLabel;
+            await sendScheduledActions(from, label);
             return;
           }
         }
@@ -214,6 +239,16 @@ async function processWebhook(body: any) {
         if (pendingApproval.sibling_id) {
           await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', pendingApproval.sibling_id);
         }
+      }
+
+      // Journal-armed branch: if the user typed /journal in the last 5
+      // minutes, the next inbound message becomes a journal entry, not
+      // a draft. Auto-clears the flag after consumption (or after the
+      // 5-min TTL even without consumption).
+      const wasArmed = await consumeJournalArmIfActive(from);
+      if (wasArmed) {
+        await captureJournalEntry(from, message, messageType);
+        return;
       }
 
       await handleNewPost(from, message, messageType);
@@ -461,6 +496,14 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleCommentSkip(from, postId);
     return;
   }
+  if (action === 'dm_send' && postId) {
+    await handleDmSend(from, postId);
+    return;
+  }
+  if (action === 'dm_skip' && postId) {
+    await handleDmSkip(from, postId);
+    return;
+  }
 
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
@@ -686,6 +729,26 @@ function isAccountsCommand(text: string): boolean {
   return /^(\/accounts|accounts|my\s+accounts|list\s+accounts|connected\s+accounts)[!?.\s]*$/i.test(text.trim());
 }
 
+function parseSearchCommand(text: string): string | null {
+  const m = text.trim().match(/^(?:\/find|\/search|find|search|past\s+posts?\s+(?:about\s+)?)\s+(.+?)[!?.\s]*$/i);
+  return m ? m[1].trim() : null;
+}
+
+function isJournalCommand(text: string): boolean {
+  return /^(\/journal|journal\s+this|save\s+for\s+later)[!?.\s]*$/i.test(text.trim());
+}
+
+function isJournalListCommand(text: string): boolean {
+  return /^(\/journal\s+list|journal\s+list|my\s+journal|list\s+journal)[!?.\s]*$/i.test(text.trim());
+}
+
+function parseJournalUseCommand(text: string): number | null {
+  const m = text.trim().match(/^(?:\/use|use\s+journal|use)\s+#?(\d+)[!?.\s]*$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return Number.isFinite(n) && n >= 1 && n <= 10 ? n : null;
+}
+
 function parseUseAccountCommand(text: string): string | null {
   const m = text.trim().match(/^(?:\/use|use|switch\s+to|post\s+as)\s+@?([A-Za-z0-9._-]+)[!?.\s]*$/i);
   return m ? m[1].trim() : null;
@@ -790,6 +853,169 @@ async function handleLearnStyle(from: string) {
   } else {
     await sendText(from, `⚠️ Couldn't update your voice profile right now — try again in a minute.`);
   }
+}
+
+// Content repository search — Postgres FTS over caption column.
+// Returns top 3 matches; user gets dates + IG links so they can riff
+// on past content instead of repeating themselves.
+async function handleContentSearch(from: string, topic: string) {
+  const supabase = getSupabase();
+  const { data: matches } = await supabase
+    .from('pending_posts')
+    .select('id, caption, ig_post_url, published_at, surface')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'published')
+    .textSearch('caption', topic, { type: 'plain', config: 'english' })
+    .order('published_at', { ascending: false })
+    .limit(3);
+
+  if (!matches?.length) {
+    await sendText(from, `🔍 No past posts about *${topic}* yet. Send me a voice note to make one!`);
+    return;
+  }
+
+  const lines = matches.map((m, i) => {
+    const date = m.published_at
+      ? new Date(m.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : '?';
+    const surface = m.surface ?? 'feed';
+    const snippet = (m.caption ?? '').slice(0, 140).replace(/\n+/g, ' ');
+    const link    = m.ig_post_url ? `\n   🔗 ${m.ig_post_url}` : '';
+    return `*${i + 1}.* ${date} · ${surface}\n   _${snippet}${m.caption && m.caption.length > 140 ? '…' : ''}_${link}`;
+  }).join('\n\n');
+
+  await sendText(from, `🔍 *Past posts about "${topic}":*\n\n${lines}\n\nSay "use 1" / "use 2" / "use 3" to riff on one as a fresh post.`);
+}
+
+// Returns true if the user had /journal-armed within the last 5 minutes,
+// AND clears the flag in the same call. Idempotent: a second call
+// returns false because the flag is gone.
+async function consumeJournalArmIfActive(from: string): Promise<boolean> {
+  const supabase = getSupabase();
+  const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('journal_armed_at')
+    .eq('whatsapp_phone', from)
+    .maybeSingle();
+  if (!data?.journal_armed_at || data.journal_armed_at < fiveMinAgo) return false;
+  await supabase
+    .from('user_profiles')
+    .update({ journal_armed_at: null })
+    .eq('whatsapp_phone', from);
+  return true;
+}
+
+// Stores a voice / text message as a journal_entry without firing the
+// generation pipeline. Voice notes are transcribed first so the entry
+// is searchable and previewable.
+async function captureJournalEntry(from: string, message: any, messageType: string) {
+  const supabase = getSupabase();
+  let body = '';
+
+  if (messageType === 'text') {
+    body = message?.text?.body ?? '';
+  } else if (messageType === 'audio') {
+    const mediaId  = message?.audio?.id;
+    const mimeType = message?.audio?.mime_type ?? 'audio/ogg';
+    if (mediaId) {
+      try {
+        body = await transcribeVoice(mediaId, mimeType);
+      } catch (err) {
+        console.error('[journal-capture] voice transcribe failed:', err);
+      }
+    }
+  } else {
+    await sendText(from, '📓 Journal supports voice notes and text only for now — try sending a thought instead.');
+    return;
+  }
+
+  if (!body.trim()) {
+    await sendText(from, "📓 I didn't catch anything to save. Try /journal again with a clear voice note or text.");
+    return;
+  }
+
+  await supabase.from('pending_posts').insert({
+    whatsapp_phone: from,
+    caption: body.trim(),
+    state: 'journal_entry',
+    image_url: '',
+    image_source: 'ai',
+    is_video: false,
+    surface: 'feed',
+  });
+
+  await sendText(
+    from,
+    `📓 *Saved to your journal.*\n\n_"${body.trim().slice(0, 200)}${body.trim().length > 200 ? '…' : ''}"_\n\n` +
+    `Pull it up anytime with \`journal list\`, or turn it into a post with \`use 1\`.`,
+  );
+}
+
+// /journal — arm the next message as a journal entry.
+async function handleJournalArm(from: string) {
+  const supabase = getSupabase();
+  await supabase
+    .from('user_profiles')
+    .update({ journal_armed_at: new Date().toISOString() })
+    .eq('whatsapp_phone', from);
+  await sendText(
+    from,
+    '📓 *Journal armed.*\n\nSend your next thought (voice note or text) and I\'ll save it without making a post. ' +
+    'Pull it up later with `journal list` or promote it to a draft with `use 1`.\n\n' +
+    '_Auto-cancels after 5 minutes if you don\'t send anything._',
+  );
+}
+
+// `journal list` — show last 5 entries with previews + numbers.
+async function handleJournalList(from: string) {
+  const supabase = getSupabase();
+  const { data: entries } = await supabase
+    .from('pending_posts')
+    .select('id, caption, created_at')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'journal_entry')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  if (!entries?.length) {
+    await sendText(from, '📓 Your journal is empty. Type `/journal` to save your next thought without posting it.');
+    return;
+  }
+
+  const lines = entries.map((e, i) => {
+    const date    = new Date(e.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const snippet = (e.caption ?? '').slice(0, 120).replace(/\n+/g, ' ');
+    return `*${i + 1}.* ${date}\n   _${snippet}${e.caption && e.caption.length > 120 ? '…' : ''}_`;
+  }).join('\n\n');
+
+  await sendText(from, `📓 *Your journal* (last ${entries.length}):\n\n${lines}\n\nSay "use 1" to turn one into a draft.`);
+}
+
+// `use <N>` — promote journal entry N to a pending_approval draft.
+async function handleJournalUse(from: string, idx: number) {
+  const supabase = getSupabase();
+  const { data: entries } = await supabase
+    .from('pending_posts')
+    .select('id, caption')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'journal_entry')
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  if (!entries || entries.length < idx) {
+    await sendText(from, `📓 You don't have a journal entry #${idx}. Try \`journal list\` to see what's there.`);
+    return;
+  }
+
+  const target = entries[idx - 1];
+  // Hand off to handleNewPost via a synthetic text message — keeps
+  // generation, image, variants, and surface routing identical to a
+  // brand-new voice-note flow.
+  await sendText(from, `📓 Using journal #${idx} — generating a fresh post from it now…`);
+  await handleNewPost(from, { text: { body: target.caption } }, 'text');
+  // Mark the journal entry as used so it doesn't keep showing up.
+  await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', target.id);
 }
 
 async function handleListAccounts(from: string) {
@@ -912,6 +1138,59 @@ async function handleCommentSkip(from: string, eventId: string) {
     resolved_at: new Date().toISOString(),
   }).eq('id', eventId).eq('status', 'pending');
   await sendText(from, '👌 Skipped. The comment stays unanswered on IG.');
+}
+
+async function handleDmSend(from: string, eventId: string) {
+  const supabase = getSupabase();
+  const { data: event } = await supabase
+    .from('ig_dm_events')
+    .select('id, ig_message_id, instagram_user_id, sender_psid, generated_reply, status')
+    .eq('id', eventId)
+    .maybeSingle();
+  if (!event || event.status !== 'pending') {
+    await sendText(from, 'That DM was already handled — no action taken.');
+    return;
+  }
+
+  const { data: account } = await supabase
+    .from('instagram_accounts')
+    .select('access_token')
+    .eq('instagram_user_id', event.instagram_user_id)
+    .maybeSingle();
+  if (!account?.access_token) {
+    await sendText(from, "⚠️ Can't send DM — IG access token expired. Reconnect on /connect.");
+    return;
+  }
+
+  try {
+    const sent = await postInstagramDm(
+      event.instagram_user_id,
+      event.sender_psid,
+      event.generated_reply ?? '',
+      account.access_token,
+    );
+    await supabase.from('ig_dm_events').update({
+      status: 'sent',
+      sent_at: new Date().toISOString(),
+      resolved_at: new Date().toISOString(),
+    }).eq('id', event.id);
+    await sendText(from, `✅ DM sent (id ${sent.message_id.slice(0, 12)}…)`);
+  } catch (err: any) {
+    console.error('[dm-send] failed:', err.message);
+    const hint = err.message?.includes('24') || err.message?.includes('window')
+      ? ' (the 24-hour DM window has likely closed — IG only allows replies within 24h of the user\'s last message)'
+      : '';
+    await sendText(from, `⚠️ Couldn't send the DM${hint}: ${err.message?.slice(0, 200) ?? 'unknown error'}`);
+  }
+}
+
+async function handleDmSkip(from: string, eventId: string) {
+  const supabase = getSupabase();
+  await supabase.from('ig_dm_events').update({
+    status: 'skipped',
+    resolved_at: new Date().toISOString(),
+  }).eq('id', eventId).eq('status', 'pending');
+  await sendText(from, '👌 Skipped. The DM stays unanswered on IG.');
 }
 
 async function handleDashboardLink(from: string) {

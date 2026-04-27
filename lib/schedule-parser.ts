@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
-const SCHEDULE_PATTERN = /\b(schedule|post at|send at|publish at|tomorrow|tonight|tonight|next\s+\w+|in \d+\s*(hour|minute|day|hr|min)|at \d{1,2}(:\d{2})?\s*(am|pm)?)\b/i;
+const SCHEDULE_PATTERN = /\b(schedule|post at|send at|publish at|tomorrow|tonight|tonight|next\s+\w+|in \d+\s*(hour|minute|day|hr|min)|at \d{1,2}(:\d{2})?\s*(am|pm)?|best\s*time)\b/i;
 
 export function hasScheduleIntent(text: string): boolean {
   return SCHEDULE_PATTERN.test(text);

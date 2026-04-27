@@ -30,6 +30,37 @@ export async function postCommentReply(
   return { id: data.id };
 }
 
+// Sends an Instagram DM via the messaging endpoint. recipientPsid is
+// the page-scoped sender ID Meta hands us in the messages webhook
+// payload. Same 24h re-engagement window as comments — outside that
+// window the call fails and we surface that to the user via WA.
+export async function postInstagramDm(
+  igUserId: string,
+  recipientPsid: string,
+  message: string,
+  accessToken: string,
+): Promise<{ message_id: string }> {
+  const res = await fetch(
+    `https://graph.instagram.com/v21.0/${igUserId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        recipient: { id: recipientPsid },
+        message:   { text: message },
+      }),
+    },
+  );
+  const data = await res.json();
+  if (!data?.message_id) {
+    throw new Error(`DM send failed: ${JSON.stringify(data)}`);
+  }
+  return { message_id: data.message_id };
+}
+
 // Stories live for 24h, are vertical 9:16, and have NO caption field —
 // the "caption" in IG Stories is the text overlay burned into the
 // image itself. We bake the overlay text into the image prompt so the

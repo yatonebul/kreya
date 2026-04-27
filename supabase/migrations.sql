@@ -185,6 +185,44 @@ ALTER TABLE user_profiles
 CREATE INDEX IF NOT EXISTS idx_user_profiles_last_nudge ON user_profiles(last_idle_nudge_at);
 
 
+-- 19. pending_posts — full-text search on captions for "find <topic>"
+--     content repository search. GIN index on the caption tsvector
+--     makes lookups <10ms even for users with thousands of posts.
+CREATE INDEX IF NOT EXISTS idx_pending_posts_caption_fts
+  ON pending_posts USING GIN (to_tsvector('english', caption))
+  WHERE state = 'published';
+
+
+-- 20. ig_dm_events — DM auto-reply audit + idempotency (mirrors
+--     ig_comment_events for the messages webhook field). Sender PSID
+--     is the IGSID Meta sends in the messaging webhook payload.
+CREATE TABLE IF NOT EXISTS ig_dm_events (
+  id                   UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  ig_message_id        TEXT         NOT NULL UNIQUE,
+  instagram_user_id    TEXT         NOT NULL,
+  sender_psid          TEXT         NOT NULL,
+  sender_handle        TEXT,
+  message_text         TEXT,
+  classification       TEXT,
+  generated_reply      TEXT,
+  status               TEXT         NOT NULL DEFAULT 'pending',  -- pending|sent|skipped|spam
+  sent_at              TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ  DEFAULT NOW(),
+  resolved_at          TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_ig_dm_events_status  ON ig_dm_events(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ig_dm_events_account ON ig_dm_events(instagram_user_id, created_at DESC);
+
+
+-- 21. user_profiles — voice journaling armed flag.
+--     When the user types /journal, we stamp this with NOW(); the next
+--     incoming text/voice message within 5 minutes is saved as a
+--     pending_posts row with state='journal_entry' instead of going
+--     through the standard draft flow. Cleared on use.
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS journal_armed_at TIMESTAMPTZ;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
