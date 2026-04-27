@@ -139,6 +139,42 @@ ALTER TABLE pending_posts
 CREATE INDEX IF NOT EXISTS idx_pending_posts_parent ON pending_posts(parent_post_id) WHERE parent_post_id IS NOT NULL;
 
 
+-- 16. ig_comment_events — engagement auto-reply audit + idempotency.
+--     Meta delivers comment webhook events; we store each one (keyed by
+--     ig_comment_id so dupes are ignored), generate a reply in the
+--     account's brand voice, and ship it to the owner's WhatsApp for
+--     approval. Once approved, the same row tracks the sent reply id.
+CREATE TABLE IF NOT EXISTS ig_comment_events (
+  id                   UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  ig_comment_id        TEXT         NOT NULL UNIQUE,
+  ig_media_id          TEXT,
+  instagram_user_id    TEXT         NOT NULL,
+  commenter_handle     TEXT,
+  comment_text         TEXT,
+  classification       TEXT,        -- 'question'|'compliment'|'complaint'|'spam'|null
+  generated_reply      TEXT,
+  status               TEXT         NOT NULL DEFAULT 'pending',  -- pending|sent|skipped|spam
+  sent_reply_id        TEXT,
+  created_at           TIMESTAMPTZ  DEFAULT NOW(),
+  resolved_at          TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_ig_comment_events_status ON ig_comment_events(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ig_comment_events_account ON ig_comment_events(instagram_user_id, created_at DESC);
+
+
+-- 17. instagram_accounts — per-brand image LoRA for visual consistency.
+--     A LoRA fine-tunes a base image model on the user's last ~50 IG
+--     photos so generated images match their brand aesthetic. We train
+--     once via Replicate (~$5, 20 min), store the model identifier, and
+--     pass it to every subsequent buildImageUrl call. Status lets us
+--     surface "training…" / "ready" / "failed" in the UI without polling.
+ALTER TABLE instagram_accounts
+  ADD COLUMN IF NOT EXISTS lora_model_id      TEXT,
+  ADD COLUMN IF NOT EXISTS lora_status        TEXT,                    -- 'training' | 'ready' | 'failed' | null
+  ADD COLUMN IF NOT EXISTS lora_trained_at    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS lora_training_id   TEXT;                    -- Replicate training run id for status polling
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
@@ -173,6 +209,19 @@ CREATE INDEX IF NOT EXISTS idx_pending_posts_parent ON pending_posts(parent_post
 --   $$
 --   SELECT net.http_get(
 --     url := 'https://kreya-github.vercel.app/api/cron/post-mortem',
+--     headers := '{"Authorization":"Bearer YOUR_CRON_SECRET"}'::jsonb
+--   );
+--   $$
+-- );
+--
+-- 4) SCHEDULE: poll LoRA training status, every 10 minutes (training
+--    takes ~20 min so this catches completions within 30 min worst case)
+-- SELECT cron.schedule(
+--   'kreya-poll-lora',
+--   '*/10 * * * *',
+--   $$
+--   SELECT net.http_get(
+--     url := 'https://kreya-github.vercel.app/api/cron/poll-lora-status',
 --     headers := '{"Authorization":"Bearer YOUR_CRON_SECRET"}'::jsonb
 --   );
 --   $$

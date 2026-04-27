@@ -1,9 +1,9 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin } from '@/lib/caption-generator';
+import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
-import { publishToInstagram, publishCarouselToInstagram, type CarouselItem } from '@/lib/instagram-publish';
+import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, type CarouselItem } from '@/lib/instagram-publish';
 import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -449,6 +449,18 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleSpinReelScript(from, postId);
     return;
   }
+  if (action === 'spin_story' && postId) {
+    await handleSpinStory(from, postId);
+    return;
+  }
+  if (action === 'comment_send' && postId) {
+    await handleCommentSend(from, postId);
+    return;
+  }
+  if (action === 'comment_skip' && postId) {
+    await handleCommentSkip(from, postId);
+    return;
+  }
 
   const post = postId ? await getPostById(postId) : await getPostByState(from, 'pending_approval');
 
@@ -474,21 +486,26 @@ async function handleButtonReply(from: string, action: string, postId: string | 
 
     const carouselItems: CarouselItem[] | null = Array.isArray(post.media_items) ? post.media_items : null;
     const isCarousel = carouselItems !== null && carouselItems.length > 1;
+    const isStory = post.surface === 'story';
     const postSurface: 'feed' | 'reels' = post.surface === 'reels' ? 'reels' : (post.is_video ? 'reels' : 'feed');
 
     await sendText(
       from,
       isCarousel
         ? `⏳ Publishing carousel (${carouselItems.length} slides)...`
-        : postSurface === 'reels'
-          ? '⏳ Publishing your Reel to Instagram...'
-          : '⏳ Publishing to Instagram...',
+        : isStory
+          ? '⏳ Publishing to your Story...'
+          : postSurface === 'reels'
+            ? '⏳ Publishing your Reel to Instagram...'
+            : '⏳ Publishing to Instagram...',
     );
     let result;
     try {
       result = isCarousel
         ? await publishCarouselToInstagram(from, post.caption, carouselItems)
-        : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
+        : isStory
+          ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
+          : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
     } catch (err: any) {
       if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
         const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
@@ -513,15 +530,20 @@ async function handleButtonReply(from: string, action: string, postId: string | 
 
     const postLabel = isCarousel
       ? 'carousel'
-      : postSurface === 'reels'
-        ? 'Reel'
-        : 'post';
+      : isStory
+        ? 'Story'
+        : postSurface === 'reels'
+          ? 'Reel'
+          : 'post';
     await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
 
     // Phase B repurpose offer — spin the same idea into another surface
     // so the creator can multiply one voice note into a week of content.
-    const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
-    await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
+    // Stories already are the spin destination, so we don't double-offer.
+    if (!isStory) {
+      const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
+      await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
+    }
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
@@ -847,6 +869,51 @@ async function handleUseAccount(from: string, handle: string) {
 // text storyboard (reel script). Drafts get parent_post_id pointing
 // back to the source so analytics can aggregate ideas across surfaces.
 
+async function handleCommentSend(from: string, eventId: string) {
+  const supabase = getSupabase();
+  const { data: event } = await supabase
+    .from('ig_comment_events')
+    .select('id, ig_comment_id, instagram_user_id, generated_reply, status')
+    .eq('id', eventId)
+    .maybeSingle();
+  if (!event || event.status !== 'pending') {
+    await sendText(from, "That reply was already handled — no action taken.");
+    return;
+  }
+
+  const { data: account } = await supabase
+    .from('instagram_accounts')
+    .select('access_token')
+    .eq('instagram_user_id', event.instagram_user_id)
+    .maybeSingle();
+  if (!account?.access_token) {
+    await sendText(from, "⚠️ Can't post — IG access token expired. Reconnect on /connect.");
+    return;
+  }
+
+  try {
+    const sent = await postCommentReply(event.ig_comment_id, event.generated_reply ?? '', account.access_token);
+    await supabase.from('ig_comment_events').update({
+      status: 'sent',
+      sent_reply_id: sent.id,
+      resolved_at: new Date().toISOString(),
+    }).eq('id', event.id);
+    await sendText(from, '✅ Reply sent.');
+  } catch (err: any) {
+    console.error('[comment-send] failed:', err.message);
+    await sendText(from, `⚠️ Couldn't post the reply: ${err.message?.slice(0, 200) ?? 'unknown error'}`);
+  }
+}
+
+async function handleCommentSkip(from: string, eventId: string) {
+  const supabase = getSupabase();
+  await supabase.from('ig_comment_events').update({
+    status: 'skipped',
+    resolved_at: new Date().toISOString(),
+  }).eq('id', eventId).eq('status', 'pending');
+  await sendText(from, '👌 Skipped. The comment stays unanswered on IG.');
+}
+
 async function handleDashboardLink(from: string) {
   const token = await createWaMagicToken(from);
   const url = `${APP_URL}/api/auth/wa-magic?token=${token}&phone=${encodeURIComponent(from)}`;
@@ -916,6 +983,71 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     `📑 *Carousel storyboard:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
   );
   await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'feed');
+}
+
+async function handleSpinStory(from: string, sourcePostId: string) {
+  const supabase = getSupabase();
+  const source = await getPostById(sourcePostId);
+  if (!source) {
+    await sendText(from, "I couldn't find that post anymore — try a fresh one.");
+    return;
+  }
+
+  await sendText(from, '🌅 Spinning your idea into a Story — generating the visual...');
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateStorySpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't generate the Story — try again.");
+    return;
+  }
+
+  // Vertical 9:16 image with the hook baked into the prompt so it appears
+  // as overlay text. detectStyle picks photoreal vs illustration based
+  // on prompt vocabulary.
+  const imageUrl = buildImageUrl(spin.imagePrompt, detectStyle(spin.imagePrompt));
+
+  // Discard conflicting drafts so the Story has a clean lane
+  const { data: stale } = await supabase
+    .from('pending_posts')
+    .select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  // Stories have no IG caption — store the hook so the preview text
+  // shows it. Publishing path uses publishStoryToInstagram which skips
+  // the caption param entirely.
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption: spin.hook,
+      image_url: imageUrl,
+      image_source: 'ai',
+      is_video: false,
+      surface: 'story',
+      state: 'pending_approval',
+      parent_post_id: sourcePostId,
+    })
+    .select('id')
+    .single();
+  if (!post) {
+    await sendText(from, '⚠️ Saved the Story idea but had trouble creating the draft — try again.');
+    return;
+  }
+
+  await sendText(
+    from,
+    `🌅 *Story preview*\n\n` +
+    `Hook (overlay): *${spin.hook}*\n\n` +
+    `Stories don't have a caption — the visual carries the message. ` +
+    `Approve to push to your 24h Story strip.`,
+  );
+  await sendPostPreview(from, imageUrl, spin.hook, post.id, false, 'feed');
 }
 
 async function handleSpinReelScript(from: string, sourcePostId: string) {

@@ -176,6 +176,50 @@ export async function generateCarouselSpin(
   return null;
 }
 
+export type StorySpin = {
+  hook: string;        // 1-5 word headline burned onto the image
+  imagePrompt: string; // background scene description, includes overlay text
+};
+
+// Stories have no IG caption — the entire message is the visual + an
+// optional sticker/text overlay. We generate a 1-5 word hook (which
+// gets baked into the image prompt as readable text) and an atmospheric
+// background scene. Result is one image; user sees it in the WA preview
+// and approves to publish straight to their 24h Story strip.
+export async function generateStorySpin(
+  sourceCaption: string,
+  profileContext?: string,
+): Promise<StorySpin | null> {
+  const system =
+    `${buildSystem(profileContext, 'feed')}\n\n` +
+    `You generate Instagram Story content. Stories are 9:16 vertical, ` +
+    `live for 24h, and the message lives in the visual itself rather ` +
+    `than a long caption.\n\n` +
+    `Return ONLY a JSON object — no prose, no markdown, no code fences.\n` +
+    `Shape: { "hook": string, "imagePrompt": string }\n` +
+    `- hook: 1-5 words MAX. Punchy, looks good rendered as bold overlay text. Examples: "POV: I quit", "New idea brewing", "Behind the scenes".\n` +
+    `- imagePrompt: cinematic background scene for the AI image generator. Describe atmosphere, lighting, framing. Vertical 9:16. People shown from behind / silhouette only — never close-up faces. End with: ' with bold white text overlay reading "<hook>"' so the hook appears burned into the image.`;
+
+  const msg = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 300,
+    system,
+    messages: [{
+      role: 'user',
+      content: `Source post caption (turn this into a 9:16 Instagram Story):\n\n${sourceCaption}\n\nReturn the JSON.`,
+    }],
+  });
+
+  const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.hook && parsed?.imagePrompt) {
+      return parsed as StorySpin;
+    }
+  } catch {}
+  return null;
+}
+
 export type ReelSpin = {
   hook: string;
   scenes: { visual: string; voiceover: string; textOverlay: string }[];
