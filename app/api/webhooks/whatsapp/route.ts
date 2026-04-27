@@ -4,14 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding } from '@/lib/whatsapp-onboarding';
 import { getProfileContextForPhone, updateActiveBrandProfile } from '@/lib/brand-profile';
 import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from '@/lib/schedule-parser';
-import { adminUrlToken } from '@/lib/session';
+import { adminUrlToken, createWaMagicToken } from '@/lib/session';
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
 const APP_URL      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
@@ -96,9 +96,14 @@ async function processWebhook(body: any) {
       if (stillOnboarding) return;
     }
 
-    // Button replies
+    // Button replies AND list replies — both surface here as type=interactive.
+    // WA wraps them differently (button_reply vs list_reply) but the id we
+    // encoded is structurally identical, so the rest of the routing is shared.
     if (messageType === 'interactive') {
-      const rawId: string = message.interactive?.button_reply?.id ?? '';
+      const rawId: string =
+        message.interactive?.button_reply?.id ??
+        message.interactive?.list_reply?.id ??
+        '';
       const colonIdx = rawId.indexOf(':');
       const action = colonIdx >= 0 ? rawId.slice(0, colonIdx) : rawId;
       const postId = colonIdx >= 0 ? rawId.slice(colonIdx + 1) : null;
@@ -193,7 +198,7 @@ async function processWebhook(body: any) {
             await getSupabase().from('pending_posts')
               .update({ state: 'scheduled', scheduled_for: scheduleTime.toISOString() })
               .eq('id', pendingApproval.id);
-            await sendText(from, `🗓️ Scheduled for ${formatScheduleConfirmation(scheduleTime)}. I'll post it automatically.`);
+            await sendScheduledActions(from, formatScheduleConfirmation(scheduleTime));
             return;
           }
         }
@@ -387,11 +392,8 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await sendText(from, "✨ I'm ready — voice-note, photo, or one line and I'll write your next post.");
     return;
   }
-  if (action === 'schedule_next') {
-    await sendText(
-      from,
-      "📅 Send your next draft, then reply with a time:\n\n• \"post tomorrow at 9am\"\n• \"schedule for Friday 3pm\"\n• \"best time this week\"",
-    );
+  if (action === 'visit_dashboard') {
+    await handleDashboardLink(from);
     return;
   }
   if (action === 'refresh_voice') {
@@ -426,6 +428,17 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
   if (action === 'spin_skip') {
     await sendText(from, "👌 Got it. Send another voice note whenever you're ready for the next post.");
+    return;
+  }
+  if (action === 'schedule' && postId) {
+    // The post stays in pending_approval. The user replies with a time
+    // ("tomorrow at 9am", "Friday 3pm") and the existing text-message
+    // schedule-intent parser at the top of the webhook flips state to
+    // 'scheduled' and confirms.
+    await sendText(
+      from,
+      `📅 *When should I post it?*\n\nReply with a time, e.g.:\n• "tomorrow at 9am"\n• "Friday 3pm"\n• "in 2 hours"\n\nOr tap a draft option again to approve / edit / discard.`,
+    );
     return;
   }
   if (action === 'spin_carousel' && postId) {
@@ -833,6 +846,15 @@ async function handleUseAccount(from: string, handle: string) {
 // structure is rendered into a fresh pending draft (carousel) or a
 // text storyboard (reel script). Drafts get parent_post_id pointing
 // back to the source so analytics can aggregate ideas across surfaces.
+
+async function handleDashboardLink(from: string) {
+  const token = await createWaMagicToken(from);
+  const url = `${APP_URL}/api/auth/wa-magic?token=${token}&phone=${encodeURIComponent(from)}`;
+  await sendText(
+    from,
+    `📊 *Tap to open your dashboard:*\n\n${url}\n\n_Link expires in 1 hour. Once you're in, your session sticks for 30 days._`,
+  );
+}
 
 async function handleSpinCarousel(from: string, sourcePostId: string) {
   const supabase = getSupabase();

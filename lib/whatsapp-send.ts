@@ -1,10 +1,19 @@
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? '1079839465213735';
 
+// WA error codes we care about handling explicitly (vs generic 5xx).
+// 131030 — recipient phone not in test allowlist (Meta app in Dev mode);
+// 131047 — re-engagement window expired (24h since last user message);
+// 100    — invalid parameter, often template name typo / locked phone.
+export const WA_RECIPIENT_NOT_ALLOWED = 131030;
+export const WA_REENGAGEMENT_EXPIRED  = 131047;
+
+export type WaResult = { ok: true; data: any } | { ok: false; code?: number; message?: string; data: any };
+
 function getToken() {
   return process.env.WHATSAPP_ACCESS_TOKEN!;
 }
 
-async function wa(body: object) {
+async function wa(body: object): Promise<WaResult> {
   const res = await fetch(
     `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
     {
@@ -17,11 +26,22 @@ async function wa(body: object) {
     }
   );
   const data = await res.json();
-  if (!res.ok) console.error('[WA send error]', JSON.stringify(data));
-  return data;
+  if (!res.ok) {
+    const code = data?.error?.code;
+    // 131030 happens for everyone outside the test allowlist while the
+    // Meta app is in Development mode. Log at warn level (not error) so
+    // we can spot real bugs in logs once the app is published.
+    if (code === WA_RECIPIENT_NOT_ALLOWED) {
+      console.warn('[WA] recipient not in dev allowlist (Meta app needs App Review):', body);
+    } else {
+      console.error('[WA send error]', JSON.stringify(data));
+    }
+    return { ok: false, code, message: data?.error?.message, data };
+  }
+  return { ok: true, data };
 }
 
-export function sendText(to: string, text: string) {
+export function sendText(to: string, text: string): Promise<WaResult> {
   return wa({
     messaging_product: 'whatsapp',
     to,
@@ -54,23 +74,19 @@ export async function sendOtpCode(to: string, code: string) {
 
 // Outbound invite — requires a template approved in Meta Business Manager.
 // Template name configured via WHATSAPP_INVITE_TEMPLATE env var.
-// Returns true if the API accepted the message, false otherwise.
-export async function sendInviteTemplate(to: string): Promise<boolean> {
+// Returns the WaResult so callers can branch on dev-mode (131030) without
+// retrying or surfacing the raw Meta error to end users.
+export async function sendInviteTemplate(to: string): Promise<WaResult> {
   const templateName = process.env.WHATSAPP_INVITE_TEMPLATE ?? 'kreya_welcome';
-  try {
-    const data = await wa({
-      messaging_product: 'whatsapp',
-      to,
-      type: 'template',
-      template: {
-        name: templateName,
-        language: { code: 'en_US' },
-      },
-    });
-    return !data.error;
-  } catch {
-    return false;
-  }
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: {
+      name: templateName,
+      language: { code: 'en_US' },
+    },
+  });
 }
 
 // AI-suggested niche/tone after voice learning. Encodes the suggestion in
@@ -151,6 +167,7 @@ export async function sendRepurposeOffer(
 // Post-publish engagement loop — three quick-reply buttons that keep the
 // creator in the chat instead of ending the conversation on a flat 'live!'
 // message. Button IDs are routed in the webhook (handleButtonReply).
+// Schedule is no longer here because it now lives in the draft preview list.
 export async function sendPostPublishedActions(to: string, postUrl: string | undefined, postLabel: string) {
   const linkLine = postUrl ? `\n\n🔗 ${postUrl}` : '';
   const body = `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep the streak going — what's next?`;
@@ -163,17 +180,49 @@ export async function sendPostPublishedActions(to: string, postUrl: string | und
       body: { text: body },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: 'next_post',     title: '➕ Next post' } },
-          { type: 'reply', reply: { id: 'schedule_next', title: '📅 Schedule one' } },
-          { type: 'reply', reply: { id: 'refresh_voice', title: '🧠 Refresh voice' } },
+          { type: 'reply', reply: { id: 'next_post',       title: '➕ Next post' } },
+          { type: 'reply', reply: { id: 'refresh_voice',   title: '🧠 Refresh voice' } },
+          { type: 'reply', reply: { id: 'visit_dashboard', title: '📊 Dashboard' } },
         ],
       },
     },
   });
 }
 
-// postId is encoded in each button ID so replying to any historical preview
-// always acts on the correct post, not the latest one.
+// Used after a draft is approved-and-scheduled (state='scheduled') so the
+// user gets the same post-publish engagement loop, just with a different
+// confirmation line.
+export async function sendScheduledActions(to: string, scheduledForLabel: string) {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text: `📅 Scheduled for *${scheduledForLabel}*. I'll post it automatically — no need to do anything else.\n\nWhile you're here:`,
+      },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: 'next_post',       title: '➕ Next post' } },
+          { type: 'reply', reply: { id: 'refresh_voice',   title: '🧠 Refresh voice' } },
+          { type: 'reply', reply: { id: 'visit_dashboard', title: '📊 Dashboard' } },
+        ],
+      },
+    },
+  });
+}
+
+// Draft preview now uses an interactive *list* (up to 10 rows) so we can
+// expose Approve / Schedule / Edit / Discard up front. WhatsApp button
+// messages cap at 3 buttons, which forced Schedule into a separate
+// post-publish nudge — but that timing was wrong (user has already
+// committed by then). With a list we can offer all actions at draft time.
+//
+// Photos: image is sent as its own WA media message first so the user
+// can see what they're approving, since list messages don't support
+// image headers (only text). Videos: text header noting it's a Reel
+// preview.
 export async function sendPostPreview(
   to: string,
   imageUrl: string,
@@ -182,31 +231,57 @@ export async function sendPostPreview(
   isVideo = false,
   surface: 'feed' | 'reels' = isVideo ? 'reels' : 'feed',
 ) {
-  await sendText(to, `🎙️ *Your voice:*\n\n${caption}`);
-
   const isReel = surface === 'reels';
-  const header = isVideo
-    ? { type: 'text', text: isReel ? '🎬 Reel preview — ready' : '🎬 Video ready to post' }
-    : { type: 'image', image: { link: imageUrl } };
 
-  const body = isReel
-    ? 'Ready to post this Reel to Instagram?\n\nIt will show on your Reels tab AND your grid.'
-    : 'Ready to post this to Instagram?';
+  // Send the photo as its own message first so the user can see it
+  // alongside the action list.
+  if (!isVideo && imageUrl) {
+    await wa({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'image',
+      image: { link: imageUrl },
+    });
+  }
+
+  await sendText(to, `🎙️ *Caption:*\n\n${caption}`);
+
+  const headerText = isReel
+    ? '🎬 Reel preview — ready'
+    : isVideo
+      ? '🎬 Video ready'
+      : '📷 Photo ready';
+
+  const bodyText = isReel
+    ? 'How do you want to send this Reel? It will show on your Reels tab AND your grid.'
+    : 'How do you want to send this?';
 
   return wa({
     messaging_product: 'whatsapp',
     to,
     type: 'interactive',
     interactive: {
-      type: 'button',
-      header,
-      body: { text: body },
-      footer: { text: 'Tip: Edit lets you change caption, style, or image' },
+      type: 'list',
+      header: { type: 'text', text: headerText },
+      body: { text: bodyText },
+      footer: { text: 'Tip: tap an option below' },
       action: {
-        buttons: [
-          { type: 'reply', reply: { id: `approve:${postId}`, title: '✅ Approve' } },
-          { type: 'reply', reply: { id: `edit:${postId}`,    title: '✏️ Edit' } },
-          { type: 'reply', reply: { id: `discard:${postId}`, title: '🗑️ Discard' } },
+        button: 'Choose action',
+        sections: [
+          {
+            title: 'Send it',
+            rows: [
+              { id: `approve:${postId}`,  title: '✅ Approve & post now', description: 'Publishes immediately to Instagram' },
+              { id: `schedule:${postId}`, title: '📅 Schedule for later',  description: 'Pick a time, I post automatically' },
+            ],
+          },
+          {
+            title: 'Refine or drop',
+            rows: [
+              { id: `edit:${postId}`,    title: '✏️ Edit',    description: 'Change caption, image, or style' },
+              { id: `discard:${postId}`, title: '🗑️ Discard', description: 'Drop this draft' },
+            ],
+          },
         ],
       },
     },

@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       ADMIN_PHONE,
       `🔔 *New Kreya registration*\n\n📧 ${normalizedEmail}${normalizedPhone ? `\n📱 +${normalizedPhone}` : ''}\n\n👉 ${APP_URL}/admin?secret=${urlToken}`
     ).then(r => {
-      if (r?.error) console.error('[register] admin WA FAILED:', JSON.stringify(r.error));
+      if (!r.ok) console.error('[register] admin WA FAILED:', JSON.stringify(r.data));
       else console.log('[register] admin WA sent');
     }).catch(err => console.error('[register] admin WA error:', err.message));
   } else {
