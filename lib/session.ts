@@ -52,3 +52,18 @@ export function sessionCookieOptions(maxAge: number) {
     maxAge,
   };
 }
+
+// One-tap dashboard link sent over WhatsApp. Stores a hashed token in
+// otp_codes (re-using the existing table schema). The /api/auth/wa-magic
+// consumer validates, marks used, creates a session cookie, and redirects
+// to /account?phone=<phone>.
+export async function createWaMagicToken(phone: string): Promise<string> {
+  const token = randomBytes(24).toString('hex');
+  const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString(); // 1 hour
+  await db().from('otp_codes').insert({
+    phone,
+    code_hash: hashToken(token),
+    expires_at: expiresAt,
+  });
+  return token;
+}

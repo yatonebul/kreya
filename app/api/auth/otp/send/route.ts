@@ -37,10 +37,14 @@ export async function POST(req: NextRequest) {
 
   const waResult = await sendOtpCode(phone, code);
 
-  if (waResult?.error) {
-    console.error('[OTP send] WhatsApp failed:', JSON.stringify(waResult.error));
-    const waMsg = waResult.error.message ?? '';
-    const hint  = waMsg.toLowerCase().includes('token') ? ' (access token may be expired)' : '';
+  if (!waResult.ok) {
+    console.error('[OTP send] WhatsApp failed:', JSON.stringify(waResult.data));
+    const waMsg = waResult.message ?? '';
+    const hint  = waResult.code === 131030
+      ? ' — your number isn\'t in the Meta dev allowlist (the app is in Development mode).'
+      : waMsg.toLowerCase().includes('token')
+        ? ' (access token may be expired)'
+        : '';
     return NextResponse.json({ error: `Could not send WhatsApp message${hint}. Check Vercel logs.` }, { status: 500 });
   }
 
