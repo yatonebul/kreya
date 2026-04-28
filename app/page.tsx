@@ -249,18 +249,38 @@ export default async function Home() {
         </Link>
       </section>
 
-      {/* Footer */}
+            {/* Footer */}
       <footer
-        className="px-6 md:px-12 py-8 flex items-center justify-between"
+        className="px-6 md:px-12 py-8 flex flex-col md:flex-row items-center justify-between gap-4"
         style={{ background: 'var(--ink)' }}
       >
         <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>
           Kreya
         </span>
+
+        {/* New Legal Links */}
+        <div className="flex gap-6">
+          <Link 
+            href="/privacy" 
+            className="text-[10px] uppercase tracking-widest hover:opacity-70 transition-opacity"
+            style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}
+          >
+            Privacy
+          </Link>
+          <Link 
+            href="/terms" 
+            className="text-[10px] uppercase tracking-widest hover:opacity-70 transition-opacity"
+            style={{ fontFamily: 'var(--font-space-mono) ', color: 'var(--muted2)' }}
+          >
+            Terms
+          </Link>
+        </div>
+
         <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
           © 2026 Kreya
         </span>
       </footer>
+
 
     </main>
   );
