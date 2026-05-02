@@ -181,13 +181,17 @@ async function processWebhook(body: any) {
 
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
-      if (inEdit) {
+      const inEditImage = await getPostByState(from, 'in_edit:image');
+      const inEditCaption = await getPostByState(from, 'in_edit:caption');
+      const inEditVideo = await getPostByState(from, 'in_edit:video');
+      const activeEdit = inEditImage || inEditCaption || inEditVideo || inEdit;
+      if (activeEdit) {
         if (messageType === 'text') {
-          await handleEditRefinement(from, inEdit, message.text.body);
+          await handleEditRefinement(from, activeEdit, message.text.body, activeEdit.state);
           return;
         }
         if (['image', 'video', 'document'].includes(messageType)) {
-          await handleEditWithNewMedia(from, inEdit, message, messageType);
+          await handleEditWithNewMedia(from, activeEdit, message, messageType);
           return;
         }
       }
@@ -531,6 +535,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, 'Post not found.');
       return;
     }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'in_edit:caption' })
+      .eq('id', postId);
     await sendText(from, '✍️ *Edit the caption:*\n\nExamples:\n• "Make it shorter"\n• "Change tone to energetic"\n• "Add a call-to-action"\n• "Translate to Spanish"\n\nWhat\'ll it be?');
     return;
   }
@@ -540,6 +547,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, 'Post not found.');
       return;
     }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'in_edit:image' })
+      .eq('id', postId);
     const hasUserPhoto = !!post.user_image_url;
     const imageMsg = '🖼️ *Edit the image:*\n\nExamples:\n• "New image cinematic"\n• "Regenerate with a moody vibe"\n• "Different photo 3d style"\n' +
       (hasUserPhoto ? '\n• "Use my photo" (revert)' : '') +
@@ -553,6 +563,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, 'Post not found.');
       return;
     }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'in_edit:video' })
+      .eq('id', postId);
     await sendText(from, '🎬 *Replace the video:*\n\nSend your new video now, or reply "cancel" to go back.');
     return;
   }
@@ -562,9 +575,18 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, 'Post not found.');
       return;
     }
-    await getSupabase().from('pending_posts')
-      .update({ state: 'pending_approval' })
-      .eq('id', postId);
+    // Reset any edit state variants back to pending_approval
+    const { data: posts } = await getSupabase()
+      .from('pending_posts')
+      .select('state')
+      .eq('id', postId)
+      .single();
+
+    if (posts?.state?.startsWith('in_edit')) {
+      await getSupabase().from('pending_posts')
+        .update({ state: 'pending_approval' })
+        .eq('id', postId);
+    }
     await sendText(from, '✋ Edit cancelled. Here\'s your draft again:');
     await sendPostPreview(from, post.image_url, post.caption, post.id, !!post.is_video);
     return;
@@ -688,12 +710,14 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     }
 
   } else if (action === 'edit') {
+    // Clear any other edit states
     await getSupabase().from('pending_posts')
       .update({ state: 'pending_approval' })
-      .eq('whatsapp_phone', from).eq('state', 'in_edit').neq('id', post.id);
+      .eq('whatsapp_phone', from)
+      .regex('state', '^in_edit')
+      .neq('id', post.id);
 
-    await getSupabase().from('pending_posts').update({ state: 'in_edit' }).eq('id', post.id);
-
+    // Show the edit menu (menu will set specific state when chosen)
     await sendEditActionsMenu(from, post.id, !!post.is_video);
 
   } else if (action === 'discard') {
@@ -705,7 +729,72 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
 }
 
-async function handleEditRefinement(from: string, pending: any, instruction: string) {
+async function handleEditRefinement(from: string, pending: any, instruction: string, state: string = 'in_edit') {
+  // Determine edit mode from state
+  const isEditingImage = state === 'in_edit:image';
+  const isEditingCaption = state === 'in_edit:caption';
+  const isEditingVideo = state === 'in_edit:video';
+
+  // If user chose a specific mode, enforce it
+  if (isEditingCaption) {
+    // Caption-only edit
+    if (!instruction.trim()) {
+      await sendText(from, '✍️ *What would you like to change about the caption?*\n\n• "Make it shorter"\n• "Change tone to energetic"\n• "Add a call-to-action"');
+      return;
+    }
+    await sendText(from, '✍️ Updating caption...');
+    const profileContext = await getProfileContextForPhone(from);
+    const newCaption = await refineCaption(pending.caption, instruction, profileContext ?? undefined);
+    const { data: updated } = await getSupabase()
+      .from('pending_posts')
+      .update({ caption: newCaption, state: 'pending_approval' })
+      .eq('id', pending.id)
+      .select('id')
+      .single();
+    if (updated?.id) {
+      await sendPostPreview(from, pending.image_url, newCaption, updated.id, pending.is_video ?? false);
+    }
+    return;
+  }
+
+  if (isEditingImage) {
+    // Image-only edit
+    const isRevertPhoto = !!pending.user_image_url && /\b(use my photo|my photo|my image|original|uploaded|revert)\b/i.test(instruction);
+    if (isRevertPhoto) {
+      await getSupabase().from('pending_posts')
+        .update({ image_url: pending.user_image_url, image_source: 'user', state: 'pending_approval' })
+        .eq('id', pending.id);
+      const updated = await getPostById(pending.id);
+      if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id, pending.is_video ?? false);
+      return;
+    }
+    if (!instruction.trim()) {
+      await sendText(from, '🖼️ *What style would you like?*\n\n• "New image cinematic"\n• "Regenerate moody"\n• "Different photo 3d"');
+      return;
+    }
+    await sendText(from, '✍️ Updating image...');
+    const imagePrompt = await generateImagePrompt(pending.caption);
+    const imageEditPrompt = imagePrompt ? `${imagePrompt} ${instruction}` : instruction;
+    const imageResult = await buildBrandedImage(imageEditPrompt, detectStyle(instruction), from);
+    const { data: updated } = await getSupabase()
+      .from('pending_posts')
+      .update({ image_url: imageResult.url, image_source: 'ai', state: 'pending_approval' })
+      .eq('id', pending.id)
+      .select('id')
+      .single();
+    if (updated?.id) {
+      if (pending.user_image_url) {
+        await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
+      }
+      await sendPostPreview(from, imageResult.url, pending.caption, updated.id, pending.is_video ?? false);
+      if (imageResult.overflowed) {
+        await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
+      }
+    }
+    return;
+  }
+
+  // Original fallback for generic 'in_edit' state
   const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
   const isRevertPhoto = !!pending.user_image_url &&
     /\b(use my photo|my photo|my image|original|uploaded|revert)\b/i.test(instruction);
