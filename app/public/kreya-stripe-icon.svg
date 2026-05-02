@@ -1,0 +1,30 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF4F3B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5E35FF;stop-opacity:1" />
+    </linearGradient>
+    <filter id="iconGloss">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.8"/>
+    </filter>
+  </defs>
+
+  <!-- Main icon container with rounded background -->
+  <rect x="32" y="32" width="192" height="192" rx="44" ry="44" fill="url(#iconGradient)"/>
+
+  <!-- Gloss/shine overlay in top-left -->
+  <ellipse cx="92" cy="76" rx="56" ry="44" fill="white" opacity="0.22" filter="url(#iconGloss)"/>
+
+  <!-- Large K letter centered -->
+  <text x="128" y="180" font-family="Syne, sans-serif" font-size="160" font-weight="800" fill="white" text-anchor="middle" dominant-baseline="middle" letter-spacing="-0.04em">K</text>
+
+  <!-- Optional: Subtle mint accent ring for portal identity -->
+  <circle cx="128" cy="128" r="108" fill="none" stroke="#00E5A0" stroke-width="2" opacity="0" style="animation: pulse 3s ease-in-out infinite"/>
+
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 0; r: 105; }
+      50% { opacity: 0.12; r: 115; }
+    }
+  </style>
+</svg>

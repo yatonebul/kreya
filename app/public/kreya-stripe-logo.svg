@@ -1,0 +1,36 @@
+<svg viewBox="0 0 320 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="kreyaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF4F3B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#5E35FF;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glossFilter">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1"/>
+    </filter>
+  </defs>
+
+  <!-- Icon: K with gradient background -->
+  <g>
+    <!-- Icon background with rounded square -->
+    <rect x="8" y="8" width="64" height="64" rx="14" ry="14" fill="url(#kreyaGradient)" opacity="1"/>
+
+    <!-- Gloss/shine effect -->
+    <ellipse cx="24" cy="20" rx="16" ry="12" fill="white" opacity="0.18" filter="url(#glossFilter)"/>
+
+    <!-- K Letter -->
+    <text x="40" y="56" font-family="Syne, sans-serif" font-size="48" font-weight="800" fill="white" text-anchor="middle" letter-spacing="-0.04em">K</text>
+  </g>
+
+  <!-- Wordmark: KREYA -->
+  <g>
+    <!-- Main wordmark -->
+    <text x="90" y="56" font-family="Syne, sans-serif" font-size="44" font-weight="800" fill="white" letter-spacing="-0.03em">KREY</text>
+    <!-- A in coral -->
+    <text x="228" y="56" font-family="Syne, sans-serif" font-size="44" font-weight="800" fill="#FF4F3B" letter-spacing="-0.03em">A</text>
+    <!-- Period/dot in coral -->
+    <circle cx="255" cy="32" r="2.5" fill="#FF4F3B"/>
+  </g>
+
+  <!-- Tagline: AI Social Media on Autopilot -->
+  <text x="90" y="72" font-family="DM Sans, sans-serif" font-size="10" font-weight="300" fill="rgba(255,255,255,0.6)" letter-spacing="0.05em">AI SOCIAL MEDIA ON AUTOPILOT</text>
+</svg>
