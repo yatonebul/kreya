@@ -110,7 +110,7 @@ export function LoraTrainingPanel({ phone, accountId, accountName, status, train
             Upgrade to <strong style={{ color: 'var(--coral)' }}>Pro</strong> to unlock brand LoRA training and up to 10 high-quality AI images per day.
           </p>
           <a
-            href="/api/billing/create-checkout"
+            href={`/api/billing/create-checkout?phone=${encodeURIComponent(phone)}`}
             className="self-start inline-flex items-center gap-2 text-xs px-4 py-2.5 rounded-full font-semibold transition-opacity hover:opacity-90"
             style={{
               background: 'var(--coral)',

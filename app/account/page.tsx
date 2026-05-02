@@ -82,9 +82,9 @@ function StateBadge({ state }: { state: string }) {
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ phone?: string; email?: string; ig?: string }>;
+  searchParams: Promise<{ phone?: string; email?: string; ig?: string; checkout?: string }>;
 }) {
-  const { phone: rawPhone, email: rawEmail, ig: rawIgId } = await searchParams;
+  const { phone: rawPhone, email: rawEmail, ig: rawIgId, checkout } = await searchParams;
 
   // Accept either ?phone= (WhatsApp users) or ?email= (email users)
   const urlIdentifier = rawPhone
@@ -291,6 +291,17 @@ export default async function AccountPage({
           <LogoutButton />
         </div>
       </nav>
+
+      {checkout === 'success' && (
+        <div className="px-6 md:px-12 py-3 flex items-center gap-2 text-sm font-medium" style={{ background: 'rgba(0,229,160,0.10)', borderBottom: '1px solid rgba(0,229,160,0.25)', color: 'var(--mint)', fontFamily: 'var(--font-dm-sans)' }}>
+          <span aria-hidden>🎉</span> You&rsquo;re now on Pro — LoRA training and high-quality images are unlocked.
+        </div>
+      )}
+      {checkout === 'already_pro' && (
+        <div className="px-6 md:px-12 py-3 flex items-center gap-2 text-sm" style={{ background: 'rgba(94,53,255,0.08)', borderBottom: '1px solid rgba(94,53,255,0.2)', color: 'var(--violet)', fontFamily: 'var(--font-dm-sans)' }}>
+          <span aria-hidden>✓</span> Your account is already on Pro.
+        </div>
+      )}
 
       <TokenRenewalBanner
         days={igDays}
