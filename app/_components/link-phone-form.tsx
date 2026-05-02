@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatPhoneInput, normalizePhoneNumber } from '@/lib/phone-formatter';
 
 export function LinkPhoneForm({ email }: { email: string }) {
   const router  = useRouter();
@@ -11,7 +12,7 @@ export function LinkPhoneForm({ email }: { email: string }) {
   const [done,    setDone]    = useState(false);
 
   async function save() {
-    const normalized = phone.trim().replace(/^\+/, '');
+    const normalized = normalizePhoneNumber(phone.trim()).replace(/^\+/, '');
     if (!normalized) return;
     setLoading(true);
     setError('');
@@ -47,7 +48,7 @@ export function LinkPhoneForm({ email }: { email: string }) {
         <input
           type="tel"
           value={phone}
-          onChange={e => setPhone(e.target.value)}
+          onChange={e => setPhone(formatPhoneInput(e.target.value))}
           onKeyDown={e => { if (e.key === 'Enter') save(); }}
           placeholder="+420 723 967 372"
           className="flex-1 px-4 py-2.5 rounded-xl outline-none text-sm"
