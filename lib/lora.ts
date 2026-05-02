@@ -149,6 +149,7 @@ export async function buildBrandImageUrl(
       Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
       'Content-Type': 'application/json',
     },
+    timeout: 10000,
     body: JSON.stringify({
       version: account.lora_model_id,
       input: {
@@ -161,17 +162,28 @@ export async function buildBrandImageUrl(
       },
     }),
   });
+  if (!res.ok) return null;
+
   const data = await res.json();
-  // Replicate returns immediately with a status URL; for a quick MVP
-  // we poll a few times. Production would use webhooks or store the
-  // prediction id and resolve later.
+  if (!data?.id) return null;
+
+  // Replicate returns immediately with a status URL; poll with a short
+  // timeout (~12s) to keep WhatsApp responses fast. If the model isn't
+  // ready by then, return null so the caller falls back to Pollinations.
   let prediction = data;
-  for (let i = 0; i < 30 && prediction?.status !== 'succeeded' && prediction?.status !== 'failed'; i++) {
+  const maxIterations = 6; // 6 iterations × 2s = ~12 seconds max
+  for (let i = 0; i < maxIterations && prediction?.status !== 'succeeded' && prediction?.status !== 'failed'; i++) {
     await new Promise(r => setTimeout(r, 2000));
-    const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-      headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
-    });
-    prediction = await poll.json();
+    try {
+      const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
+        timeout: 5000,
+      });
+      if (!poll.ok) return null;
+      prediction = await poll.json();
+    } catch (e) {
+      return null; // timeout or network error, fall back to Pollinations
+    }
   }
   if (prediction?.status === 'succeeded' && Array.isArray(prediction.output) && prediction.output[0]) {
     return prediction.output[0] as string;
