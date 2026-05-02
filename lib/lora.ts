@@ -149,7 +149,7 @@ export async function buildBrandImageUrl(
       Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    timeout: 10000,
+    signal: AbortSignal.timeout(10000),
     body: JSON.stringify({
       version: account.lora_model_id,
       input: {
