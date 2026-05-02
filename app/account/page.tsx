@@ -20,6 +20,7 @@ import { EngagementToggles } from '@/app/_components/engagement-toggles';
 import { SurfaceStats } from '@/app/_components/surface-stats';
 import { TokenRenewalBanner } from '@/app/_components/token-renewal-banner';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { formatPhoneForDisplay } from '@/lib/phone-format';
 
 export const dynamic = 'force-dynamic';
 
@@ -286,9 +287,11 @@ export default async function AccountPage({
         </a>
         <div className="flex items-center gap-2">
           <WaButton />
-          <span className="text-xs truncate max-w-[140px] hidden sm:block" style={{ color: 'var(--muted2)', fontFamily: 'var(--font-space-mono)' }}>
-            {sessionId}
-          </span>
+          {sessionId && (
+            <span className="text-xs truncate max-w-[140px] hidden sm:block" style={{ color: 'var(--muted2)', fontFamily: 'var(--font-space-mono)' }}>
+              {sessionId.includes('@') ? sessionId : formatPhoneForDisplay(sessionId)}
+            </span>
+          )}
           <LogoutButton />
         </div>
       </nav>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 type Step = {
   id: 'whatsapp' | 'instagram' | 'engagement';
   title: string;
@@ -25,6 +27,19 @@ export function NextStepsChecklist({
   connectUrl: string;
   isProPlan: boolean;
 }) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const hasViewed = localStorage.getItem('kreya_checklist_viewed');
+    if (hasViewed) {
+      setIsExpanded(false);
+    } else {
+      localStorage.setItem('kreya_checklist_viewed', 'true');
+    }
+  }, []);
+
   const steps: Step[] = [
     {
       id: 'whatsapp',
@@ -72,33 +87,53 @@ export function NextStepsChecklist({
 
   const completedCount = steps.filter(s => s.completed).length;
   const progress = (completedCount / steps.length) * 100;
+  const isFullyComplete = completedCount === steps.length;
+  const shouldShowExpanded = !mounted || isExpanded || isFullyComplete;
 
   return (
     <section className="rounded-2xl p-6 flex flex-col gap-6" style={{ background: 'var(--surf2)', border: '1px solid rgba(0,229,160,0.15)' }}>
       {/* Header */}
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center justify-between gap-3 flex-wrap w-full text-left hover:opacity-80 transition-opacity"
+          style={{ cursor: 'pointer' }}
+        >
           <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
             Next Steps
           </h2>
-          <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--mint)', background: 'rgba(0,229,160,0.12)', border: '1px solid rgba(0,229,160,0.3)' }}>
-            {completedCount}/{steps.length} complete
-          </span>
-        </div>
-        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surf3)' }}>
-          <div
-            className="h-full rounded-full transition-all duration-300"
-            style={{
-              width: `${progress}%`,
-              background: progress === 100 ? 'var(--mint)' : 'var(--coral)',
-            }}
-          />
-        </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--mint)', background: 'rgba(0,229,160,0.12)', border: '1px solid rgba(0,229,160,0.3)' }}>
+              {completedCount}/{steps.length} complete
+            </span>
+            <span
+              className="text-sm transition-transform"
+              style={{
+                transform: shouldShowExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+              }}
+              aria-hidden
+            >
+              ▼
+            </span>
+          </div>
+        </button>
+        {shouldShowExpanded && (
+          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surf3)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${progress}%`,
+                background: progress === 100 ? 'var(--mint)' : 'var(--coral)',
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Steps */}
-      <div className="flex flex-col gap-3">
-        {steps.map(step => (
+      {shouldShowExpanded && (
+        <div className="flex flex-col gap-3">
+          {steps.map(step => (
           <div
             key={step.id}
             className="rounded-xl p-4 flex items-start gap-4 transition-colors"
@@ -174,9 +209,10 @@ export function NextStepsChecklist({
             )}
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
-      {/* Pro unlock card for free users */}
+      {/* Pro unlock card for free users — always visible */}
       {!isProPlan && (
         <div
           className="rounded-xl p-4 flex items-start gap-3"

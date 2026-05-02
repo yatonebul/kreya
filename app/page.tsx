@@ -47,7 +47,7 @@ export default async function Home() {
                 className="text-sm px-5 py-2 rounded-full font-medium transition-opacity hover:opacity-90"
                 style={{ fontFamily: 'var(--font-dm-sans)', background: 'var(--coral)', color: '#fff' }}
               >
-                Get access
+                Try it for free
               </Link>
             </>
           )}
