@@ -272,6 +272,26 @@ export async function sendRepurposeOffer(
 // creator in the chat instead of ending the conversation on a flat 'live!'
 // message. Button IDs are routed in the webhook (handleButtonReply).
 // Schedule is no longer here because it now lives in the draft preview list.
+export async function sendConversationStarters(to: string, name: string) {
+  const body = `👋 Hey *${name}*!\n\nWhat would you like to do?`;
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: 'create_post',   title: '✨ Create a post' } },
+          { type: 'reply', reply: { id: 'check_status',  title: '📋 Check status' } },
+          { type: 'reply', reply: { id: 'visit_dashboard', title: '📊 Dashboard' } },
+        ],
+      },
+    },
+  });
+}
+
 export async function sendPostPublishedActions(to: string, postUrl: string | undefined, postLabel: string) {
   const linkLine = postUrl ? `\n\n🔗 ${postUrl}` : '';
   const body = `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep the streak going — what's next?`;

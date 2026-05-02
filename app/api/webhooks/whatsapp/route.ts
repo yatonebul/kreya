@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -447,6 +447,16 @@ async function getRecentCaptions(): Promise<string[]> {
 }
 
 async function handleButtonReply(from: string, action: string, postId: string | null) {
+  // Conversation starters
+  if (action === 'create_post') {
+    await sendText(from, "✨ I'm ready — send a voice note, photo, video, or one line and I'll write your next post.");
+    return;
+  }
+  if (action === 'check_status') {
+    await handleStatus(from);
+    return;
+  }
+
   // Engagement-loop actions sent after publish — no pending post is required.
   if (action === 'next_post') {
     await sendText(from, "✨ I'm ready — voice-note, photo, or one line and I'll write your next post.");
@@ -592,7 +602,12 @@ async function handleButtonReply(from: string, action: string, postId: string | 
         await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
         return;
       }
-      throw err;
+      const contentType = isCarousel ? 'carousel' : isStory ? 'Story' : 'post';
+      const errorMsg = err.message?.includes('platform') || err.message?.includes('failed')
+        ? `⚠️ Instagram is having trouble posting your ${contentType} right now. Try again in a moment — your draft is saved.`
+        : `⚠️ Couldn't post your ${contentType} right now. Try again in a moment — your draft is saved.`;
+      await sendText(from, errorMsg);
+      return;
     }
 
     await getSupabase().from('pending_posts')
@@ -672,7 +687,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
   const hasCaptionInstruction = captionInstruction.length > 3;
 
   if (!isImageRequest && !hasCaptionInstruction) {
-    await sendText(from, '✏️ I didn\'t catch that — what would you like to change?');
+    await sendText(from, '✏️ *What would you like to edit?*\n\n• *Caption:* "Make it shorter" / "Add a call-to-action" / etc.\n• *Image:* "New image" / "Different photo" / "Regenerate" / etc.\n• *Photo:* Send your own photo or say "use my photo"');
     return;
   }
 
@@ -1745,14 +1760,12 @@ async function handleGreeting(from: string) {
   if (igAccount) {
     const days = Math.ceil((new Date(igAccount.token_expires_at).getTime() - Date.now()) / 86_400_000);
     igLine = days > 7
-      ? `📸 Instagram: *@${igAccount.account_name}* ✓\nWant to switch accounts? ${connectUrl}`
-      : `📸 Instagram: *@${igAccount.account_name}* ⚠️ Token expires in ${days}d\nRenew: ${connectUrl}`;
+      ? `📸 Instagram: *@${igAccount.account_name}* ✓`
+      : `📸 Instagram: *@${igAccount.account_name}* ⚠️ Token expires in ${days}d. Renew: ${connectUrl}`;
   } else {
-    igLine = `📸 Instagram: *not connected*\nConnect here: ${connectUrl}`;
+    igLine = `📸 Instagram: *not connected*. Connect: ${connectUrl}`;
   }
 
-  await sendText(
-    from,
-    `👋 Hey *${name}*!\n\n${igLine}\n\n🔗 Your account: ${APP_URL}/account?phone=${encodeURIComponent(from)}\n\nSend me a message, photo, video, or voice note to create your next post.`
-  );
+  await sendText(from, `${igLine}\n\n🔗 Your account: ${APP_URL}/account?phone=${encodeURIComponent(from)}`);
+  await sendConversationStarters(from, name);
 }
