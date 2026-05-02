@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -523,6 +523,53 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleSpinStory(from, postId);
     return;
   }
+
+  // Edit action sub-menu handlers
+  if (action === 'edit_caption' && postId) {
+    const post = await getPostById(postId);
+    if (!post) {
+      await sendText(from, 'Post not found.');
+      return;
+    }
+    await sendText(from, '✍️ *Edit the caption:*\n\nExamples:\n• "Make it shorter"\n• "Change tone to energetic"\n• "Add a call-to-action"\n• "Translate to Spanish"\n\nWhat\'ll it be?');
+    return;
+  }
+  if (action === 'edit_image' && postId) {
+    const post = await getPostById(postId);
+    if (!post) {
+      await sendText(from, 'Post not found.');
+      return;
+    }
+    const hasUserPhoto = !!post.user_image_url;
+    const imageMsg = '🖼️ *Edit the image:*\n\nExamples:\n• "New image cinematic"\n• "Regenerate with a moody vibe"\n• "Different photo 3d style"\n' +
+      (hasUserPhoto ? '\n• "Use my photo" (revert)' : '') +
+      '\n\nWhat style?';
+    await sendText(from, imageMsg);
+    return;
+  }
+  if (action === 'edit_video' && postId) {
+    const post = await getPostById(postId);
+    if (!post) {
+      await sendText(from, 'Post not found.');
+      return;
+    }
+    await sendText(from, '🎬 *Replace the video:*\n\nSend your new video now, or reply "cancel" to go back.');
+    return;
+  }
+  if (action === 'cancel_edit' && postId) {
+    const post = await getPostById(postId);
+    if (!post) {
+      await sendText(from, 'Post not found.');
+      return;
+    }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'pending_approval' })
+      .eq('id', postId);
+    await sendText(from, '✋ Edit cancelled. Here\'s your draft again:');
+    await sendPostPreview(from, post.image_url, post.caption, post.id, !!post.is_video);
+    return;
+  }
+
   if (action === 'comment_send' && postId) {
     await handleCommentSend(from, postId);
     return;
@@ -647,13 +694,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
 
     await getSupabase().from('pending_posts').update({ state: 'in_edit' }).eq('id', post.id);
 
-    const isVideoPost = !!post.is_video;
-    const hasUserPhoto = !!post.user_image_url && !isVideoPost;
-    const editMsg = isVideoPost
-      ? '✏️ What would you like to change?\n\nCaption: tone, length, angle, language\nVideo: send a new video to replace it'
-      : '✏️ What would you like to change?\n\nCaption: tone, length, angle, language\nImage: say "new image" + any style (cinematic, moody, 3d, anime…)' +
-        (hasUserPhoto ? '\n\nSay "use my photo" to revert to your uploaded image.' : '');
-    await sendText(from, editMsg);
+    await sendEditActionsMenu(from, post.id, !!post.is_video);
 
   } else if (action === 'discard') {
     await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
