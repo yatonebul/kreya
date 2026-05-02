@@ -1,4 +1,4 @@
-import { parsePhoneNumber, formatPhoneNumber } from 'libphonenumber-js';
+import { parsePhoneNumber } from 'libphonenumber-js';
 
 export function formatPhoneInput(value: string, defaultCountry: string = 'CZ'): string {
   if (!value) return '';
@@ -6,7 +6,7 @@ export function formatPhoneInput(value: string, defaultCountry: string = 'CZ'): 
   try {
     const phoneNumber = parsePhoneNumber(value, defaultCountry as any);
     if (!phoneNumber) return value;
-    return formatPhoneNumber(phoneNumber, 'INTERNATIONAL');
+    return phoneNumber.formatInternational();
   } catch {
     return value;
   }
