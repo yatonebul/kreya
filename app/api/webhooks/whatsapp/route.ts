@@ -180,6 +180,46 @@ async function processWebhook(body: any) {
         }
       }
 
+      // Explicit image-style or caption-edit sub-states set by the Edit Image /
+      // Edit Caption sub-menu buttons.  10-minute expiry prevents a stale state
+      // from hijacking a future unrelated message (e.g. user clicked Edit Image
+      // but never replied, then comes back an hour later with new content).
+      const awaitingImageStyle = await getPostByState(from, 'awaiting_image_style');
+      if (awaitingImageStyle) {
+        const ageMs = Date.now() - new Date(
+          (awaitingImageStyle as any).updated_at ?? awaitingImageStyle.created_at
+        ).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          await getSupabase().from('pending_posts')
+            .update({ state: 'pending_approval' })
+            .eq('id', awaitingImageStyle.id);
+        } else {
+          if (messageType === 'text') {
+            await handleImageStyleInput(from, awaitingImageStyle, message.text.body);
+            return;
+          }
+          if (['image', 'video', 'document'].includes(messageType)) {
+            await handleEditWithNewMedia(from, awaitingImageStyle, message, messageType);
+            return;
+          }
+        }
+      }
+
+      const awaitingCaptionEdit = await getPostByState(from, 'awaiting_caption_edit');
+      if (awaitingCaptionEdit) {
+        const ageMs = Date.now() - new Date(
+          (awaitingCaptionEdit as any).updated_at ?? awaitingCaptionEdit.created_at
+        ).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          await getSupabase().from('pending_posts')
+            .update({ state: 'pending_approval' })
+            .eq('id', awaitingCaptionEdit.id);
+        } else if (messageType === 'text') {
+          await handleCaptionEditInput(from, awaitingCaptionEdit, message.text.body);
+          return;
+        }
+      }
+
       // If in edit mode, route to refinement
       const inEdit = await getPostByState(from, 'in_edit');
       if (inEdit) {
@@ -545,6 +585,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, 'Post not found.');
       return;
     }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'awaiting_caption_edit' })
+      .eq('id', postId);
     await sendText(from, '✍️ *Edit the caption:*\n\nExamples:\n• "Make it shorter"\n• "Change tone to energetic"\n• "Add a call-to-action"\n• "Translate to Spanish"\n\nWhat\'ll it be?');
     return;
   }
@@ -554,9 +597,12 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, 'Post not found.');
       return;
     }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'awaiting_image_style' })
+      .eq('id', postId);
     const hasUserPhoto = !!post.user_image_url;
-    const imageMsg = '🖼️ *Edit the image:*\n\nExamples:\n• "New image cinematic"\n• "Regenerate with a moody vibe"\n• "Different photo 3d style"\n' +
-      (hasUserPhoto ? '\n• "Use my photo" (revert)' : '') +
+    const imageMsg = '🖼️ *Regenerate the image:*\n\nExamples:\n• "Ryanair realistic"\n• "Moody cinematic"\n• "3D illustration"\n• "Dark and dramatic"\n' +
+      (hasUserPhoto ? '\n• "Use my photo" (revert to your upload)' : '') +
       '\n\nWhat style?';
     await sendText(from, imageMsg);
     return;
@@ -790,6 +836,56 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
     }
   }
+}
+
+// Called when the user has explicitly tapped "Edit Image" and sent their
+// style instruction.  Always treats the input as an image-generation prompt —
+// never as a caption edit — regardless of whether the instruction contains
+// the word "image".
+async function handleImageStyleInput(from: string, post: any, instruction: string) {
+  const isRevert = !!post.user_image_url &&
+    /\b(use my photo|my photo|my image|original|uploaded|revert)\b/i.test(instruction);
+
+  if (isRevert) {
+    await getSupabase().from('pending_posts')
+      .update({ image_url: post.user_image_url, image_source: 'user', state: 'pending_approval' })
+      .eq('id', post.id);
+    const updated = await getPostById(post.id);
+    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id, post.is_video ?? false);
+    return;
+  }
+
+  await sendText(from, '🖼️ Generating new image style...');
+
+  const imagePrompt = await generateImagePrompt(post.caption);
+  // Combine original caption context with the user's style instruction so the
+  // subject stays consistent (e.g. "sunset beach" + "Ryanair realistic style").
+  const combinedPrompt = `${imagePrompt}, ${instruction}`;
+  const imageResult = await buildBrandedImage(combinedPrompt, detectStyle(instruction), from);
+
+  await getSupabase().from('pending_posts')
+    .update({ image_url: imageResult.url, image_source: 'ai', state: 'pending_approval' })
+    .eq('id', post.id);
+
+  if (post.user_image_url) {
+    await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
+  }
+  await sendPostPreview(from, imageResult.url, post.caption, post.id, post.is_video ?? false);
+  if (imageResult.overflowed) {
+    await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
+  }
+}
+
+// Called when the user has explicitly tapped "Edit Caption" and sent their
+// instruction.  Always treats the input as a caption refinement.
+async function handleCaptionEditInput(from: string, post: any, instruction: string) {
+  await sendText(from, '✍️ Updating caption...');
+  const profileContext = await getProfileContextForPhone(from);
+  const newCaption = await refineCaption(post.caption, instruction, profileContext ?? undefined);
+  await getSupabase().from('pending_posts')
+    .update({ caption: newCaption, state: 'pending_approval' })
+    .eq('id', post.id);
+  await sendPostPreview(from, post.image_url, newCaption, post.id, post.is_video ?? false);
 }
 
 async function handleEditWithNewMedia(from: string, pending: any, message: any, messageType: string) {
@@ -1506,12 +1602,17 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     return;
   }
 
-  // One AI image per slide. detectStyle is photorealistic-by-default
-  // unless the prompt mentions something like "illustration" or "logo".
-  // Brand LoRA flows in here too — when ready, every slide matches the
-  // user's feed aesthetic, not generic Flux-realistic.
+  // One AI image per slide — failures fall back to Pollinations so a single
+  // slow/throttled generation doesn't abort the entire carousel.
   const mediaResults = await Promise.all(
-    spin.slides.map(async s => await buildBrandedImage(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt), from)),
+    spin.slides.map(async s => {
+      const prompt = `${s.imagePrompt} | overlay text: "${s.headline}"`;
+      try {
+        return await buildBrandedImage(prompt, detectStyle(s.imagePrompt), from);
+      } catch {
+        return { url: buildImageUrl(prompt, 'realistic'), overflowed: false };
+      }
+    }),
   );
   const mediaItems: CarouselItem[] = mediaResults.map(r => ({ url: r.url, is_video: false }));
   const carouselOverflowed = mediaResults.some(r => r.overflowed);
@@ -1682,8 +1783,13 @@ async function handleCarouselStart(from: string) {
 }
 
 async function handleCarouselAppend(from: string, post: { id: string; media_items: CarouselItem[] | null }, message: { image?: { id?: string; mime_type?: string } }) {
-  const items: CarouselItem[] = post.media_items ?? [];
-  if (items.length >= 10) {
+  // Capacity guard: count committed items + anything already in the buffer
+  const currentItems: CarouselItem[] = post.media_items ?? [];
+  const { count: bufferedCount } = await getSupabase()
+    .from('carousel_buffer')
+    .select('id', { count: 'exact', head: true })
+    .eq('carousel_post_id', post.id);
+  if (currentItems.length + (bufferedCount ?? 0) >= 10) {
     await sendText(from, "⚠️ Carousels max out at 10 photos. Type *done* to publish what you've got.");
     return;
   }
@@ -1703,23 +1809,91 @@ async function handleCarouselAppend(from: string, post: { id: string; media_item
     return;
   }
 
-  const next = [...items, { url, is_video: false }];
-  await getSupabase()
-    .from('pending_posts')
-    .update({ media_items: next })
-    .eq('id', post.id);
+  // Store in the debounce buffer (atomic insert — no JSONB race with concurrent uploads).
+  // WhatsApp fires one webhook per photo when the user selects multiple from their
+  // camera roll, so all N arrive within ~1 s of each other.
+  const { data: bufRow } = await getSupabase()
+    .from('carousel_buffer')
+    .insert({ whatsapp_phone: from, carousel_post_id: post.id, url })
+    .select('id, created_at')
+    .single();
 
-  const remaining = 10 - next.length;
-  const tail = remaining === 0
-    ? 'That\'s the max — type *done* to publish.'
-    : remaining === 1
-      ? 'Room for 1 more, or type *done* to publish.'
-      : `Send up to ${remaining} more, or type *done* to publish.`;
-  await sendText(from, `✅ Photo *${next.length}* added. ${tail}`);
+  const myCreatedAt: string = bufRow?.created_at ?? new Date().toISOString();
+
+  // After 4 s, check whether this was the last image in the burst.
+  // If so, flush all buffered items to pending_posts.media_items atomically
+  // and send one consolidated "N photos added" reply.
+  after(async () => {
+    await new Promise(r => setTimeout(r, 4000));
+
+    // If a newer item arrived after us, that after() will be the flusher.
+    const { data: newer } = await getSupabase()
+      .from('carousel_buffer')
+      .select('id')
+      .eq('carousel_post_id', post.id)
+      .gt('created_at', myCreatedAt)
+      .limit(1);
+    if (newer && newer.length > 0) return;
+
+    // Fetch everything in this burst (may include items from earlier after() runs
+    // that also found themselves as last — deduplication is handled by the DELETE).
+    const { data: pending } = await getSupabase()
+      .from('carousel_buffer')
+      .select('url, created_at')
+      .eq('carousel_post_id', post.id)
+      .order('created_at', { ascending: true });
+    if (!pending || pending.length === 0) return;
+
+    // Atomically append each URL — safe even if a concurrent flush races here.
+    let finalCount = currentItems.length;
+    for (const item of pending) {
+      const { data: newCount } = await getSupabase().rpc('append_carousel_item', {
+        p_post_id: post.id,
+        p_item: { url: item.url, is_video: false },
+      });
+      if (typeof newCount === 'number') finalCount = newCount;
+    }
+
+    // Clear the buffer; if another flush beat us here this is a no-op.
+    await getSupabase().from('carousel_buffer').delete().eq('carousel_post_id', post.id);
+
+    const batchSize = pending.length;
+    const remaining = 10 - finalCount;
+    const tail = remaining <= 0
+      ? "That's the max — type *done* to publish."
+      : remaining === 1
+        ? 'Room for 1 more, or type *done* to publish.'
+        : `Send up to ${remaining} more, or type *done* to publish.`;
+    const addedMsg = batchSize === 1
+      ? `✅ Photo *${finalCount}* added. ${tail}`
+      : `✅ *${batchSize} photos* added (${finalCount} total). ${tail}`;
+    await sendText(from, addedMsg);
+  });
 }
 
 async function handleCarouselFinish(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
-  const items: CarouselItem[] = post.media_items ?? [];
+  // Flush any images still in the 4-second debounce buffer (user may have typed
+  // "done" before the after() timer fired).
+  const { data: bufPending } = await getSupabase()
+    .from('carousel_buffer')
+    .select('url, created_at')
+    .eq('carousel_post_id', post.id)
+    .order('created_at', { ascending: true });
+
+  if (bufPending && bufPending.length > 0) {
+    for (const item of bufPending) {
+      await getSupabase().rpc('append_carousel_item', {
+        p_post_id: post.id,
+        p_item: { url: item.url, is_video: false },
+      });
+    }
+    await getSupabase().from('carousel_buffer').delete().eq('carousel_post_id', post.id);
+  }
+
+  // Re-fetch so media_items reflects the flushed buffer.
+  const fresh = await getPostById(post.id);
+  const items: CarouselItem[] = (fresh?.media_items as CarouselItem[] | null) ?? [];
+
   if (items.length < 2) {
     await sendText(from, '⚠️ A carousel needs at least 2 photos. Send another, or type *cancel*.');
     return;
@@ -1768,6 +1942,7 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
 }
 
 async function handleCarouselCancel(from: string, post: { id: string }) {
+  await getSupabase().from('carousel_buffer').delete().eq('carousel_post_id', post.id);
   await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
   await sendText(from, '🗑️ Carousel cancelled.');
 }
