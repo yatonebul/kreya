@@ -147,6 +147,7 @@ async function processWebhook(body: any) {
         if (isAccountsCommand(txt))   { await handleListAccounts(from);                       return; }
         if (isJournalListCommand(txt)){ await handleJournalList(from);                         return; }
         if (isJournalCommand(txt))    { await handleJournalArm(from);                          return; }
+        if (isCreatePostCommand(txt))  { await handleCreatePostIntent(from);                   return; }
         const journalIdx = parseJournalUseCommand(txt);
         if (journalIdx !== null)      { await handleJournalUse(from, journalIdx);              return; }
         const searchTopic = parseSearchCommand(txt);
@@ -266,6 +267,19 @@ async function processWebhook(body: any) {
       const wasArmed = await consumeJournalArmIfActive(from);
       if (wasArmed) {
         await captureJournalEntry(from, message, messageType);
+        return;
+      }
+
+      // For plain text that's not a media upload and not in a special state,
+      // show conversation starters instead of auto-creating a post.
+      // Users must explicitly choose "create post" or send media to start creation.
+      if (messageType === 'text') {
+        const { data: profile } = await getSupabase()
+          .from('user_profiles')
+          .select('brand_name')
+          .eq('whatsapp_phone', from)
+          .maybeSingle();
+        await sendConversationStarters(from, profile?.brand_name ?? 'there');
         return;
       }
 
@@ -836,6 +850,10 @@ function isAccountsCommand(text: string): boolean {
   return /^(\/accounts|accounts|my\s+accounts|list\s+accounts|connected\s+accounts)[!?.\s]*$/i.test(text.trim());
 }
 
+function isCreatePostCommand(text: string): boolean {
+  return /^(\/create|create\s+(a\s+)?post|new\s+post|start\s+post|make\s+post|write\s+post|draft)[!?.\s]*$/i.test(text.trim());
+}
+
 function parseSearchCommand(text: string): string | null {
   const m = text.trim().match(/^(?:\/find|\/search|find|search|past\s+posts?\s+(?:about\s+)?)\s+(.+?)[!?.\s]*$/i);
   return m ? m[1].trim() : null;
@@ -895,6 +913,10 @@ function parseProfileUpdate(text: string): ProfileField | null {
   m = t.match(/\b(?:change|update|set)\s+(?:my\s+)?niche\s+to\s+(.+)/i);
   if (m) return { field: 'niche', value: m[1].trim() };
   return null;
+}
+
+async function handleCreatePostIntent(from: string) {
+  await sendText(from, "✨ I'm ready — send a voice note, photo, video, or one line and I'll write your next post.");
 }
 
 async function handleHelp(from: string) {
