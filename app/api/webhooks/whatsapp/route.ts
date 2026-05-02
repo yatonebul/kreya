@@ -686,15 +686,16 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
     isImageRequest ? generateImagePrompt(pending.caption) : Promise.resolve(null),
   ]);
 
-  const [newCaption, newImageUrl] = await Promise.all([
+  const [newCaption, imageResult] = await Promise.all([
     hasCaptionInstruction
       ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
       : Promise.resolve(pending.caption),
     isImageRequest && imagePrompt
-      ? buildBrandedImage(imagePrompt, detectStyle(instruction), from).then(r => r.url)
-      : Promise.resolve(pending.image_url),
+      ? buildBrandedImage(imagePrompt, detectStyle(instruction), from)
+      : Promise.resolve({ url: pending.image_url, overflowed: false }),
   ]);
 
+  const newImageUrl = imageResult.url;
   const newSource = isImageRequest ? 'ai' : pending.image_source;
 
   const { data: updated } = await getSupabase()
@@ -709,6 +710,9 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
     }
     await sendPostPreview(from, newImageUrl, newCaption, updated.id, pending.is_video ?? false);
+    if (imageResult.overflowed) {
+      await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
+    }
   }
 }
 
@@ -1422,12 +1426,11 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   // unless the prompt mentions something like "illustration" or "logo".
   // Brand LoRA flows in here too — when ready, every slide matches the
   // user's feed aesthetic, not generic Flux-realistic.
-  const mediaItems: CarouselItem[] = await Promise.all(
-    spin.slides.map(async s => ({
-      url: (await buildBrandedImage(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt), from)).url,
-      is_video: false,
-    })),
+  const mediaResults = await Promise.all(
+    spin.slides.map(async s => await buildBrandedImage(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt), from)),
   );
+  const mediaItems: CarouselItem[] = mediaResults.map(r => ({ url: r.url, is_video: false }));
+  const carouselOverflowed = mediaResults.some(r => r.overflowed);
 
   // Discard any other pending drafts so the new carousel has the lane to itself
   const { data: stale } = await supabase
@@ -1465,6 +1468,9 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     `📑 *Carousel storyboard:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
   );
   await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'feed');
+  if (carouselOverflowed) {
+    await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
+  }
 }
 
 async function handleSpinStory(from: string, sourcePostId: string) {

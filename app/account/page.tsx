@@ -7,6 +7,7 @@ import { LogoutButton } from '@/app/_components/logout-button';
 import { LinkPhoneForm } from '@/app/_components/link-phone-form';
 import { PendingPosts } from '@/app/_components/pending-posts';
 import { OnboardingWizard } from '@/app/_components/onboarding-wizard';
+import { NextStepsChecklist } from '@/app/_components/next-steps-checklist';
 import { CancelScheduledButton } from '@/app/_components/cancel-scheduled-button';
 import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
 import { ComposeCta } from '@/app/_components/compose-cta';
@@ -321,6 +322,15 @@ export default async function AccountPage({
         {(pendingPosts?.length ?? 0) > 0 && (
           <PendingPosts initial={pendingPosts!} connectUrl={connectUrl} />
         )}
+
+        {/* Next steps checklist — track onboarding completion */}
+        <NextStepsChecklist
+          whatsappPhone={dataPhone}
+          instagramConnected={!!activeAccount}
+          engagementEnabled={!!(activeAccount?.dm_autoreply_enabled || activeAccount?.comment_autoreply_enabled)}
+          connectUrl={connectUrl}
+          isProPlan={(phoneProfile?.plan ?? 'free') === 'pro'}
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4">

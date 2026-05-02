@@ -4,6 +4,7 @@ import { PhoneForm } from './_components/phone-form';
 import { EmailForm } from './_components/email-form';
 import { ChatPreview } from './_components/chat-preview';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
+import { getProPrice } from '@/lib/stripe-pricing';
 
 const WA_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '';
 const waDirectLink = WA_NUMBER
@@ -14,6 +15,7 @@ export default async function Home() {
   const jar     = await cookies();
   const token   = jar.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token) : null;
+  const proPrice = await getProPrice();
   return (
     <main className="flex flex-col min-h-screen" style={{ background: 'var(--dark)' }}>
 
@@ -285,7 +287,7 @@ export default async function Home() {
             <div>
               <p className="text-xs tracking-widest uppercase mb-2" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--violet)' }}>Pro</p>
               <p className="text-4xl font-extrabold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
-                {process.env.NEXT_PUBLIC_PRO_PRICE_LABEL ?? '$29'}
+                {proPrice.formattedPrice}
               </p>
               <p className="text-sm mt-1" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>per month</p>
             </div>
