@@ -11,12 +11,14 @@ interface Props {
   accountName: string;
   status: LoraStatus;
   trainedAt: string | null;
+  isPro: boolean;
 }
 
 // Surfaces brand LoRA state per IG account. Idle → "Train" button.
 // Training → progress badge ("~20 min, no action needed"). Ready →
 // mint badge with the training date. Failed → coral badge + retry.
-export function LoraTrainingPanel({ phone, accountId, accountName, status, trainedAt }: Props) {
+// Non-pro users see an upgrade CTA instead of the training controls.
+export function LoraTrainingPanel({ phone, accountId, accountName, status, trainedAt, isPro }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'info' | 'err'; text: string } | null>(null);
@@ -59,25 +61,39 @@ export function LoraTrainingPanel({ phone, accountId, accountName, status, train
           <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
             Brand image style
           </h2>
-          <span
-            className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
-            style={{
-              fontFamily: 'var(--font-space-mono)',
-              color: isReady ? 'var(--mint)' : isTraining ? 'var(--gold)' : isFailed ? 'var(--coral)' : 'var(--muted2)',
-              background: isReady
-                ? 'rgba(0,229,160,0.10)'
-                : isTraining
-                  ? 'rgba(255,209,102,0.10)'
-                  : isFailed
-                    ? 'rgba(255,79,59,0.10)'
-                    : 'transparent',
-              border: `1px solid ${
-                isReady ? 'var(--mint)' : isTraining ? 'var(--gold)' : isFailed ? 'var(--coral)' : 'var(--surf3)'
-              }`,
-            }}
-          >
-            {isReady ? '● Ready' : isTraining ? '◐ Training' : isFailed ? '✗ Failed' : 'Not trained'}
-          </span>
+          {isPro ? (
+            <span
+              className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
+              style={{
+                fontFamily: 'var(--font-space-mono)',
+                color: isReady ? 'var(--mint)' : isTraining ? 'var(--gold)' : isFailed ? 'var(--coral)' : 'var(--muted2)',
+                background: isReady
+                  ? 'rgba(0,229,160,0.10)'
+                  : isTraining
+                    ? 'rgba(255,209,102,0.10)'
+                    : isFailed
+                      ? 'rgba(255,79,59,0.10)'
+                      : 'transparent',
+                border: `1px solid ${
+                  isReady ? 'var(--mint)' : isTraining ? 'var(--gold)' : isFailed ? 'var(--coral)' : 'var(--surf3)'
+                }`,
+              }}
+            >
+              {isReady ? '● Ready' : isTraining ? '◐ Training' : isFailed ? '✗ Failed' : 'Not trained'}
+            </span>
+          ) : (
+            <span
+              className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
+              style={{
+                fontFamily: 'var(--font-space-mono)',
+                color: 'var(--coral)',
+                background: 'rgba(255,79,59,0.10)',
+                border: '1px solid rgba(255,79,59,0.35)',
+              }}
+            >
+              Pro only
+            </span>
+          )}
         </div>
       </div>
 
@@ -88,13 +104,32 @@ export function LoraTrainingPanel({ phone, accountId, accountName, status, train
         <span style={{ color: 'var(--muted2)' }}>~20 min, ~$5 per account, one-time.</span>
       </p>
 
-      {isReady && trainedAt && (
+      {!isPro && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+            Upgrade to <strong style={{ color: 'var(--coral)' }}>Pro</strong> to unlock brand LoRA training and up to 10 high-quality AI images per day.
+          </p>
+          <a
+            href="/api/billing/create-checkout"
+            className="self-start inline-flex items-center gap-2 text-xs px-4 py-2.5 rounded-full font-semibold transition-opacity hover:opacity-90"
+            style={{
+              background: 'var(--coral)',
+              color: '#fff',
+              fontFamily: 'var(--font-dm-sans)',
+            }}
+          >
+            Upgrade to Pro
+          </a>
+        </div>
+      )}
+
+      {isPro && isReady && trainedAt && (
         <p className="text-xs" style={{ color: 'var(--muted2)', fontFamily: 'var(--font-space-mono)' }}>
           Trained {new Date(trainedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
         </p>
       )}
 
-      {!isReady && !isTraining && (
+      {isPro && !isReady && !isTraining && (
         <button
           type="button"
           onClick={startTraining}

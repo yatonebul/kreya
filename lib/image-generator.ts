@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { buildBrandImageUrl } from '@/lib/lora';
 
 const NEGATIVE = 'blurry, distorted face, ugly, deformed, low quality, watermark, text, logo';
+const DAILY_PRO_LIMIT = 10;
 
 export type ImageStyle = 'realistic' | 'anime' | '3d' | 'artistic';
 
@@ -34,40 +35,71 @@ export function buildImageUrl(prompt: string, style: ImageStyle = 'realistic'): 
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&model=${model}&seed=${seed}&negative=${encodeURIComponent(NEGATIVE)}`;
 }
 
-// Brand-aware image generation. When the active IG account for this
-// phone has a trained LoRA (status='ready'), route through Replicate
-// for visual consistency with the user's actual feed. Otherwise fall
-// back to the pollinations URL — instant, free, and still on-brand
-// via prompt engineering.
-//
-// Async because Replicate predictions take 10-20s of polling. Caller
-// must await. On any LoRA failure (timeout, missing token, model
-// errors), we silently fall back so the user still gets an image.
+export type BrandedImageResult = { url: string; overflowed: boolean };
+
+// Brand-aware image generation. Routes Pro users with a trained LoRA through
+// Replicate; everyone else (and Pro users who've hit their daily cap) gets
+// the Pollinations fallback. Returns overflowed=true when a Pro user is
+// silently downgraded due to hitting the daily limit — callers should surface
+// a "limit reached" notification to the user.
 export async function buildBrandedImage(
   prompt: string,
   style: ImageStyle = 'realistic',
   phone?: string,
-): Promise<string> {
+): Promise<BrandedImageResult> {
   const fallback = buildImageUrl(prompt, style);
 
-  if (!phone || !process.env.REPLICATE_API_TOKEN) return fallback;
+  if (!phone || !process.env.REPLICATE_API_TOKEN) return { url: fallback, overflowed: false };
 
-  const { data: account } = await getSupabase()
-    .from('instagram_accounts')
-    .select('account_name, lora_model_id, lora_status')
-    .in('whatsapp_phone', phoneVariants(phone))
-    .eq('is_active', true)
-    .maybeSingle();
+  const supabase = getSupabase();
+  const variants = phoneVariants(phone);
 
+  const [{ data: account }, { data: profile }] = await Promise.all([
+    supabase
+      .from('instagram_accounts')
+      .select('account_name, lora_model_id, lora_status')
+      .in('whatsapp_phone', variants)
+      .eq('is_active', true)
+      .maybeSingle(),
+    supabase
+      .from('user_profiles')
+      .select('plan, daily_pro_gen_count, last_gen_reset_date')
+      .in('whatsapp_phone', variants)
+      .maybeSingle(),
+  ]);
+
+  // Non-pro users get Pollinations (free tier by design, not a limit hit)
+  if ((profile?.plan ?? 'free') !== 'pro') return { url: fallback, overflowed: false };
+
+  // No LoRA model trained yet — Pro but no visual upgrade available
   if (!account?.lora_model_id || account.lora_status !== 'ready') {
-    return fallback;
+    return { url: fallback, overflowed: false };
   }
+
+  // Daily counter — reset when the date rolls over
+  const today = new Date().toISOString().slice(0, 10);
+  let count = profile?.daily_pro_gen_count ?? 0;
+  if ((profile?.last_gen_reset_date ?? '') !== today) {
+    count = 0;
+    await supabase
+      .from('user_profiles')
+      .update({ daily_pro_gen_count: 0, last_gen_reset_date: today })
+      .in('whatsapp_phone', variants);
+  }
+
+  if (count >= DAILY_PRO_LIMIT) return { url: fallback, overflowed: true };
+
+  // Claim one slot before the Replicate call (optimistic, tolerates parallel races)
+  await supabase
+    .from('user_profiles')
+    .update({ daily_pro_gen_count: count + 1, last_gen_reset_date: today })
+    .in('whatsapp_phone', variants);
 
   try {
     const url = await buildBrandImageUrl(prompt, account);
-    return url ?? fallback;
+    return { url: url ?? fallback, overflowed: false };
   } catch (err) {
     console.warn('[branded-image] LoRA failed, using fallback:', err);
-    return fallback;
+    return { url: fallback, overflowed: false };
   }
 }

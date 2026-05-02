@@ -174,7 +174,7 @@ export default async function AccountPage({
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
   const [{ data: phoneProfile }, { data: allAccounts }, { data: posts }, { data: scheduled }] = await Promise.all([
-    supabase.from('user_profiles').select('brand_name, niche, tone').eq('whatsapp_phone', queryId).maybeSingle(),
+    supabase.from('user_profiles').select('brand_name, niche, tone, plan').eq('whatsapp_phone', queryId).maybeSingle(),
     phones.length
       ? supabase.from('instagram_accounts')
           .select('id, account_name, token_expires_at, brand_name, niche, tone, is_active, lora_status, lora_trained_at, dm_autoreply_enabled, comment_autoreply_enabled')
@@ -371,7 +371,8 @@ export default async function AccountPage({
         </section>
 
         {/* Brand image style (LoRA) — per-account visual consistency.
-            Only renders when an IG account is connected. */}
+            Only renders when an IG account is connected. Non-pro users
+            see an upgrade CTA instead of the training controls. */}
         {viewedAccount && (
           <LoraTrainingPanel
             phone={queryId}
@@ -379,6 +380,7 @@ export default async function AccountPage({
             accountName={viewedAccount.account_name}
             status={(viewedAccount.lora_status as 'training' | 'ready' | 'failed' | null) ?? null}
             trainedAt={viewedAccount.lora_trained_at ?? null}
+            isPro={(phoneProfile?.plan ?? 'free') === 'pro'}
           />
         )}
 

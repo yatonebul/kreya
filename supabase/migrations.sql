@@ -238,6 +238,20 @@ ALTER TABLE instagram_accounts
   ADD COLUMN IF NOT EXISTS engagement_offered_at      TIMESTAMPTZ;
 
 
+-- 23. user_profiles — Stripe billing + daily Pro generation quota.
+--     stripe_customer_id / subscription_status: used by /api/billing/create-checkout
+--     and the future Stripe webhook to sync plan changes.
+--     daily_pro_gen_count / last_gen_reset_date: reset each day to track
+--     "High-Quality Generation" (Replicate LoRA) usage. When count >= 10,
+--     buildBrandedImage silently overflows to Pollinations for the remainder
+--     of the day and notifies the user via WhatsApp.
+ALTER TABLE user_profiles
+  ADD COLUMN IF NOT EXISTS stripe_customer_id   TEXT,
+  ADD COLUMN IF NOT EXISTS subscription_status  TEXT,
+  ADD COLUMN IF NOT EXISTS daily_pro_gen_count  INT  NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS last_gen_reset_date  DATE;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
