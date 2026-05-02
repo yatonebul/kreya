@@ -67,6 +67,14 @@ export async function GET(request: NextRequest) {
 
   const stripe = new Stripe(STRIPE_SECRET_KEY);
 
+  // Look up the user's email to pre-fill the Stripe form
+  const { data: reg } = await db()
+    .from('email_registrations')
+    .select('email')
+    .in('phone', phoneVariants(phone).map(p => p.replace(/^\+/, '')))
+    .maybeSingle();
+  const userEmail = reg?.email ?? undefined;
+
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode:               'subscription',
     line_items:         [{ price: STRIPE_PRO_PRICE_ID, quantity: 1 }],
@@ -77,9 +85,12 @@ export async function GET(request: NextRequest) {
     allow_promotion_codes: true,
   };
 
-  // Re-use existing Stripe customer if we already have one
+  // Re-use existing Stripe customer (preserves payment methods + email)
   if (profile?.stripe_customer_id) {
     sessionParams.customer = profile.stripe_customer_id;
+  } else if (userEmail) {
+    // Pre-fill email so the Stripe form is ready to go
+    sessionParams.customer_email = userEmail;
   }
 
   const checkoutSession = await stripe.checkout.sessions.create(sessionParams);

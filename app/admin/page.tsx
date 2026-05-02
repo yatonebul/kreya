@@ -34,11 +34,17 @@ export default async function AdminPage({
     { data: igPosts },
     { data: igAccounts },
     { data: allProfiles },
+    { data: allIgAccounts },
+    { data: postCounts },
   ] = await Promise.all([
     db().from('email_registrations').select('id, email, phone, status, created_at').order('created_at', { ascending: false }),
     db().from('pending_posts').select('id, whatsapp_phone, caption, image_url, is_video, state, created_at, ig_post_url').order('created_at', { ascending: false }).limit(50),
     db().from('instagram_accounts').select('whatsapp_phone, account_name').eq('is_active', true),
-    db().from('user_profiles').select('whatsapp_phone, brand_name, plan, created_at').order('created_at', { ascending: false }),
+    db().from('user_profiles').select('whatsapp_phone, brand_name, niche, tone, plan, subscription_status, stripe_customer_id, daily_pro_gen_count, last_gen_reset_date, created_at').order('created_at', { ascending: false }),
+    // All IG accounts (not just active) for the Users tab
+    db().from('instagram_accounts').select('whatsapp_phone, account_name, is_active, lora_status, dm_autoreply_enabled, comment_autoreply_enabled'),
+    // Published post counts per phone
+    db().from('pending_posts').select('whatsapp_phone').eq('state', 'published'),
   ]);
 
   const counts = {
@@ -51,6 +57,21 @@ export default async function AdminPage({
   for (const a of igAccounts ?? []) {
     const clean = a.whatsapp_phone?.replace(/^\+/, '');
     if (clean) phoneToIg[clean] = a.account_name;
+  }
+
+  // All IG accounts grouped by phone (for Users tab)
+  const phoneToAllIg: Record<string, typeof allIgAccounts> = {};
+  for (const a of allIgAccounts ?? []) {
+    const clean = (a.whatsapp_phone ?? '').replace(/^\+/, '');
+    if (!phoneToAllIg[clean]) phoneToAllIg[clean] = [];
+    phoneToAllIg[clean]!.push(a);
+  }
+
+  // Published post counts per phone
+  const phoneToPostCount: Record<string, number> = {};
+  for (const p of postCounts ?? []) {
+    const clean = (p.whatsapp_phone ?? '').replace(/^\+/, '');
+    phoneToPostCount[clean] = (phoneToPostCount[clean] ?? 0) + 1;
   }
 
   const tabs = [
@@ -139,47 +160,99 @@ export default async function AdminPage({
 
         {/* ── USERS TAB ── */}
         {tab === 'users' && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs" style={{ color: 'var(--muted)', fontFamily: 'var(--font-space-mono)' }}>
-              {allProfiles?.filter(u => u.plan === 'pro').length ?? 0} pro ·{' '}
-              {allProfiles?.filter(u => u.plan === 'agency').length ?? 0} agency ·{' '}
-              {allProfiles?.filter(u => !u.plan || u.plan === 'free').length ?? 0} free
-            </p>
+          <div className="flex flex-col gap-4">
+            {/* Summary bar */}
+            <div className="flex items-center gap-4 text-xs flex-wrap" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted)' }}>
+              <span><span style={{ color: 'var(--violet)' }}>{allProfiles?.filter(u => u.plan === 'pro').length ?? 0}</span> pro</span>
+              <span><span style={{ color: 'var(--gold)' }}>{allProfiles?.filter(u => u.plan === 'agency').length ?? 0}</span> agency</span>
+              <span><span style={{ color: 'var(--muted2)' }}>{allProfiles?.filter(u => !u.plan || u.plan === 'free').length ?? 0}</span> free</span>
+              <span style={{ color: 'var(--muted2)' }}>·</span>
+              <span><span style={{ color: 'var(--mint)' }}>{Object.values(phoneToPostCount).reduce((a, b) => a + b, 0)}</span> total posts</span>
+            </div>
+
             {(allProfiles?.length ?? 0) === 0 && (
               <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>No users yet.</p>
             )}
+
             {allProfiles?.map(u => {
-              const cleanPhone = u.whatsapp_phone?.replace(/^\+/, '');
-              const igHandle   = cleanPhone ? phoneToIg[cleanPhone] : null;
-              const plan       = (u.plan ?? 'free') as 'free' | 'pro' | 'agency';
-              const planColor  = plan === 'pro' ? 'var(--violet)' : plan === 'agency' ? 'var(--gold)' : 'var(--muted2)';
-              const planBg     = plan === 'pro' ? 'rgba(94,53,255,0.10)' : plan === 'agency' ? 'rgba(255,209,102,0.10)' : 'transparent';
+              const cleanPhone  = (u.whatsapp_phone ?? '').replace(/^\+/, '');
+              const plan        = (u.plan ?? 'free') as 'free' | 'pro' | 'agency';
+              const planColor   = plan === 'pro' ? 'var(--violet)' : plan === 'agency' ? 'var(--gold)' : 'var(--muted2)';
+              const planBg      = plan === 'pro' ? 'rgba(94,53,255,0.10)' : plan === 'agency' ? 'rgba(255,209,102,0.10)' : 'transparent';
+              const igList      = phoneToAllIg[cleanPhone] ?? [];
+              const postCount   = phoneToPostCount[cleanPhone] ?? 0;
+              const joinedAt    = u.created_at ? new Date(u.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+
               return (
                 <div
                   key={u.whatsapp_phone}
-                  className="flex items-center justify-between rounded-2xl px-5 py-4 gap-4 flex-wrap"
-                  style={{ background: 'var(--surf2)', border: plan !== 'free' ? `1px solid ${planColor}33` : '1px solid transparent' }}
+                  className="rounded-2xl flex flex-col gap-0 overflow-hidden"
+                  style={{ background: 'var(--surf2)', border: plan !== 'free' ? `1px solid ${planColor}33` : '1px solid var(--surf3)' }}
                 >
-                  {/* Identity */}
-                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                    <span className="text-sm font-medium truncate" style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--white)' }}>
-                      {u.brand_name ?? u.whatsapp_phone}
-                    </span>
-                    <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
-                      {igHandle ? `@${igHandle} · ` : ''}{u.whatsapp_phone}
-                    </span>
+                  {/* Main row */}
+                  <div className="flex items-start justify-between gap-4 px-5 py-4 flex-wrap">
+                    {/* Left: identity */}
+                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
+                          {u.brand_name ?? u.whatsapp_phone}
+                        </span>
+                        <span
+                          className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
+                          style={{ fontFamily: 'var(--font-space-mono)', color: planColor, background: planBg, border: `1px solid ${planColor}` }}
+                        >
+                          {plan}
+                        </span>
+                      </div>
+                      <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+                        {u.whatsapp_phone}{joinedAt ? ` · joined ${joinedAt}` : ''}
+                      </span>
+                      {u.niche && (
+                        <span className="text-xs mt-0.5" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+                          {u.niche}{u.tone ? ` · ${u.tone}` : ''}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right: stats + plan toggle */}
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <AdminPlanToggle phone={u.whatsapp_phone} currentPlan={plan} adminSecret={ADMIN_SECRET} />
+                      <div className="flex items-center gap-3 text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+                        {postCount > 0 && <span><span style={{ color: 'var(--mint)' }}>{postCount}</span> posts</span>}
+                        {plan === 'pro' && typeof u.daily_pro_gen_count === 'number' && (
+                          <span><span style={{ color: 'var(--violet)' }}>{u.daily_pro_gen_count}</span>/10 today</span>
+                        )}
+                        {u.subscription_status && u.subscription_status !== 'active' && (
+                          <span style={{ color: 'var(--coral)' }}>{u.subscription_status}</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Current plan badge */}
-                  <span
-                    className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full flex-shrink-0"
-                    style={{ fontFamily: 'var(--font-space-mono)', color: planColor, background: planBg, border: `1px solid ${planColor}` }}
-                  >
-                    {plan}
-                  </span>
-
-                  {/* Toggle */}
-                  <AdminPlanToggle phone={u.whatsapp_phone} currentPlan={plan} adminSecret={ADMIN_SECRET} />
+                  {/* IG accounts strip */}
+                  {igList.length > 0 && (
+                    <div
+                      className="px-5 py-3 flex flex-wrap gap-2"
+                      style={{ borderTop: '1px solid var(--surf3)', background: 'rgba(0,0,0,0.15)' }}
+                    >
+                      {igList.map((ig: any) => {
+                        const loraColor = ig.lora_status === 'ready' ? 'var(--mint)' : ig.lora_status === 'training' ? 'var(--gold)' : 'var(--muted2)';
+                        return (
+                          <div key={ig.account_name} className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: 'var(--surf3)', color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+                            <span style={{ color: ig.is_active ? 'var(--mint)' : 'var(--muted2)' }}>●</span>
+                            <span>@{ig.account_name}</span>
+                            {ig.lora_status && (
+                              <span style={{ color: loraColor, fontFamily: 'var(--font-space-mono)', fontSize: '0.65rem' }}>
+                                LoRA:{ig.lora_status}
+                              </span>
+                            )}
+                            {ig.dm_autoreply_enabled && <span style={{ color: 'var(--violet)', fontSize: '0.65rem' }}>DM</span>}
+                            {ig.comment_autoreply_enabled && <span style={{ color: 'var(--violet)', fontSize: '0.65rem' }}>CMT</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -223,6 +223,96 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section id="pricing" className="px-6 md:px-12 py-20 flex flex-col items-center gap-10" style={{ background: 'var(--surf)' }}>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span
+            className="text-xs tracking-widest uppercase px-3 py-1 rounded-full"
+            style={{ fontFamily: 'var(--font-space-mono)', background: 'var(--surf3)', color: 'var(--violet)' }}
+          >
+            Simple pricing
+          </span>
+          <h2 className="text-3xl md:text-4xl font-bold" style={{ fontFamily: 'var(--font-syne)' }}>
+            Pick your plan
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto w-full">
+          {/* Free */}
+          <div className="rounded-2xl p-7 flex flex-col gap-5" style={{ background: 'var(--surf2)', border: '1px solid var(--surf3)' }}>
+            <div>
+              <p className="text-xs tracking-widest uppercase mb-2" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>Free</p>
+              <p className="text-4xl font-extrabold" style={{ fontFamily: 'var(--font-syne)' }}>$0</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>No card needed</p>
+            </div>
+            <ul className="flex flex-col gap-2.5 flex-1">
+              {[
+                'WhatsApp → Instagram in 30 seconds',
+                'Caption in your brand voice',
+                '3 caption variants per post',
+                'Schedule posts',
+                'Standard AI image generation',
+                '1 Instagram account',
+              ].map(f => (
+                <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+                  <span style={{ color: 'var(--mint)', flexShrink: 0 }}>✓</span> {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={session ? '/account' : '/register'}
+              className="w-full py-3 rounded-full text-sm font-semibold text-center transition-opacity hover:opacity-80"
+              style={{ background: 'var(--surf3)', color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}
+            >
+              {session ? 'Go to dashboard' : 'Get started free'}
+            </a>
+          </div>
+
+          {/* Pro */}
+          <div
+            className="rounded-2xl p-7 flex flex-col gap-5 relative"
+            style={{
+              background: 'linear-gradient(135deg, rgba(94,53,255,0.15) 0%, rgba(255,79,59,0.10) 100%)',
+              border: '1px solid rgba(94,53,255,0.4)',
+            }}
+          >
+            <span
+              className="absolute top-4 right-4 text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
+              style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--gold)', background: 'rgba(255,209,102,0.12)', border: '1px solid rgba(255,209,102,0.4)' }}
+            >
+              Most popular
+            </span>
+            <div>
+              <p className="text-xs tracking-widest uppercase mb-2" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--violet)' }}>Pro</p>
+              <p className="text-4xl font-extrabold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
+                {process.env.NEXT_PUBLIC_PRO_PRICE_LABEL ?? '$29'}
+              </p>
+              <p className="text-sm mt-1" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>per month</p>
+            </div>
+            <ul className="flex flex-col gap-2.5 flex-1">
+              {[
+                'Everything in Free',
+                'Brand image style (LoRA training on your feed)',
+                '10 high-quality AI images per day',
+                'Visual consistency across all surfaces',
+                'Priority generation',
+              ].map(f => (
+                <li key={f} className="flex items-start gap-2 text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+                  <span style={{ color: 'var(--violet)', flexShrink: 0 }}>✦</span> {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={session ? `/api/billing/create-checkout` : '/register?intent=pro'}
+              className="w-full py-3 rounded-full text-sm font-semibold text-center transition-opacity hover:opacity-90"
+              style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}
+            >
+              {session ? 'Upgrade to Pro' : 'Get Pro'}
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* Waitlist */}
       <section id="waitlist" className="px-6 md:px-12 py-20 flex flex-col items-center gap-8">
         <div className="flex flex-col items-center gap-3 text-center">
