@@ -338,6 +338,51 @@ export default async function AccountPage({
         {/* Surface mix — Feed vs Reels vs Carousel vs Story split. */}
         <SurfaceStats counts={surfaceCounts} />
 
+        {/* Pro upgrade card — shown for all free users, regardless of IG status */}
+        {(phoneProfile?.plan ?? 'free') === 'free' && (
+          <section
+            className="rounded-2xl p-6 flex flex-col gap-4"
+            style={{
+              background:  'linear-gradient(135deg, rgba(94,53,255,0.12) 0%, rgba(255,79,59,0.08) 100%)',
+              border:      '1px solid rgba(94,53,255,0.3)',
+            }}
+          >
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)', color: 'var(--white)' }}>
+                  Kreya Pro
+                </h2>
+                <span
+                  className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full"
+                  style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--violet)', background: 'rgba(94,53,255,0.15)', border: '1px solid rgba(94,53,255,0.4)' }}
+                >
+                  Upgrade
+                </span>
+              </div>
+              <a
+                href={`/api/billing/create-checkout?phone=${encodeURIComponent(queryId)}`}
+                className="inline-flex items-center gap-2 text-sm px-5 py-2.5 rounded-full font-semibold transition-opacity hover:opacity-90"
+                style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}
+              >
+                Upgrade to Pro
+              </a>
+            </div>
+
+            <ul className="flex flex-col gap-2">
+              {[
+                { icon: '🎨', text: 'Brand image style — train a LoRA on your Instagram feed so every AI image matches your aesthetic' },
+                { icon: '⚡', text: '10 high-quality AI images per day via Replicate (free plan uses standard generation)' },
+                { icon: '📸', text: 'Visual consistency across posts, carousels, stories and repurposed content' },
+              ].map(f => (
+                <li key={f.icon} className="flex items-start gap-2 text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)', lineHeight: 1.55 }}>
+                  <span aria-hidden style={{ flexShrink: 0, marginTop: 1 }}>{f.icon}</span>
+                  {f.text}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* Brand profile — promoted above Instagram because it controls every caption.
             For multi-account users, AccountSwitcher tabs let them pick which IG's
             brand profile they're editing. The badge tells them whether they're
