@@ -794,6 +794,20 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
     return;
   }
 
+  if (isEditingVideo) {
+    // Video-only edit - text not allowed, need actual video
+    if (instruction.toLowerCase().trim() === 'cancel') {
+      await getSupabase().from('pending_posts')
+        .update({ state: 'pending_approval' })
+        .eq('id', pending.id);
+      await sendText(from, '✋ Video edit cancelled. Here\'s your draft again:');
+      await sendPostPreview(from, pending.image_url, pending.caption, pending.id, true);
+      return;
+    }
+    await sendText(from, '🎬 *Please send a video file* instead of text. Send your new video to replace the current one.');
+    return;
+  }
+
   // Original fallback for generic 'in_edit' state
   const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
   const isRevertPhoto = !!pending.user_image_url &&
