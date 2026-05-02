@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kreya Stripe Branding Assets - Download</title>
+  <style>
+    :root {
+      --ink: #07070d;
+      --dark: #0b0918;
+      --coral: #ff4f3b;
+      --mint: #00e5a0;
+      --violet: #5e35ff;
+      --white: #fff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--dark);
+      color: var(--white);
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 32px;
+      margin-bottom: 10px;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 40px;
+      font-size: 14px;
+    }
+
+    .assets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .asset-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 24px;
+      transition: all 0.3s ease;
+    }
+
+    .asset-card:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--coral);
+    }
+
+    .preview {
+      width: 100%;
+      height: 180px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+
+    .preview img, .preview svg {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+    }
+
+    .asset-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+
+    .asset-desc {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .download-btn {
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--coral);
+      color: var(--white);
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .download-btn:hover {
+      opacity: 0.9;
+    }
+
+    .download-btn:active {
+      opacity: 0.8;
+    }
+
+    .info-box {
+      background: rgba(0, 229, 160, 0.08);
+      border: 1px solid rgba(0, 229, 160, 0.2);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 40px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .info-box strong {
+      color: var(--mint);
+    }
+
+    .file-path {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px;
+      border-radius: 4px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      margin: 12px 0;
+      overflow-x: auto;
+      word-break: break-all;
+    }
+
+    .specs {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Kreya Stripe Branding Assets</h1>
+    <p class="subtitle">Download your Stripe portal assets below</p>
+
+    <div class="assets-grid">
+      <!-- Logo -->
+      <div class="asset-card">
+        <div class="preview" style="background: linear-gradient(180deg, #0f0a1e 0%, #0b0918 100%);">
+          <img src="kreya-stripe-logo.svg" alt="Logo">
+        </div>
+        <div class="asset-name">Logo + Wordmark</div>
+        <div class="asset-desc">Horizontal logo with K icon and "KREYA" wordmark</div>
+        <div class="specs">320×80px · SVG</div>
+        <button class="download-btn" onclick="downloadFile('kreya-stripe-logo.svg', 'kreya-stripe-logo')">Download SVG</button>
+      </div>
+
+      <!-- Icon Gradient -->
+      <div class="asset-card">
+        <div class="preview" style="background: #1a1530;">
+          <img src="kreya-stripe-icon.svg" alt="Icon Gradient">
+        </div>
+        <div class="asset-name">Icon — Gradient</div>
+        <div class="asset-desc">K icon with coral-to-violet gradient</div>
+        <div class="specs">256×256px · SVG</div>
+        <button class="download-btn" onclick="downloadFile('kreya-stripe-icon.svg', 'kreya-stripe-icon')">Download SVG</button>
+      </div>
+
+      <!-- Icon Mint -->
+      <div class="asset-card">
+        <div class="preview" style="background: #0b0918;">
+          <img src="kreya-stripe-icon-mint.svg" alt="Icon Mint">
+        </div>
+        <div class="asset-name">Icon — Mint Variant</div>
+        <div class="asset-desc">K icon with coral-to-mint gradient (dark bg)</div>
+        <div class="specs">256×256px · SVG</div>
+        <button class="download-btn" onclick="downloadFile('kreya-stripe-icon-mint.svg', 'kreya-stripe-icon-mint')">Download SVG</button>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>📝 Next Steps:</strong>
+      <ol style="margin: 12px 0 0 18px; padding: 0;">
+        <li>Download the SVG files above</li>
+        <li>Convert to PNG (use <a href="https://cloudconvert.com/svg-to-png" target="_blank" style="color: var(--mint);">CloudConvert</a> for quick conversion)</li>
+        <li>Upload to <strong>Stripe Dashboard > Settings > Branding</strong></li>
+        <li>Set Brand Color: <code style="background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 2px;">#FF4F3B</code></li>
+        <li>Set Accent Color: <code style="background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 2px;">#00E5A0</code></li>
+        <li>Button Shape: <strong>Max (Pill)</strong></li>
+      </ol>
+      <div class="file-path">
+        📂 Local files: /app/public/kreya-stripe-icon*.svg
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function downloadFile(filename, downloadName) {
+      const link = document.createElement('a');
+      link.href = filename;
+      link.download = downloadName + '.svg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
