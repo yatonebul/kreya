@@ -19,6 +19,24 @@ export async function POST(request: NextRequest) {
   if (!phone) return NextResponse.json({ error: 'phone required' }, { status: 400 });
 
   const supabase = getSupabase();
+
+  // Plan gate — LoRA training is a Pro-only feature
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('plan')
+    .in('whatsapp_phone', phoneVariants(phone))
+    .maybeSingle();
+
+  if ((profile?.plan ?? 'free') !== 'pro') {
+    return NextResponse.json(
+      {
+        error: 'upgrade_required',
+        message: 'Brand image style training is a Pro feature. Upgrade to unlock LoRA training.',
+      },
+      { status: 402 },
+    );
+  }
+
   const accountQuery = account_id
     ? supabase.from('instagram_accounts')
         .select('id, account_name, instagram_user_id, access_token, lora_status')

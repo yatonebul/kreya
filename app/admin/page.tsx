@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { AdminActions } from '@/app/_components/admin-actions';
+import { AdminPlanToggle } from '@/app/_components/admin-plan-toggle';
 import { adminUrlToken } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -28,21 +29,17 @@ export default async function AdminPage({
 
   const secretParam = `?secret=${secret}`;
 
-  const { data: registrations } = await db()
-    .from('email_registrations')
-    .select('id, email, phone, status, created_at')
-    .order('created_at', { ascending: false });
-
-  const { data: igPosts } = await db()
-    .from('pending_posts')
-    .select('id, whatsapp_phone, caption, image_url, is_video, state, created_at, ig_post_url')
-    .order('created_at', { ascending: false })
-    .limit(50);
-
-  const { data: igAccounts } = await db()
-    .from('instagram_accounts')
-    .select('whatsapp_phone, account_name')
-    .eq('is_active', true);
+  const [
+    { data: registrations },
+    { data: igPosts },
+    { data: igAccounts },
+    { data: allProfiles },
+  ] = await Promise.all([
+    db().from('email_registrations').select('id, email, phone, status, created_at').order('created_at', { ascending: false }),
+    db().from('pending_posts').select('id, whatsapp_phone, caption, image_url, is_video, state, created_at, ig_post_url').order('created_at', { ascending: false }).limit(50),
+    db().from('instagram_accounts').select('whatsapp_phone, account_name').eq('is_active', true),
+    db().from('user_profiles').select('whatsapp_phone, brand_name, plan, created_at').order('created_at', { ascending: false }),
+  ]);
 
   const counts = {
     pending:  registrations?.filter(r => r.status === 'pending').length  ?? 0,
@@ -58,6 +55,7 @@ export default async function AdminPage({
 
   const tabs = [
     { id: 'waitlist',  label: `Waitlist${counts.pending ? ` · ${counts.pending} pending` : ''}` },
+    { id: 'users',     label: `Users · ${allProfiles?.length ?? 0}` },
     { id: 'instagram', label: 'Instagram' },
   ];
 
@@ -136,6 +134,55 @@ export default async function AdminPage({
             {(registrations?.length ?? 0) === 0 && (
               <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>No registrations yet.</p>
             )}
+          </div>
+        )}
+
+        {/* ── USERS TAB ── */}
+        {tab === 'users' && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs" style={{ color: 'var(--muted)', fontFamily: 'var(--font-space-mono)' }}>
+              {allProfiles?.filter(u => u.plan === 'pro').length ?? 0} pro ·{' '}
+              {allProfiles?.filter(u => u.plan === 'agency').length ?? 0} agency ·{' '}
+              {allProfiles?.filter(u => !u.plan || u.plan === 'free').length ?? 0} free
+            </p>
+            {(allProfiles?.length ?? 0) === 0 && (
+              <p className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>No users yet.</p>
+            )}
+            {allProfiles?.map(u => {
+              const cleanPhone = u.whatsapp_phone?.replace(/^\+/, '');
+              const igHandle   = cleanPhone ? phoneToIg[cleanPhone] : null;
+              const plan       = (u.plan ?? 'free') as 'free' | 'pro' | 'agency';
+              const planColor  = plan === 'pro' ? 'var(--violet)' : plan === 'agency' ? 'var(--gold)' : 'var(--muted2)';
+              const planBg     = plan === 'pro' ? 'rgba(94,53,255,0.10)' : plan === 'agency' ? 'rgba(255,209,102,0.10)' : 'transparent';
+              return (
+                <div
+                  key={u.whatsapp_phone}
+                  className="flex items-center justify-between rounded-2xl px-5 py-4 gap-4 flex-wrap"
+                  style={{ background: 'var(--surf2)', border: plan !== 'free' ? `1px solid ${planColor}33` : '1px solid transparent' }}
+                >
+                  {/* Identity */}
+                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                    <span className="text-sm font-medium truncate" style={{ fontFamily: 'var(--font-dm-sans)', color: 'var(--white)' }}>
+                      {u.brand_name ?? u.whatsapp_phone}
+                    </span>
+                    <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+                      {igHandle ? `@${igHandle} · ` : ''}{u.whatsapp_phone}
+                    </span>
+                  </div>
+
+                  {/* Current plan badge */}
+                  <span
+                    className="text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-full flex-shrink-0"
+                    style={{ fontFamily: 'var(--font-space-mono)', color: planColor, background: planBg, border: `1px solid ${planColor}` }}
+                  >
+                    {plan}
+                  </span>
+
+                  {/* Toggle */}
+                  <AdminPlanToggle phone={u.whatsapp_phone} currentPlan={plan} adminSecret={ADMIN_SECRET} />
+                </div>
+              );
+            })}
           </div>
         )}
 

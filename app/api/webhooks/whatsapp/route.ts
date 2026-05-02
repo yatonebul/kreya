@@ -87,6 +87,21 @@ async function processWebhook(body: any) {
           await sendText(from, `🔐 *Admin dashboard*\n\n${adminUrl}`);
           return;
         }
+        // /setplan <phone> <free|pro|agency> — manually toggle a user's plan for testing
+        const setplanMatch = txt.match(/^\/setplan\s+(\S+)\s+(free|pro|agency)$/i);
+        if (setplanMatch) {
+          const targetRaw = setplanMatch[1];
+          const newPlan   = setplanMatch[2].toLowerCase();
+          const targetVariants = phoneVariants(targetRaw.startsWith('+') ? targetRaw : `+${targetRaw}`);
+          const { error: spErr } = await getSupabase()
+            .from('user_profiles')
+            .update({ plan: newPlan })
+            .in('whatsapp_phone', targetVariants);
+          await sendText(from, spErr
+            ? `⚠️ setplan failed: ${spErr.message}`
+            : `✅ Plan set to *${newPlan}* for ${targetRaw}`);
+          return;
+        }
       }
     }
 
@@ -123,11 +138,12 @@ async function processWebhook(body: any) {
       // Command shortcuts — bypass pending draft so they always work
       if (messageType === 'text') {
         const txt = message.text?.body ?? '';
-        if (isHelpCommand(txt))       { await handleHelp(from);                               return; }
-        if (isStatusCheck(txt))       { await handleStatus(from);                             return; }
-        if (isCancelScheduled(txt))   { await handleCancelScheduled(from);                    return; }
-        if (isLearnStyleCommand(txt)) { await handleLearnStyle(from);                         return; }
-        if (isCarouselCommand(txt))   { await handleCarouselStart(from);                      return; }
+        if (isHelpCommand(txt))        { await handleHelp(from);                               return; }
+        if (isStatusCheck(txt))        { await handleStatus(from);                             return; }
+        if (isCancelScheduled(txt))    { await handleCancelScheduled(from);                    return; }
+        if (isTrainBrandCommand(txt))  { await handleTrainBrand(from);                         return; }
+        if (isLearnStyleCommand(txt))  { await handleLearnStyle(from);                         return; }
+        if (isCarouselCommand(txt))    { await handleCarouselStart(from);                      return; }
         if (isAccountsCommand(txt))   { await handleListAccounts(from);                       return; }
         if (isJournalListCommand(txt)){ await handleJournalList(from);                         return; }
         if (isJournalCommand(txt))    { await handleJournalArm(from);                          return; }
@@ -325,7 +341,10 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     : await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions, surface);
   const caption = variants[0] ?? '';
 
-  const imageUrl = userMediaUrl ?? await buildBrandedImage(imagePromptText!, 'realistic', from);
+  const imageResult = userMediaUrl
+    ? { url: userMediaUrl, overflowed: false }
+    : await buildBrandedImage(imagePromptText!, 'realistic', from);
+  const imageUrl = imageResult.url;
 
   // Discard any stale pending_approval before creating new post
   const { data: staleDrafts } = await getSupabase()
@@ -365,7 +384,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
 
   // If user sent a photo AND asked for AI version — generate sibling post
   if (wantsAiAlso && imagePromptText) {
-    const aiImageUrl = await buildBrandedImage(imagePromptText, 'realistic', from);
+    const { url: aiImageUrl } = await buildBrandedImage(imagePromptText, 'realistic', from);
     const { data: aiPost } = await getSupabase()
       .from('pending_posts')
       .insert({
@@ -400,6 +419,10 @@ async function handleNewPost(from: string, message: any, messageType: string) {
       return `*${i + 2}.* ${trimmed}`;
     }).join('\n\n');
     await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+  }
+
+  if (imageResult.overflowed) {
+    await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
   }
 }
 
@@ -668,7 +691,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
       ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
       : Promise.resolve(pending.caption),
     isImageRequest && imagePrompt
-      ? buildBrandedImage(imagePrompt, detectStyle(instruction), from)
+      ? buildBrandedImage(imagePrompt, detectStyle(instruction), from).then(r => r.url)
       : Promise.resolve(pending.image_url),
   ]);
 
@@ -729,6 +752,10 @@ function isStatusCheck(text: string): boolean {
 
 function isCancelScheduled(text: string): boolean {
   return /\b(cancel|remove|delete|discard)\s+(my\s+)?(next\s+)?(scheduled|upcoming)\s*(post)?\b/i.test(text.trim());
+}
+
+function isTrainBrandCommand(text: string): boolean {
+  return /^(\/train|train\s+(my\s+)?(brand|style|lora|image\s*style)|retrain\s+(brand|style|lora))[!?.\s]*$/i.test(text.trim());
 }
 
 function isLearnStyleCommand(text: string): boolean {
@@ -885,6 +912,64 @@ async function handleLearnStyle(from: string) {
   } else {
     await sendText(from, `⚠️ Couldn't update your voice profile right now — try again in a minute.`);
   }
+}
+
+async function handleTrainBrand(from: string) {
+  const supabase = getSupabase();
+
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('plan')
+    .in('whatsapp_phone', phoneVariants(from))
+    .maybeSingle();
+
+  if ((profile?.plan ?? 'free') !== 'pro') {
+    await sendText(
+      from,
+      `🎨 *Brand image style training is a Pro feature.*\n\n` +
+      `Upgrade to unlock:\n` +
+      `• Custom LoRA trained on your Instagram feed\n` +
+      `• Up to 10 high-quality AI images per day\n` +
+      `• Visual consistency across every post\n\n` +
+      `👉 Upgrade now: ${APP_URL}/api/billing/create-checkout`,
+    );
+    return;
+  }
+
+  const { data: account } = await supabase
+    .from('instagram_accounts')
+    .select('id, account_name, instagram_user_id, access_token, lora_status')
+    .in('whatsapp_phone', phoneVariants(from))
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!account?.access_token || !account.instagram_user_id) {
+    await sendText(from, `📸 Connect Instagram first — ${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`);
+    return;
+  }
+  if (account.lora_status === 'training') {
+    await sendText(from, `◐ Already training — I'll WhatsApp you when @${account.account_name} is ready (~20 min).`);
+    return;
+  }
+  if (account.lora_status === 'ready') {
+    await sendText(from, `● Brand style already trained for @${account.account_name}. Every AI image already matches your feed aesthetic.`);
+    return;
+  }
+
+  const { startLoraTraining } = await import('@/lib/lora');
+  const result = await startLoraTraining({
+    accountId: account.id,
+    igUserId: account.instagram_user_id,
+    accessToken: account.access_token,
+    accountName: account.account_name,
+  });
+
+  if (!result.ok) {
+    await sendText(from, `⚠️ Couldn't start training: ${result.error ?? 'please try again.'}`);
+    return;
+  }
+
+  await sendText(from, `🎨 Training kicked off for @${account.account_name}! Replicate takes ~20 min — I'll WhatsApp you when it's ready.`);
 }
 
 // Content repository search — Postgres FTS over caption column.
@@ -1339,7 +1424,7 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   // user's feed aesthetic, not generic Flux-realistic.
   const mediaItems: CarouselItem[] = await Promise.all(
     spin.slides.map(async s => ({
-      url: await buildBrandedImage(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt), from),
+      url: (await buildBrandedImage(`${s.imagePrompt} | overlay text: "${s.headline}"`, detectStyle(s.imagePrompt), from)).url,
       is_video: false,
     })),
   );
@@ -1402,7 +1487,7 @@ async function handleSpinStory(from: string, sourcePostId: string) {
   // Vertical 9:16 image with the hook baked into the prompt so it appears
   // as overlay text. detectStyle picks photoreal vs illustration based
   // on prompt vocabulary.
-  const imageUrl = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from);
+  const { url: imageUrl, overflowed: storyOverflowed } = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from);
 
   // Discard conflicting drafts so the Story has a clean lane
   const { data: stale } = await supabase
@@ -1445,6 +1530,9 @@ async function handleSpinStory(from: string, sourcePostId: string) {
     `Approve to push to your 24h Story strip.`,
   );
   await sendPostPreview(from, imageUrl, spin.hook, post.id, false, 'feed');
+  if (storyOverflowed) {
+    await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
+  }
 }
 
 async function handleSpinReelScript(from: string, sourcePostId: string) {
