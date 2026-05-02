@@ -411,3 +411,38 @@ export async function sendPostPreview(
     },
   });
 }
+
+export async function sendEditActionsMenu(to: string, postId: string, isVideo: boolean) {
+  const editOptions: { id: string; title: string; description: string }[] = [
+    { id: `edit_caption:${postId}`, title: '✍️ Caption', description: 'Tone, length, angle, language' },
+  ];
+
+  if (!isVideo) {
+    editOptions.push({ id: `edit_image:${postId}`, title: '🖼️ Image', description: 'Regenerate or change style' });
+  } else {
+    editOptions.push({ id: `edit_video:${postId}`, title: '🎬 Video', description: 'Replace with a new video' });
+  }
+
+  editOptions.push({ id: `cancel_edit:${postId}`, title: '✖️ Cancel', description: 'Discard changes, back to draft' });
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      header: { type: 'text', text: '✏️ What to edit?' },
+      body: { text: 'Choose what you\'d like to change:' },
+      footer: { text: 'Tip: tap an option below' },
+      action: {
+        button: 'Edit options',
+        sections: [
+          {
+            title: 'Edit',
+            rows: editOptions,
+          },
+        ],
+      },
+    },
+  });
+}
