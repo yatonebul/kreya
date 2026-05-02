@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-
 type Step = {
   id: 'whatsapp' | 'instagram' | 'engagement';
   title: string;
