@@ -742,12 +742,18 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
     isImageRequest ? generateImagePrompt(pending.caption) : Promise.resolve(null),
   ]);
 
+  // For image edits, combine original caption context with the edit instruction
+  // e.g., caption "cliffs" + instruction "add grass" → "cliffs with grass"
+  const imageEditPrompt = isImageRequest && imagePrompt
+    ? `${imagePrompt} ${instruction}`
+    : imagePrompt;
+
   const [newCaption, imageResult] = await Promise.all([
     hasCaptionInstruction
       ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
       : Promise.resolve(pending.caption),
-    isImageRequest && imagePrompt
-      ? buildBrandedImage(imagePrompt, detectStyle(instruction), from)
+    isImageRequest && imageEditPrompt
+      ? buildBrandedImage(imageEditPrompt, detectStyle(instruction), from)
       : Promise.resolve({ url: pending.image_url, overflowed: false }),
   ]);
 
