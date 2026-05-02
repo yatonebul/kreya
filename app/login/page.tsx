@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { formatPhoneInput, normalizePhoneNumber } from '@/lib/phone-formatter';
 
 type Mode = 'email' | 'phone';
 type Step = 'input' | 'code' | 'verifying';
@@ -37,7 +38,7 @@ function LoginForm() {
     try {
       const body = mode === 'email'
         ? { email: value.toLowerCase().trim() }
-        : { phone: value.trim().replace(/^\+/, '') };
+        : { phone: normalizePhoneNumber(value.trim()).replace(/^\+/, '') };
       const endpoint = mode === 'email' ? '/api/auth/otp/email' : '/api/auth/otp/send';
 
       const res  = await fetch(endpoint, {
@@ -65,7 +66,7 @@ function LoginForm() {
     try {
       const identifier = mode === 'email'
         ? value.toLowerCase().trim()
-        : value.trim().replace(/^\+/, '');
+        : normalizePhoneNumber(value.trim()).replace(/^\+/, '');
 
       const res  = await fetch('/api/auth/otp/verify', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -83,7 +84,7 @@ function LoginForm() {
       if (mode === 'email') {
         router.push(`/account?email=${encodeURIComponent(value.toLowerCase().trim())}`);
       } else {
-        router.push(`/account?phone=${encodeURIComponent(value.trim().replace(/^\+/, ''))}`);
+        router.push(`/account?phone=${encodeURIComponent(normalizePhoneNumber(value.trim()).replace(/^\+/, ''))}`);
       }
     } catch {
       setError('Network error. Please try again.');
@@ -136,7 +137,7 @@ function LoginForm() {
               <input
                 type={inputType}
                 value={value}
-                onChange={e => setValue(e.target.value)}
+                onChange={e => setValue(mode === 'phone' ? formatPhoneInput(e.target.value) : e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && value) sendCode(); }}
                 placeholder={placeholder}
                 autoFocus

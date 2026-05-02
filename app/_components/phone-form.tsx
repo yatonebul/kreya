@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatPhoneInput, normalizePhoneNumber } from '@/lib/phone-formatter';
 
 export function PhoneForm() {
   const [phone, setPhone] = useState('');
@@ -16,10 +17,11 @@ export function PhoneForm() {
     setErrorMsg('');
 
     try {
+      const normalized = normalizePhoneNumber(phone.trim());
       const res = await fetch('/api/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone: normalized }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Something went wrong');
@@ -84,8 +86,8 @@ export function PhoneForm() {
         <input
           type="tel"
           value={phone}
-          onChange={e => setPhone(e.target.value)}
-          placeholder="+1 555 000 0000"
+          onChange={e => setPhone(formatPhoneInput(e.target.value))}
+          placeholder="+420 723 967 372"
           className="flex-1 rounded-full px-5 py-3 text-sm outline-none"
           style={{
             background: 'var(--surf3)',

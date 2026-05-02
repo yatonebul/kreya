@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { formatPhoneInput, normalizePhoneNumber } from '@/lib/phone-formatter';
 
 export default function RegisterPage() {
   const [email,   setEmail]   = useState('');
@@ -16,10 +17,11 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
     try {
+      const normalizedPhone = phone ? normalizePhoneNumber(phone.trim()) : undefined;
       const res  = await fetch('/api/register', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email, phone: phone || undefined }),
+        body:    JSON.stringify({ email, phone: normalizedPhone }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
@@ -100,7 +102,7 @@ export default function RegisterPage() {
               <input
                 type="tel"
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
+                onChange={e => setPhone(formatPhoneInput(e.target.value))}
                 placeholder="+420 723 967 372"
                 className="w-full px-4 py-3 rounded-xl outline-none text-sm"
                 style={{ background: 'var(--surf2)', color: 'var(--white)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)', caretColor: 'var(--coral)' }}
