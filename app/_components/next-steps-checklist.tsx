@@ -93,7 +93,12 @@ export function NextStepsChecklist({
               {completedCount}/{steps.length} complete
             </span>
             {allComplete && (
-              <span style={{ color: 'var(--muted)', fontSize: '12px', transition: 'transform 0.2s', display: 'inline-block', transform: expanded ? 'rotate(0deg)' : 'rotate(180deg)' }}>▲</span>
+              <svg
+                width="16" height="16" viewBox="0 0 16 16" fill="none"
+                style={{ transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)', transform: expanded ? 'rotate(0deg)' : 'rotate(180deg)', flexShrink: 0 }}
+              >
+                <path d="M4 10L8 6L12 10" stroke="var(--mint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             )}
           </div>
         </div>
