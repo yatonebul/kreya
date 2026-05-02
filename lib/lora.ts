@@ -177,7 +177,7 @@ export async function buildBrandImageUrl(
     try {
       const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
         headers: { Authorization: `Bearer ${process.env.REPLICATE_API_TOKEN}` },
-        timeout: 5000,
+        signal: AbortSignal.timeout(5000),
       });
       if (!poll.ok) return null;
       prediction = await poll.json();
