@@ -188,8 +188,9 @@ export function NextStepsChecklist({
                 href={step.cta.href}
                 className="text-xs px-3 py-1.5 rounded-full font-medium flex-shrink-0 transition-opacity hover:opacity-80 whitespace-nowrap"
                 style={{
-                  background: 'var(--coral)',
-                  color: '#fff',
+                  background: step.cta.label.includes('Upgrade') ? 'var(--coral)' : 'transparent',
+                  color: step.cta.label.includes('Upgrade') ? '#fff' : 'var(--white)',
+                  border: step.cta.label.includes('Upgrade') ? 'none' : '1px solid var(--muted2)',
                   fontFamily: 'var(--font-dm-sans)',
                 }}
               >
@@ -247,7 +248,7 @@ export function NextStepsChecklist({
             href="/api/billing/create-checkout"
             className="text-xs px-3 py-1.5 rounded-full font-medium flex-shrink-0 transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{
-              background: 'var(--violet)',
+              background: 'var(--coral)',
               color: '#fff',
               fontFamily: 'var(--font-dm-sans)',
             }}

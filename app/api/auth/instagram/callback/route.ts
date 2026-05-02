@@ -22,6 +22,13 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
   const state = searchParams.get('state');
+  const userAgent = request.headers.get('user-agent') || '';
+
+  // Detect Instagram in-app browser and suggest opening in system browser
+  const isInstagramInApp = userAgent.includes('Instagram');
+  if (isInstagramInApp) {
+    console.warn('[IG callback] Detected Instagram in-app browser user-agent');
+  }
 
   if (error || !code) {
     return NextResponse.redirect(`${CONNECT_URL}?error=${encodeURIComponent(error ?? 'no_code')}`);
@@ -70,21 +77,30 @@ export async function GET(request: NextRequest) {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) throw new Error('Token exchange failed');
+    if (!tokenData.access_token) {
+      console.error('[IG callback token exchange]', { code: tokenData?.error, message: tokenData?.error_description, tokenStatus: tokenRes.status });
+      throw new Error('Token exchange failed');
+    }
 
     // 2. Exchange for long-lived token (~60 days)
     const longRes = await fetch(
       `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${APP_SECRET}&access_token=${tokenData.access_token}`
     );
     const longData = await longRes.json();
-    if (longData.error) throw new Error('Long-lived token exchange failed');
+    if (longData.error) {
+      console.error('[IG callback long-lived token]', { error: longData.error, errorDescription: longData.error_description });
+      throw new Error('Long-lived token exchange failed');
+    }
 
     const accessToken = longData.access_token ?? tokenData.access_token;
 
     // 3. Get Instagram user info
     const meRes = await fetch(`https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`);
     const meData = await meRes.json();
-    if (!meData.id) throw new Error('Could not fetch user info');
+    if (!meData.id) {
+      console.error('[IG callback user info]', { meData, meStatus: meRes.status });
+      throw new Error('Could not fetch user info');
+    }
 
     // 4. Upsert token + phone in Supabase (manual check avoids missing unique constraint).
     //    Whoever just completed OAuth becomes the active account for that phone — any
@@ -104,7 +120,15 @@ export async function GET(request: NextRequest) {
             .in('whatsapp_phone', whatsappPhone.startsWith('+') ? [whatsappPhone, whatsappPhone.slice(1)] : [whatsappPhone, `+${whatsappPhone}`])
             .neq('instagram_user_id', meData.id))
         : { error: null };
-      if (demoteErr) throw new Error(`Failed to demote siblings: ${demoteErr.message}`);
+      if (demoteErr) {
+        console.error('[IG callback demote error (existing)]', {
+          code: demoteErr.code,
+          message: demoteErr.message,
+          details: demoteErr.details,
+          hint: demoteErr.hint,
+        });
+        throw new Error(`Failed to demote siblings: ${demoteErr.message}`);
+      }
 
       const { error: updateErr } = await getSupabase().from('instagram_accounts').update({
         account_name: meData.username,
@@ -113,7 +137,17 @@ export async function GET(request: NextRequest) {
         is_active: true,
         ...(whatsappPhone ? { whatsapp_phone: whatsappPhone } : {}),
       }).eq('id', existing.id);
-      if (updateErr) throw new Error(`Failed to update account: ${updateErr.message}`);
+      if (updateErr) {
+        console.error('[IG callback update error]', {
+          code: updateErr.code,
+          message: updateErr.message,
+          details: updateErr.details,
+          hint: updateErr.hint,
+          existingId: existing.id,
+          igUserId: meData.id,
+        });
+        throw new Error(`Failed to update account: ${updateErr.message}`);
+      }
     } else {
       // New account: demote siblings first, then insert.
       // Backfill brand fields from user_profiles so the new IG inherits the
@@ -142,12 +176,20 @@ export async function GET(request: NextRequest) {
           throw new Error(`Failed to demote siblings: ${demoteErr.message}`);
         }
 
-        const { data: phoneProfile } = await getSupabase()
+        const { data: phoneProfile, error: profileErr } = await getSupabase()
           .from('user_profiles')
           .select('brand_name, niche, tone, profile_context')
           .eq('whatsapp_phone', whatsappPhone)
           .maybeSingle();
-        if (phoneProfile) backfill = phoneProfile;
+        if (profileErr) {
+          console.warn('[IG callback profile lookup]', {
+            code: profileErr.code,
+            message: profileErr.message,
+            whatsappPhone,
+          });
+        } else if (phoneProfile) {
+          backfill = phoneProfile;
+        }
       }
 
       const insertData: any = {
