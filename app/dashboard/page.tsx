@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { MobileBottomNav } from '@/app/_components/mobile-bottom-nav';
 import { WaButton } from '@/app/_components/wa-button';
+import { AutoRefresh } from '@/app/_components/auto-refresh';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 function getSupabase() {
   return createClient(
@@ -119,6 +121,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--dark)' }}>
+      <AutoRefresh />
       {/* Nav */}
       <nav className="flex items-center justify-between px-6 py-5 md:px-12" style={{ borderBottom: '1px solid var(--surf3)' }}>
         <a href="/" className="text-xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>

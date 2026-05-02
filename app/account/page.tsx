@@ -19,9 +19,11 @@ import { LoraTrainingPanel } from '@/app/_components/lora-training-panel';
 import { EngagementToggles } from '@/app/_components/engagement-toggles';
 import { SurfaceStats } from '@/app/_components/surface-stats';
 import { TokenRenewalBanner } from '@/app/_components/token-renewal-banner';
+import { AutoRefresh } from '@/app/_components/auto-refresh';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
@@ -279,6 +281,7 @@ export default async function AccountPage({
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--dark)' }}>
+      <AutoRefresh />
       {/* Nav */}
       <nav className="flex items-center justify-between px-6 py-5 md:px-12" style={{ borderBottom: '1px solid var(--surf3)' }}>
         <a href="/" className="text-xl font-bold tracking-tight" style={{ fontFamily: 'var(--font-syne)', color: 'var(--coral)' }}>

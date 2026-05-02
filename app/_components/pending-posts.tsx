@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 type Post = {
@@ -160,6 +160,26 @@ function PostCard({ post, onDone, connectUrl }: { post: Post; onDone: (id: strin
 export function PendingPosts({ initial, connectUrl }: { initial: Post[]; connectUrl?: string }) {
   const router = useRouter();
   const [posts, setPosts] = useState(initial);
+
+  useEffect(() => {
+    // Poll for fresh data every 8 seconds when page is visible
+    const handleVisibilityChange = () => {
+      if (document.hidden) return;
+      router.refresh();
+    };
+
+    const pollInterval = setInterval(() => {
+      if (!document.hidden) {
+        router.refresh();
+      }
+    }, 8000);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [router]);
 
   function onDone(id: string) {
     setPosts(p => p.filter(x => x.id !== id));
