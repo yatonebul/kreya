@@ -119,7 +119,8 @@
   "completed_this_session": [
     "Strategy doc: docs/strategy-chat-first-social-os.md (chat-first social OS vision + phase 1 plan)",
     "Caption variants v1 — generateCaptionVariants returns 3 angles (hook/story/CTA) in one Sonnet 4.6 call. Stored in pending_posts.caption_variants jsonb. User replies bare 1/2/3 to swap active caption.",
-    "Style memory v0 — lib/style-memory.ts pulls last 50 IG captions via Graph API, summarizes voice via Haiku into user_profiles.learned_style. Triggered fire-and-forget after OAuth callback; refresh on demand via WA command 'learn my style'. getProfileContextForPhone concatenates brand profile + learned style for every caption call."
+    "Style memory v0 — lib/style-memory.ts pulls last 50 IG captions via Graph API, summarizes voice via Haiku into user_profiles.learned_style. Triggered fire-and-forget after OAuth callback; refresh on demand via WA command 'learn my style'. getProfileContextForPhone concatenates brand profile + learned style for every caption call.",
+    "Onboarding & Stripe billing integration — (1) NextStepsChecklist component tracks WhatsApp/Instagram/engagement completion; integrated into /account dashboard. (2) Dynamic pricing on homepage fetches from Stripe API with 1-hour cache. (3) Overflow notifications added to edit refinement and carousel generation flows; story flow already had them. (4) All feature gating verified: train-lora endpoint enforces Pro plan, buildBrandedImage routes Pro→Replicate vs free→Pollinations, daily limit enforced with reset at midnight. Stripe webhook (checkout.session.completed, customer.subscription.updated, customer.subscription.deleted) already implemented and working."
   ],
 
   "next_session_ideas": [
@@ -131,7 +132,7 @@
   ],
 
   "metadata": {
-    "last_updated": "2026-04-25",
-    "version": "2.1"
+    "last_updated": "2026-05-02",
+    "version": "2.2"
   }
 }
