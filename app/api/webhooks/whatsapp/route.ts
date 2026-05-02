@@ -180,6 +180,17 @@ async function processWebhook(body: any) {
         }
       }
 
+      // Auto-carousel: image sent with "carousel" in the caption while NOT already
+      // in /carousel mode.  Multiple simultaneous uploads (camera-roll multi-select)
+      // all land here; the 4-second debounce buffer joins them into one session.
+      if (messageType === 'image' && !collecting) {
+        const imgCaption = (message.image?.caption ?? '').trim();
+        if (/\bcarousel\b/i.test(imgCaption)) {
+          await handleAutoCarouselImage(from, message, imgCaption);
+          return;
+        }
+      }
+
       // Explicit image-style or caption-edit sub-states set by the Edit Image /
       // Edit Caption sub-menu buttons.  10-minute expiry prevents a stale state
       // from hijacking a future unrelated message (e.g. user clicked Edit Image
@@ -1754,6 +1765,157 @@ async function handleSpinReelScript(from: string, sourcePostId: string) {
     `📝 *Caption:*\n${spin.caption}\n\n` +
     `Film it on your phone (vertical, 9:16). When you're done, send the video back here and I'll post it as a Reel with this caption already loaded. 🚀`,
   );
+}
+
+// Handles images sent with "carousel" in the caption WITHOUT the user first
+// typing /carousel.  Works atomically for batch camera-roll uploads:
+//   1. Each concurrent webhook buffers its image immediately.
+//   2. The last-in-burst after() (4 s) flushes all buffered images, generates
+//      a single caption from the user's prompt, and presents the draft.
+//   3. The unique partial index (migration 27) ensures exactly one
+//      collecting_carousel session exists per phone even under concurrency.
+async function handleAutoCarouselImage(from: string, message: any, userCaption: string) {
+  const supabase = getSupabase();
+
+  const mediaId = message.image?.id;
+  const mimeType = message.image?.mime_type ?? 'image/jpeg';
+  if (!mediaId) return;
+
+  let url: string;
+  try {
+    url = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    await sendText(from, '📎 Couldn\'t download that photo — try again.');
+    return;
+  }
+
+  // Find or create the one collecting_carousel session for this phone.
+  // If two concurrent requests both see no session, the unique index lets
+  // only one INSERT succeed; the other catches the conflict and SELECTs.
+  let sessionId: string;
+
+  const { data: existing } = await supabase
+    .from('pending_posts')
+    .select('id, caption')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'collecting_carousel')
+    .maybeSingle();
+
+  if (existing) {
+    sessionId = existing.id;
+    // Promote caption if this photo carried one and the session has none yet
+    if (userCaption && !existing.caption) {
+      await supabase.from('pending_posts').update({ caption: userCaption }).eq('id', sessionId);
+    }
+  } else {
+    // Discard stale drafts to clear the lane
+    const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
+      .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit']);
+    for (const d of stale ?? []) {
+      await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+      if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+    }
+
+    const { data: created, error: insertErr } = await supabase.from('pending_posts').insert({
+      whatsapp_phone: from,
+      state: 'collecting_carousel',
+      surface: 'carousel',
+      media_items: [],
+      caption: userCaption,
+    }).select('id').single();
+
+    if (insertErr || !created) {
+      // Unique index conflict — another concurrent request won the race
+      const { data: winner } = await supabase.from('pending_posts')
+        .select('id').eq('whatsapp_phone', from).eq('state', 'collecting_carousel').maybeSingle();
+      if (!winner) return;
+      sessionId = winner.id;
+    } else {
+      sessionId = created.id;
+    }
+  }
+
+  // Buffer the image atomically
+  const { data: bufRow } = await supabase.from('carousel_buffer')
+    .insert({ whatsapp_phone: from, carousel_post_id: sessionId, url })
+    .select('id, created_at')
+    .single();
+
+  const myCreatedAt: string = bufRow?.created_at ?? new Date().toISOString();
+
+  after(async () => {
+    await new Promise(r => setTimeout(r, 4000));
+
+    // If a newer image arrived, let that after() be the flusher
+    const { data: newer } = await supabase.from('carousel_buffer').select('id')
+      .eq('carousel_post_id', sessionId).gt('created_at', myCreatedAt).limit(1);
+    if (newer && newer.length > 0) return;
+
+    // Flush all buffered images atomically
+    const { data: pending } = await supabase.from('carousel_buffer').select('url, created_at')
+      .eq('carousel_post_id', sessionId).order('created_at', { ascending: true });
+    if (!pending || pending.length === 0) return;
+
+    let finalCount = 0;
+    for (const item of pending) {
+      const { data: cnt } = await supabase.rpc('append_carousel_item', {
+        p_post_id: sessionId,
+        p_item: { url: item.url, is_video: false },
+      });
+      if (typeof cnt === 'number') finalCount = cnt;
+    }
+    await supabase.from('carousel_buffer').delete().eq('carousel_post_id', sessionId);
+
+    const freshPost = await getPostById(sessionId);
+    const items: CarouselItem[] = (freshPost?.media_items as CarouselItem[] | null) ?? [];
+
+    const [profileContext, recentCaptions] = await Promise.all([
+      getProfileContextForPhone(from),
+      getRecentCaptions(),
+    ]);
+
+    if (items.length === 1) {
+      // Only one photo arrived — fall back to a regular feed post
+      const variants = await generateCaptionVariants(
+        freshPost?.caption || '[Write a creative caption for this photo]',
+        profileContext ?? undefined, recentCaptions, 'feed',
+      );
+      const caption = variants[0] ?? '';
+      await supabase.from('pending_posts').update({
+        state: 'pending_approval', surface: 'feed', caption,
+        image_url: items[0].url, media_items: null,
+        ...(variants.length > 1 ? { caption_variants: variants } : {}),
+      }).eq('id', sessionId);
+      await sendPostPreview(from, items[0].url, caption, sessionId, false);
+      return;
+    }
+
+    // 2+ photos → publish as carousel
+    await sendText(from, `🎞️ Building your *${items.length}-slide carousel*...`);
+
+    const captionPrompt = freshPost?.caption
+      ? `${freshPost.caption}. [Carousel of ${items.length} photos — write one caption framing the whole set.]`
+      : `[Carousel of ${items.length} photos — write one caption framing the whole set.]`;
+
+    const variants = await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions);
+    const caption = variants[0] ?? '';
+
+    await supabase.from('pending_posts').update({
+      state: 'pending_approval', caption, image_url: items[0].url,
+      ...(variants.length > 1 ? { caption_variants: variants } : {}),
+    }).eq('id', sessionId);
+
+    await sendText(from, `🎞️ Carousel ready — *${items.length} slides*. First slide previewed below.`);
+    await sendPostPreview(from, items[0].url, caption, sessionId, false);
+
+    if (variants.length > 1) {
+      const others = variants.slice(1).map((v, i) => {
+        const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+        return `*${i + 2}.* ${trimmed}`;
+      }).join('\n\n');
+      await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+    }
+  });
 }
 
 async function handleCarouselStart(from: string) {
