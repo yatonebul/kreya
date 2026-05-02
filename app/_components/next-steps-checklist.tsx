@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 type Step = {
   id: 'whatsapp' | 'instagram' | 'engagement';
   title: string;
@@ -71,19 +73,29 @@ export function NextStepsChecklist({
   ];
 
   const completedCount = steps.filter(s => s.completed).length;
+  const allComplete = completedCount === steps.length;
   const progress = (completedCount / steps.length) * 100;
+  const [expanded, setExpanded] = useState(!allComplete);
 
   return (
     <section className="rounded-2xl p-6 flex flex-col gap-6" style={{ background: 'var(--surf2)', border: '1px solid rgba(0,229,160,0.15)' }}>
-      {/* Header */}
+      {/* Header — clickable when all steps complete */}
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div
+          className={`flex items-center justify-between gap-3 flex-wrap${allComplete ? ' cursor-pointer select-none' : ''}`}
+          onClick={allComplete ? () => setExpanded(v => !v) : undefined}
+        >
           <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>
             Next Steps
           </h2>
-          <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--mint)', background: 'rgba(0,229,160,0.12)', border: '1px solid rgba(0,229,160,0.3)' }}>
-            {completedCount}/{steps.length} complete
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--mint)', background: 'rgba(0,229,160,0.12)', border: '1px solid rgba(0,229,160,0.3)' }}>
+              {completedCount}/{steps.length} complete
+            </span>
+            {allComplete && (
+              <span style={{ color: 'var(--muted)', fontSize: '12px', transition: 'transform 0.2s', display: 'inline-block', transform: expanded ? 'rotate(0deg)' : 'rotate(180deg)' }}>▲</span>
+            )}
+          </div>
         </div>
         <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surf3)' }}>
           <div
@@ -96,8 +108,8 @@ export function NextStepsChecklist({
         </div>
       </div>
 
-      {/* Steps */}
-      <div className="flex flex-col gap-3">
+      {/* Steps — hidden when collapsed */}
+      {expanded && <div className="flex flex-col gap-3">
         {steps.map(step => (
           <div
             key={step.id}
@@ -174,9 +186,9 @@ export function NextStepsChecklist({
             )}
           </div>
         ))}
-      </div>
+      </div>}
 
-      {/* Pro unlock card for free users */}
+      {/* Pro unlock card for free users — always visible */}
       {!isProPlan && (
         <div
           className="rounded-xl p-4 flex items-start gap-3"
