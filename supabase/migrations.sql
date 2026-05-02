@@ -252,6 +252,55 @@ ALTER TABLE user_profiles
   ADD COLUMN IF NOT EXISTS last_gen_reset_date  DATE;
 
 
+-- 24. pending_posts — updated_at column + trigger.
+--     Required for 10-minute expiry on awaiting_image_style /
+--     awaiting_caption_edit states so stale prompts don't hijack
+--     future messages after the user abandoned the edit flow.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+CREATE OR REPLACE FUNCTION set_pending_posts_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_pending_posts_updated_at
+  BEFORE UPDATE ON pending_posts
+  FOR EACH ROW EXECUTE FUNCTION set_pending_posts_updated_at();
+
+
+-- 25. pending_posts — atomic carousel item append.
+--     When WhatsApp delivers N images as N concurrent webhook calls, a
+--     read-modify-write on media_items creates a race that drops all but
+--     one image.  This function appends atomically at the DB level.
+CREATE OR REPLACE FUNCTION append_carousel_item(p_post_id UUID, p_item JSONB)
+RETURNS INTEGER
+LANGUAGE sql AS $$
+  UPDATE pending_posts
+  SET    media_items = COALESCE(media_items, '[]'::jsonb) || jsonb_build_array(p_item)
+  WHERE  id = p_post_id
+  RETURNING jsonb_array_length(media_items);
+$$;
+
+
+-- 26. carousel_buffer — 4-second debounce window for multi-image batch uploads.
+--     WhatsApp sends N photos as N separate webhook events fired < 1 s apart.
+--     Images land here first; the last-in-burst after() callback flushes them
+--     all to pending_posts.media_items in one atomic operation.
+CREATE TABLE IF NOT EXISTS carousel_buffer (
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  whatsapp_phone   TEXT        NOT NULL,
+  carousel_post_id UUID        NOT NULL REFERENCES pending_posts(id) ON DELETE CASCADE,
+  url              TEXT        NOT NULL,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_carousel_buffer_post
+  ON carousel_buffer (carousel_post_id, created_at);
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
