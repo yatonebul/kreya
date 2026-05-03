@@ -797,77 +797,20 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
 }
 
+// Caption-only refinement for the in_edit fallback path. Image changes must
+// be made explicitly via the 🖼️ Image button in the edit sub-menu.
 async function handleEditRefinement(from: string, pending: any, instruction: string) {
-  const isImageRequest = /\b(image|photo|picture|pic|visual|regenerate|new image|different image|change image|swap)\b/i.test(instruction);
-  const isRevertPhoto = !!pending.user_image_url &&
-    /\b(use my photo|my photo|my image|original|uploaded|revert)\b/i.test(instruction);
-
-  // Revert to user's uploaded photo
-  if (isRevertPhoto) {
-    await getSupabase().from('pending_posts')
-      .update({ image_url: pending.user_image_url, image_source: 'user', state: 'pending_approval' })
-      .eq('id', pending.id);
-    const updated = await getPostById(pending.id);
-    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id, pending.is_video ?? false);
+  if (instruction.trim().length < 3) {
+    await sendText(from, '✏️ Not sure what to change — try "Make it shorter" or "Add a CTA".\nTo swap the visual, pick 🖼️ Image from the edit menu.');
     return;
   }
-
-  const captionInstruction = instruction
-    .replace(/\b(edit|update|regenerate|change|new|different|swap|avoid|fix|redo|create|generate|make)\s*(the\s*)?(image|photo|picture|pic|visual|faces?|blurr\w*)\b/gi, '')
-    .replace(/\b(edit|update|redo)\b/gi, '')  // remove leftover action verbs with no caption target
-    .replace(/\band\b/gi, '')
-    .trim();
-  const hasCaptionInstruction = captionInstruction.length > 3;
-
-  if (!isImageRequest && !hasCaptionInstruction) {
-    await sendText(from, '✏️ *What would you like to edit?*\n\n• *Caption:* "Make it shorter" / "Add a call-to-action" / etc.\n• *Image:* "New image" / "Different photo" / "Regenerate" / etc.\n• *Photo:* Send your own photo or say "use my photo"');
-    return;
-  }
-
-  const statusParts: string[] = [];
-  if (isImageRequest) statusParts.push('image');
-  if (hasCaptionInstruction) statusParts.push('caption');
-  await sendText(from, `✍️ Updating ${statusParts.join(' & ')}...`);
-
-  const [profileContext, imagePrompt] = await Promise.all([
-    hasCaptionInstruction ? getProfileContextForPhone(from) : Promise.resolve(null),
-    isImageRequest ? generateImagePrompt(pending.caption) : Promise.resolve(null),
-  ]);
-
-  // For image edits, combine original caption context with the edit instruction
-  // e.g., caption "cliffs" + instruction "add grass" → "cliffs with grass"
-  const imageEditPrompt = isImageRequest && imagePrompt
-    ? `${imagePrompt} ${instruction}`
-    : imagePrompt;
-
-  const [newCaption, imageResult] = await Promise.all([
-    hasCaptionInstruction
-      ? refineCaption(pending.caption, captionInstruction, profileContext ?? undefined)
-      : Promise.resolve(pending.caption),
-    isImageRequest && imageEditPrompt
-      ? buildBrandedImage(imageEditPrompt, detectStyle(instruction), from)
-      : Promise.resolve({ url: pending.image_url, overflowed: false }),
-  ]);
-
-  const newImageUrl = imageResult.url;
-  const newSource = isImageRequest ? 'ai' : pending.image_source;
-
-  const { data: updated } = await getSupabase()
-    .from('pending_posts')
-    .update({ caption: newCaption, image_url: newImageUrl, image_source: newSource, state: 'pending_approval' })
-    .eq('id', pending.id)
-    .select('id')
-    .single();
-
-  if (updated?.id) {
-    if (isImageRequest && pending.user_image_url) {
-      await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
-    }
-    await sendPostPreview(from, newImageUrl, newCaption, updated.id, pending.is_video ?? false);
-    if (imageResult.overflowed) {
-      await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
-    }
-  }
+  await sendText(from, '✍️ Updating caption...');
+  const profileContext = await getProfileContextForPhone(from);
+  const newCaption = await refineCaption(pending.caption, instruction, profileContext ?? undefined);
+  await getSupabase().from('pending_posts')
+    .update({ caption: newCaption, state: 'pending_approval' })
+    .eq('id', pending.id);
+  await sendPostPreview(from, pending.image_url, newCaption, pending.id, pending.is_video ?? false);
 }
 
 // Called when the user has explicitly tapped "Edit Image" and sent their
