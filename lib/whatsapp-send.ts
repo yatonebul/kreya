@@ -419,6 +419,7 @@ export async function sendEditActionsMenu(to: string, postId: string, isVideo: b
 
   if (!isVideo) {
     editOptions.push({ id: `edit_image:${postId}`, title: '🖼️ Image', description: 'Regenerate or change style' });
+    editOptions.push({ id: `add_slides:${postId}`, title: '🎞️ Add Slides', description: 'Turn into a multi-image carousel' });
   } else {
     editOptions.push({ id: `edit_video:${postId}`, title: '🎬 Video', description: 'Replace with a new video' });
   }

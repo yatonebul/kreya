@@ -301,6 +301,16 @@ CREATE INDEX IF NOT EXISTS idx_carousel_buffer_post
   ON carousel_buffer (carousel_post_id, created_at);
 
 
+-- 27. pending_posts — one collecting_carousel session per phone.
+--     When the user sends multiple photos simultaneously without /carousel,
+--     each webhook fires concurrently and both try to INSERT a new session.
+--     This unique partial index serialises that at the DB level: the second
+--     INSERT gets a conflict error and the caller falls through to a SELECT.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_posts_one_carousel_per_phone
+  ON pending_posts (whatsapp_phone)
+  WHERE state = 'collecting_carousel';
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
