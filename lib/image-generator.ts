@@ -29,10 +29,10 @@ export function detectStyle(instruction: string): ImageStyle {
   return 'realistic';
 }
 
-export function buildImageUrl(prompt: string, style: ImageStyle = 'realistic'): string {
+export function buildImageUrl(prompt: string, style: ImageStyle = 'realistic', dims = { w: 1080, h: 1080 }): string {
   const seed = Math.floor(Math.random() * 1_000_000);
   const model = MODEL_MAP[style];
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1080&height=1080&nologo=true&model=${model}&seed=${seed}&negative=${encodeURIComponent(NEGATIVE)}`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${dims.w}&height=${dims.h}&nologo=true&model=${model}&seed=${seed}&negative=${encodeURIComponent(NEGATIVE)}`;
 }
 
 export type BrandedImageResult = { url: string; overflowed: boolean };
@@ -46,8 +46,9 @@ export async function buildBrandedImage(
   prompt: string,
   style: ImageStyle = 'realistic',
   phone?: string,
+  dims = { w: 1080, h: 1080 },
 ): Promise<BrandedImageResult> {
-  const fallback = buildImageUrl(prompt, style);
+  const fallback = buildImageUrl(prompt, style, dims);
 
   if (!phone || !process.env.REPLICATE_API_TOKEN) return { url: fallback, overflowed: false };
 
