@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendRetryButton } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendRetryButton } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -160,38 +160,93 @@ async function processWebhook(body: any) {
         if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
       }
 
-      // If actively collecting a carousel, route every text/image into the collection flow
+      // If actively collecting a carousel, route every text/image/video into the collection flow
       const collecting = await getPostByState(from, 'collecting_carousel');
       if (collecting) {
         if (messageType === 'text') {
           const txt = message.text?.body ?? '';
           if (isCarouselFinishCommand(txt)) { await handleCarouselFinish(from, collecting); return; }
           if (/^cancel/i.test(txt.trim()))  { await handleCarouselCancel(from, collecting); return; }
-          await sendText(from, '📸 Send another photo, or type *done* to publish — *cancel* to bail.');
+          await sendText(from, '📸 Send more photos/videos, or type *done* to publish — *cancel* to bail.');
           return;
         }
         if (messageType === 'image') {
           await handleCarouselAppend(from, collecting, message);
           return;
         }
-        if (messageType === 'video' || messageType === 'audio' || messageType === 'document') {
-          await sendText(from, '🎞️ Carousels are photos only for now — send a JPG/PNG, or type *done* / *cancel*.');
+        if (messageType === 'video') {
+          await handleCarouselAppendVideo(from, collecting, message);
+          return;
+        }
+        if (messageType === 'audio' || messageType === 'document') {
+          await sendText(from, '🎞️ Carousels support photos and short videos — send media, or type *done* / *cancel*.');
           return;
         }
       }
 
-      // All images outside an active edit flow go through a 3-second debounce
-      // buffer so camera-roll multi-selects are joined before processing:
-      //   2+ images → carousel    |    1 image → regular post
-      // Skip if the user is mid-edit (those states handle photos differently).
+      // Videos outside an active edit flow: check if they belong to an in-flight burst
+      // (same media_group_id OR arrived within 5s of the last active carousel session).
+      // If so, append to the carousel instead of creating a standalone Reel.
+      if (messageType === 'video' && !collecting) {
+        const { data: editPost } = await getSupabase()
+          .from('pending_posts').select('id')
+          .eq('whatsapp_phone', from)
+          .in('state', ['awaiting_image_style', 'awaiting_caption_edit', 'in_edit', 'awaiting_slide_replace'])
+          .limit(1).maybeSingle();
+        if (!editPost) {
+          const videoGroupId: string | undefined = message.video?.media_group_id;
+          const burst = await findBurstCarouselSession(from, videoGroupId);
+          if (burst) {
+            await handleCarouselAppendVideo(from, burst, message);
+            return;
+          }
+          // No active burst — fall through to standard Reel processing below
+        }
+      }
+
+      // All images outside an active edit flow use the burst-buffer so that
+      // camera-roll multi-selects are joined before processing:
+      //   2+ items → carousel  |  1 item → regular post
       if (messageType === 'image' && !collecting) {
         const { data: editPost } = await getSupabase()
           .from('pending_posts').select('id')
           .eq('whatsapp_phone', from)
-          .in('state', ['awaiting_image_style', 'awaiting_caption_edit', 'in_edit'])
+          .in('state', ['awaiting_image_style', 'awaiting_caption_edit', 'in_edit', 'awaiting_slide_replace'])
           .limit(1).maybeSingle();
         if (!editPost) {
           await handleAutoCarouselImage(from, message, (message.image?.caption ?? '').trim());
+          return;
+        }
+      }
+
+      // Carousel slide replace — user selected a specific slide to swap out.
+      // 10-minute expiry same as image-style state.
+      const awaitingSlideReplace = await getPostByState(from, 'awaiting_slide_replace');
+      if (awaitingSlideReplace) {
+        const ageMs = Date.now() - new Date(
+          (awaitingSlideReplace as any).updated_at ?? awaitingSlideReplace.created_at
+        ).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          await getSupabase().from('pending_posts')
+            .update({ state: 'pending_approval', editing_slide_idx: null })
+            .eq('id', awaitingSlideReplace.id);
+        } else if (['image', 'video'].includes(messageType)) {
+          await handleSlideReplace(from, awaitingSlideReplace, message, messageType);
+          return;
+        } else if (messageType === 'text' && /^cancel/i.test(message.text?.body?.trim() ?? '')) {
+          await getSupabase().from('pending_posts')
+            .update({ state: 'pending_approval', editing_slide_idx: null })
+            .eq('id', awaitingSlideReplace.id);
+          await sendText(from, '✋ Cancelled. Here\'s your draft:');
+          const refreshed = await getPostById(awaitingSlideReplace.id);
+          if (refreshed) {
+            const items = Array.isArray(refreshed.media_items) ? refreshed.media_items : [];
+            await sendPostPreview(from, refreshed.image_url, refreshed.caption, refreshed.id, false, 'carousel', items.length);
+          }
+          return;
+        } else {
+          const idx = awaitingSlideReplace.editing_slide_idx ?? 0;
+          await sendText(from, `🖼️ Send the replacement photo or video for slide ${idx + 1}, or type *cancel* to go back.`);
           return;
         }
       }
@@ -284,7 +339,7 @@ async function processWebhook(body: any) {
               .from('pending_posts')
               .update({ caption: newCaption })
               .eq('id', pendingApproval.id);
-            await sendPostPreview(from, pendingApproval.image_url, newCaption, pendingApproval.id, pendingApproval.is_video ?? false);
+            await sendPostPreview(from, pendingApproval.image_url, newCaption, pendingApproval.id, pendingApproval.is_video ?? false, deriveSurface(pendingApproval), deriveSlideCount(pendingApproval));
             return;
           }
           if (newCaption === pendingApproval.caption) {
@@ -323,7 +378,7 @@ async function processWebhook(body: any) {
         }
         // Show draft with clear instructions — user must explicitly discard to start fresh
         await sendText(from, '👆 Still got a draft on the line — tap *Approve* to post it, or *Discard* to start fresh:');
-        await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id, pendingApproval.is_video ?? false);
+        await sendPostPreview(from, pendingApproval.image_url, pendingApproval.caption, pendingApproval.id, pendingApproval.is_video ?? false, deriveSurface(pendingApproval), deriveSlideCount(pendingApproval));
         return;
       }
 
@@ -520,6 +575,18 @@ async function getPostById(id: string) {
   return data;
 }
 
+function deriveSurface(post: any): 'feed' | 'reels' | 'carousel' | 'story' {
+  if (Array.isArray(post.media_items) && post.media_items.length > 1) return 'carousel';
+  if (post.surface === 'story') return 'story';
+  if (post.surface === 'reels' || post.is_video) return 'reels';
+  return 'feed';
+}
+
+function deriveSlideCount(post: any): number | undefined {
+  const items = Array.isArray(post.media_items) ? post.media_items : [];
+  return items.length > 1 ? items.length : undefined;
+}
+
 async function getPostByState(phone: string, state: string) {
   const { data } = await getSupabase()
     .from('pending_posts').select('*')
@@ -654,6 +721,43 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await sendText(from, '🎬 *Replace the video:*\n\nSend your new video now, or reply "cancel" to go back.');
     return;
   }
+  // Carousel slide picker: show list of slides so user can select one to replace
+  if (action === 'edit_slide_picker' && postId) {
+    const post = await getPostById(postId);
+    if (!post) { await sendText(from, 'Post not found.'); return; }
+    const items: CarouselItem[] = Array.isArray(post.media_items) ? post.media_items : [];
+    if (items.length < 2) {
+      // Fallback to normal image edit if somehow not a carousel
+      await getSupabase().from('pending_posts').update({ state: 'awaiting_image_style' }).eq('id', postId);
+      await sendText(from, '🖼️ *Regenerate the image:*\n\nWhat style? (e.g. "Moody cinematic", "3D illustration")');
+      return;
+    }
+    await sendCarouselSlideSelector(from, postId, items.length);
+    return;
+  }
+  // Specific slide selected for replacement
+  if (action === 'edit_slide' && postId) {
+    const parts = postId.split(':');
+    const actualPostId = parts[0];
+    const slideIdx = parts[1] !== undefined ? parseInt(parts[1], 10) : 0;
+    const post = await getPostById(actualPostId);
+    if (!post) { await sendText(from, 'Post not found.'); return; }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'awaiting_slide_replace', editing_slide_idx: slideIdx })
+      .eq('id', actualPostId);
+    await sendText(from, `🖼️ *Replace slide ${slideIdx + 1}:*\n\nSend your replacement photo or video now, or type *cancel* to go back.`);
+    return;
+  }
+  // Replace all slides: restart carousel collection with a clean session
+  if (action === 'edit_all_slides' && postId) {
+    const post = await getPostById(postId);
+    if (!post) { await sendText(from, 'Post not found.'); return; }
+    await getSupabase().from('pending_posts')
+      .update({ state: 'collecting_carousel', media_items: [], editing_slide_idx: null })
+      .eq('id', postId);
+    await sendText(from, '🎞️ *Carousel reset* — send your new photos/videos one by one, then type *done* to publish.');
+    return;
+  }
   if (action === 'add_slides' && postId) {
     const post = await getPostById(postId);
     if (!post) { await sendText(from, 'Post not found.'); return; }
@@ -680,7 +784,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       .update({ state: 'pending_approval' })
       .eq('id', postId);
     await sendText(from, '✋ Edit cancelled. Here\'s your draft again:');
-    await sendPostPreview(from, post.image_url, post.caption, post.id, !!post.is_video);
+    await sendPostPreview(from, post.image_url, post.caption, post.id, !!post.is_video, deriveSurface(post), deriveSlideCount(post));
     return;
   }
 
@@ -808,7 +912,8 @@ async function handleButtonReply(from: string, action: string, postId: string | 
 
     await getSupabase().from('pending_posts').update({ state: 'in_edit' }).eq('id', post.id);
 
-    await sendEditActionsMenu(from, post.id, !!post.is_video);
+    const mediaItemCount = Array.isArray(post.media_items) ? post.media_items.length : 0;
+    await sendEditActionsMenu(from, post.id, !!post.is_video, mediaItemCount);
 
   } else if (action === 'discard') {
     await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.id);
@@ -832,7 +937,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
   await getSupabase().from('pending_posts')
     .update({ caption: newCaption, state: 'pending_approval' })
     .eq('id', pending.id);
-  await sendPostPreview(from, pending.image_url, newCaption, pending.id, pending.is_video ?? false);
+  await sendPostPreview(from, pending.image_url, newCaption, pending.id, pending.is_video ?? false, deriveSurface(pending), deriveSlideCount(pending));
 }
 
 // Called when the user has explicitly tapped "Edit Image" and sent their
@@ -864,7 +969,7 @@ async function handleImageStyleInput(from: string, post: any, instruction: strin
       .update({ image_url: post.user_image_url, image_source: 'user', state: 'pending_approval' })
       .eq('id', post.id);
     const updated = await getPostById(post.id);
-    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id, post.is_video ?? false);
+    if (updated) await sendPostPreview(from, updated.image_url, updated.caption, updated.id, post.is_video ?? false, deriveSurface(updated), deriveSlideCount(updated));
     return;
   }
 
@@ -883,7 +988,7 @@ async function handleImageStyleInput(from: string, post: any, instruction: strin
   if (post.user_image_url) {
     await sendText(from, '💡 Switched to AI image. Say "use my photo" to revert.');
   }
-  await sendPostPreview(from, imageResult.url, post.caption, post.id, post.is_video ?? false);
+  await sendPostPreview(from, imageResult.url, post.caption, post.id, post.is_video ?? false, deriveSurface(post), deriveSlideCount(post));
   if (imageResult.overflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
   }
@@ -898,7 +1003,7 @@ async function handleCaptionEditInput(from: string, post: any, instruction: stri
   await getSupabase().from('pending_posts')
     .update({ caption: newCaption, state: 'pending_approval' })
     .eq('id', post.id);
-  await sendPostPreview(from, post.image_url, newCaption, post.id, post.is_video ?? false);
+  await sendPostPreview(from, post.image_url, newCaption, post.id, post.is_video ?? false, deriveSurface(post), deriveSlideCount(post));
 }
 
 async function handleEditWithNewMedia(from: string, pending: any, message: any, messageType: string) {
@@ -923,6 +1028,7 @@ async function handleEditWithNewMedia(from: string, pending: any, message: any, 
     .single();
 
   if (updated?.id) {
+    // Single media replacement always resets to feed/reels — user is not modifying a carousel via this path
     await sendPostPreview(from, userMediaUrl, pending.caption, updated.id, isVideo);
   }
 }
@@ -1665,7 +1771,7 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     from,
     `📑 *Carousel storyboard:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
   );
-  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'feed');
+  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
   if (carouselOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
   }
@@ -1739,7 +1845,7 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
     `Stories don't have a caption — the visual carries the message. ` +
     `Approve to push to your 24h Story strip.`,
   );
-  await sendPostPreview(from, imageUrl, spin.hook, post.id, false, 'feed');
+  await sendPostPreview(from, imageUrl, spin.hook, post.id, false, 'story');
   if (storyOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
   }
@@ -1801,17 +1907,34 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
     return;
   }
 
+  const imageGroupId: string | undefined = message.image?.media_group_id;
+
   let sessionId: string;
-  const { data: existing } = await supabase
+  // Look for an existing session: same media_group_id first, then any active session
+  let existingQuery = supabase
+    .from('pending_posts')
+    .select('id, caption')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'collecting_carousel');
+
+  if (imageGroupId) {
+    existingQuery = existingQuery.eq('media_group_id', imageGroupId);
+  }
+
+  const { data: existing } = await existingQuery.maybeSingle();
+  // Fallback: find any active session if group-id search found nothing
+  const { data: anyExisting } = !existing ? await supabase
     .from('pending_posts')
     .select('id, caption')
     .eq('whatsapp_phone', from)
     .eq('state', 'collecting_carousel')
-    .maybeSingle();
+    .maybeSingle() : { data: null };
 
-  if (existing) {
-    sessionId = existing.id;
-    if (userCaption && !existing.caption) {
+  const resolvedExisting = existing ?? anyExisting;
+
+  if (resolvedExisting) {
+    sessionId = resolvedExisting.id;
+    if (userCaption && !resolvedExisting.caption) {
       await supabase.from('pending_posts').update({ caption: userCaption }).eq('id', sessionId);
     }
   } else {
@@ -1830,11 +1953,10 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
       media_items: [],
       caption: userCaption,
       image_url: '',
+      ...(imageGroupId ? { media_group_id: imageGroupId } : {}),
     }).select('id').single();
 
     if (insertErr || !created) {
-      // Could be a unique index conflict (concurrent webhook won the race) or
-      // another DB error. Log the code so we can distinguish in Vercel logs.
       if (insertErr?.code !== '23505') {
         console.error('[carousel session create]', insertErr?.code, insertErr?.message);
       }
@@ -1925,6 +2047,108 @@ async function handleCarouselAppend(from: string, post: { id: string; media_item
   }
 }
 
+// Appends a video item to an active carousel session.
+// Used both for explicit /carousel collection and for burst-detection routing.
+async function handleCarouselAppendVideo(from: string, post: { id: string; media_items: CarouselItem[] | null }, message: any) {
+  const mediaId = message.video?.id;
+  const mimeType = message.video?.mime_type ?? 'video/mp4';
+  if (!mediaId) {
+    await sendText(from, '📎 Couldn\'t read that video — try sending it again.');
+    return;
+  }
+
+  let url: string;
+  try {
+    url = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    await sendText(from, '📎 Couldn\'t download that video — try again.');
+    return;
+  }
+
+  const { data: newCount } = await getSupabase().rpc('append_carousel_item', {
+    p_post_id: post.id,
+    p_item: { url, is_video: true },
+  });
+  const count = typeof newCount === 'number' ? newCount : (post.media_items ?? []).length + 1;
+
+  if (count >= 10) {
+    await sendText(from, `🎬 Video added (slide ${count}) — that's the max! Type *done* to publish.`);
+  } else {
+    await sendText(from, `🎬 Video added (slide ${count}). Send more photos/videos, or type *done* to publish.`);
+  }
+}
+
+// Finds an active collecting_carousel session that a burst video should join.
+// Priority: same media_group_id → then any session updated in the last 5 seconds.
+async function findBurstCarouselSession(phone: string, mediaGroupId: string | undefined) {
+  const supabase = getSupabase();
+
+  if (mediaGroupId) {
+    const { data } = await supabase
+      .from('pending_posts')
+      .select('id, media_items')
+      .eq('whatsapp_phone', phone)
+      .eq('state', 'collecting_carousel')
+      .eq('media_group_id', mediaGroupId)
+      .maybeSingle();
+    if (data) return data;
+  }
+
+  // Fallback: any carousel session touched in the last 5 seconds
+  const cutoff = new Date(Date.now() - 5000).toISOString();
+  const { data } = await supabase
+    .from('pending_posts')
+    .select('id, media_items')
+    .eq('whatsapp_phone', phone)
+    .eq('state', 'collecting_carousel')
+    .gte('updated_at', cutoff)
+    .maybeSingle();
+  return data ?? null;
+}
+
+// Replaces a specific slide in a carousel (awaiting_slide_replace state).
+async function handleSlideReplace(from: string, post: any, message: any, messageType: string) {
+  const isVideo = messageType === 'video';
+  const media = isVideo ? message.video : message.image;
+  const mediaId = media?.id;
+  const mimeType = media?.mime_type ?? (isVideo ? 'video/mp4' : 'image/jpeg');
+  const slideIdx: number = post.editing_slide_idx ?? 0;
+
+  if (!mediaId) {
+    await sendText(from, '📎 Couldn\'t read that file — try sending it again.');
+    return;
+  }
+
+  await sendText(from, `📥 Processing slide ${slideIdx + 1} replacement...`);
+
+  let url: string;
+  try {
+    url = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    throw Object.assign(new Error('📎 Couldn\'t download that file — please try again.'), { userFacing: true });
+  }
+
+  const currentItems: CarouselItem[] = Array.isArray(post.media_items) ? [...post.media_items] : [];
+  if (slideIdx < currentItems.length) {
+    currentItems[slideIdx] = { url, is_video: isVideo };
+  } else {
+    currentItems.push({ url, is_video: isVideo });
+  }
+
+  const newImageUrl = currentItems[0]?.url ?? post.image_url;
+  await getSupabase().from('pending_posts')
+    .update({
+      state: 'pending_approval',
+      editing_slide_idx: null,
+      media_items: currentItems,
+      image_url: newImageUrl,
+    })
+    .eq('id', post.id);
+
+  await sendText(from, `✅ Slide ${slideIdx + 1} replaced.`);
+  await sendPostPreview(from, newImageUrl, post.caption, post.id, false, 'carousel', currentItems.length);
+}
+
 async function handleCarouselFinish(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
   // Safety flush: clear any stale carousel_buffer entries that may have been
   // left by an older code path or a failed previous run.
@@ -2011,8 +2235,7 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
     if (error) console.warn('[caption_variants update]', error.message);
   }
 
-  await sendText(from, `🎞️ Carousel ready — *${items.length} slides*. First slide previewed below.`);
-  await sendPostPreview(from, items[0].url, caption, post.id, false);
+  await sendPostPreview(from, items[0].url, caption, post.id, false, 'carousel', items.length);
 
   if (variants.length > 1) {
     const others = variants.slice(1).map((v, i) => {

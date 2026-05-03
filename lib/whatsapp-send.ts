@@ -370,12 +370,14 @@ export async function sendPostPreview(
   caption: string,
   postId: string,
   isVideo = false,
-  surface: 'feed' | 'reels' = isVideo ? 'reels' : 'feed',
+  surface: 'feed' | 'reels' | 'carousel' | 'story' = isVideo ? 'reels' : 'feed',
+  slideCount?: number,
 ) {
-  const isReel = surface === 'reels';
+  const isReel    = surface === 'reels';
+  const isCarousel = surface === 'carousel';
+  const isStory   = surface === 'story';
 
-  // Send the photo as its own message first so the user can see it
-  // alongside the action list.
+  // Send the first slide / cover photo so the user sees it alongside the action list.
   if (!isVideo && imageUrl) {
     await wa({
       messaging_product: 'whatsapp',
@@ -385,17 +387,26 @@ export async function sendPostPreview(
     });
   }
 
-  await sendText(to, `🎙️ *Caption:*\n\n${caption}`);
+  const captionLabel = isStory ? '🎙️ *Hook (overlay text):*' : '🎙️ *Caption:*';
+  await sendText(to, `${captionLabel}\n\n${caption}`);
 
-  const headerText = isReel
-    ? '🎬 Reel preview — ready'
-    : isVideo
-      ? '🎬 Video ready'
-      : '📷 Photo ready';
+  const headerText = isCarousel
+    ? `🎡 Carousel Draft${slideCount && slideCount > 1 ? ` (${slideCount} slides)` : ''}`
+    : isStory
+      ? '📱 Story Draft'
+      : isReel
+        ? '🎬 Reel Draft'
+        : isVideo
+          ? '🎬 Video ready'
+          : '📷 Draft';
 
-  const bodyText = isReel
-    ? 'How do you want to send this Reel? It will show on your Reels tab AND your grid.'
-    : 'How do you want to send this?';
+  const bodyText = isCarousel
+    ? 'Carousel ready. Approve, schedule, or refine before posting.'
+    : isStory
+      ? 'Story ready — no caption, just the visual. Approve to push to your 24-hour Story strip.'
+      : isReel
+        ? 'How do you want to send this Reel? It will show on your Reels tab AND your grid.'
+        : 'How do you want to send this?';
 
   return wa({
     messaging_product: 'whatsapp',
@@ -429,14 +440,20 @@ export async function sendPostPreview(
   });
 }
 
-export async function sendEditActionsMenu(to: string, postId: string, isVideo: boolean) {
+export async function sendEditActionsMenu(to: string, postId: string, isVideo: boolean, mediaItemCount = 0) {
+  const isCarousel = mediaItemCount > 1;
   const editOptions: { id: string; title: string; description: string }[] = [
     { id: `edit_caption:${postId}`, title: '✍️ Caption', description: 'Tone, length, angle, language' },
   ];
 
   if (!isVideo) {
-    editOptions.push({ id: `edit_image:${postId}`, title: '🖼️ Image', description: 'Regenerate or change style' });
-    editOptions.push({ id: `add_slides:${postId}`, title: '🎞️ Add Slides', description: 'Turn into a multi-image carousel' });
+    if (isCarousel) {
+      // Carousel: offer slide-level picker instead of single image edit, no "Add Slides"
+      editOptions.push({ id: `edit_slide_picker:${postId}`, title: '🖼️ Edit Media', description: `Choose which slide to replace` });
+    } else {
+      editOptions.push({ id: `edit_image:${postId}`, title: '🖼️ Image', description: 'Regenerate or change style' });
+      editOptions.push({ id: `add_slides:${postId}`, title: '🎞️ Add Slides', description: 'Turn into a multi-image carousel' });
+    }
     editOptions.push({ id: `spin_story:${postId}`, title: '🌅 Story', description: 'Convert into a vertical Story' });
   } else {
     editOptions.push({ id: `edit_video:${postId}`, title: '🎬 Video', description: 'Replace with a new video' });
@@ -461,6 +478,40 @@ export async function sendEditActionsMenu(to: string, postId: string, isVideo: b
             rows: editOptions,
           },
         ],
+      },
+    },
+  });
+}
+
+// Carousel slide selector: lets the user pick which slide to replace during edit.
+// Supports up to 9 slides (WA list max is 10 rows; we reserve the last for "Replace All").
+export async function sendCarouselSlideSelector(to: string, postId: string, slideCount: number) {
+  const rows: { id: string; title: string; description: string }[] = Array.from(
+    { length: Math.min(slideCount, 9) },
+    (_, i) => ({
+      id: `edit_slide:${postId}:${i}`,
+      title: `🖼️ Slide ${i + 1}`,
+      description: `Replace slide ${i + 1} with a new photo or video`,
+    }),
+  );
+  rows.push({
+    id: `edit_all_slides:${postId}`,
+    title: '🎞️ Replace All',
+    description: 'Clear all slides and send new ones',
+  });
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      header: { type: 'text', text: '🖼️ Which slide to replace?' },
+      body: { text: `Your carousel has ${slideCount} slides. Pick the one you want to change:` },
+      footer: { text: 'Send new media after selecting' },
+      action: {
+        button: 'Choose slide',
+        sections: [{ title: 'Slides', rows }],
       },
     },
   });
