@@ -160,67 +160,10 @@ async function processWebhook(body: any) {
         if (profileEdit)              { await handleProfileUpdate(from, profileEdit);          return; }
       }
 
-      // If actively collecting a carousel, route every text/image/video into the collection flow
-      const collecting = await getPostByState(from, 'collecting_carousel');
-      if (collecting) {
-        if (messageType === 'text') {
-          const txt = message.text?.body ?? '';
-          if (isCarouselFinishCommand(txt)) { await handleCarouselFinish(from, collecting); return; }
-          if (/^cancel/i.test(txt.trim()))  { await handleCarouselCancel(from, collecting); return; }
-          await sendText(from, '📸 Send more photos/videos, or type *done* to publish — *cancel* to bail.');
-          return;
-        }
-        if (messageType === 'image') {
-          await handleCarouselAppend(from, collecting, message);
-          return;
-        }
-        if (messageType === 'video') {
-          await handleCarouselAppendVideo(from, collecting, message);
-          return;
-        }
-        if (messageType === 'audio' || messageType === 'document') {
-          await sendText(from, '🎞️ Carousels support photos and short videos — send media, or type *done* / *cancel*.');
-          return;
-        }
-      }
+      // ── Explicit edit states — checked FIRST so stale carousel sessions
+      //    can never intercept an active caption/image edit. ──────────────
 
-      // Videos outside an active edit flow: check if they belong to an in-flight burst
-      // (same media_group_id OR arrived within 5s of the last active carousel session).
-      // If so, append to the carousel instead of creating a standalone Reel.
-      if (messageType === 'video' && !collecting) {
-        const { data: editPost } = await getSupabase()
-          .from('pending_posts').select('id')
-          .eq('whatsapp_phone', from)
-          .in('state', ['awaiting_image_style', 'awaiting_caption_edit', 'in_edit', 'awaiting_slide_replace'])
-          .limit(1).maybeSingle();
-        if (!editPost) {
-          const videoGroupId: string | undefined = message.video?.media_group_id;
-          const burst = await findBurstCarouselSession(from, videoGroupId);
-          if (burst) {
-            await handleCarouselAppendVideo(from, burst, message);
-            return;
-          }
-          // No active burst — fall through to standard Reel processing below
-        }
-      }
-
-      // All images outside an active edit flow use the burst-buffer so that
-      // camera-roll multi-selects are joined before processing:
-      //   2+ items → carousel  |  1 item → regular post
-      if (messageType === 'image' && !collecting) {
-        const { data: editPost } = await getSupabase()
-          .from('pending_posts').select('id')
-          .eq('whatsapp_phone', from)
-          .in('state', ['awaiting_image_style', 'awaiting_caption_edit', 'in_edit', 'awaiting_slide_replace'])
-          .limit(1).maybeSingle();
-        if (!editPost) {
-          await handleAutoCarouselImage(from, message, (message.image?.caption ?? '').trim());
-          return;
-        }
-      }
-
-      // Carousel slide replace — user selected a specific slide to swap out.
-      // 10-minute expiry same as image-style state.
+      // Carousel slide replace (awaiting_slide_replace) — 10-min expiry
       const awaitingSlideReplace = await getPostByState(from, 'awaiting_slide_replace');
       if (awaitingSlideReplace) {
         const ageMs = Date.now() - new Date(
@@ -251,10 +194,7 @@ async function processWebhook(body: any) {
         }
       }
 
-      // Explicit image-style or caption-edit sub-states set by the Edit Image /
-      // Edit Caption sub-menu buttons.  10-minute expiry prevents a stale state
-      // from hijacking a future unrelated message (e.g. user clicked Edit Image
-      // but never replied, then comes back an hour later with new content).
+      // Image-style sub-state (awaiting_image_style) — 10-min expiry
       const awaitingImageStyle = await getPostByState(from, 'awaiting_image_style');
       if (awaitingImageStyle) {
         const ageMs = Date.now() - new Date(
@@ -286,6 +226,7 @@ async function processWebhook(body: any) {
         }
       }
 
+      // Caption-edit sub-state (awaiting_caption_edit) — 10-min expiry
       const awaitingCaptionEdit = await getPostByState(from, 'awaiting_caption_edit');
       if (awaitingCaptionEdit) {
         const ageMs = Date.now() - new Date(
@@ -310,7 +251,7 @@ async function processWebhook(body: any) {
         }
       }
 
-      // If in edit mode, route to refinement
+      // General edit fallback (in_edit)
       const inEdit = await getPostByState(from, 'in_edit');
       if (inEdit) {
         if (messageType === 'text') {
@@ -321,6 +262,68 @@ async function processWebhook(body: any) {
           await handleEditWithNewMedia(from, inEdit, message, messageType);
           return;
         }
+      }
+
+      // ── Carousel collection — runs AFTER explicit edit states so a stale
+      //    collecting_carousel session can't swallow caption-edit instructions.
+      //    Sessions older than 30 minutes are auto-discarded. ───────────────
+      const collecting = await getPostByState(from, 'collecting_carousel');
+      if (collecting) {
+        const carouselAgeMs = Date.now() - new Date(
+          (collecting as any).updated_at ?? collecting.created_at
+        ).getTime();
+        if (carouselAgeMs > 30 * 60 * 1000) {
+          // Stale session — discard silently and fall through to new-post flow
+          await getSupabase().from('pending_posts')
+            .update({ state: 'discarded' })
+            .eq('id', collecting.id);
+        } else {
+          if (messageType === 'text') {
+            const txt = message.text?.body ?? '';
+            if (isCarouselFinishCommand(txt)) { await handleCarouselFinish(from, collecting); return; }
+            if (/^cancel/i.test(txt.trim()))  { await handleCarouselCancel(from, collecting); return; }
+            await sendText(from, '📸 Send more photos/videos, or type *done* to publish — *cancel* to bail.');
+            return;
+          }
+          if (messageType === 'image') {
+            await handleCarouselAppend(from, collecting, message);
+            return;
+          }
+          if (messageType === 'video') {
+            await handleCarouselAppendVideo(from, collecting, message);
+            return;
+          }
+          if (messageType === 'audio' || messageType === 'document') {
+            await sendText(from, '🎞️ Carousels support photos and short videos — send media, or type *done* / *cancel*.');
+            return;
+          }
+        }
+      }
+
+      // Videos without an active edit flow: check for burst group before Reel processing.
+      // If a media_group_id is present, the video belongs to a camera-roll burst — create
+      // or join a carousel session rather than opening a standalone Reel draft.
+      if (messageType === 'video') {
+        const videoGroupId: string | undefined = message.video?.media_group_id;
+        if (videoGroupId) {
+          // Burst video: always route into carousel collection (create session if needed)
+          await handleAutoCarouselVideo(from, message, videoGroupId);
+          return;
+        }
+        // No group id but check for a recently-created session (5s window) for implicit bursts
+        const burst = await findBurstCarouselSession(from, undefined);
+        if (burst) {
+          await handleCarouselAppendVideo(from, burst, message);
+          return;
+        }
+        // No burst — fall through to standard Reel processing in handleNewPost below
+      }
+
+      // All images outside an active edit or collection flow: auto-carousel buffer.
+      //   2+ images → carousel  |  1 image → regular post
+      if (messageType === 'image') {
+        await handleAutoCarouselImage(from, message, (message.image?.caption ?? '').trim());
+        return;
       }
 
       // If a draft is waiting — check for schedule intent first, then offer choice
@@ -498,7 +501,8 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     if (d.sibling_id) await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
   }
 
-  // Create the primary post
+  // Create the primary post — store source_prompt so caption refinements can
+  // chain on the original subject matter (e.g. "Greece, Lindos views...")
   const { data: primaryPost } = await getSupabase()
     .from('pending_posts')
     .insert({
@@ -510,6 +514,7 @@ async function handleNewPost(from: string, message: any, messageType: string) {
       is_video: isVideo,
       surface,
       state: 'pending_approval',
+      ...(prompt ? { source_prompt: prompt } : {}),
     })
     .select('id')
     .single();
@@ -933,7 +938,7 @@ async function handleEditRefinement(from: string, pending: any, instruction: str
   }
   await sendText(from, '✍️ Updating caption...');
   const profileContext = await getProfileContextForPhone(from);
-  const newCaption = await refineCaption(pending.caption, instruction, profileContext ?? undefined);
+  const newCaption = await refineCaption(pending.caption, instruction, profileContext ?? undefined, pending.source_prompt ?? undefined);
   await getSupabase().from('pending_posts')
     .update({ caption: newCaption, state: 'pending_approval' })
     .eq('id', pending.id);
@@ -999,7 +1004,7 @@ async function handleImageStyleInput(from: string, post: any, instruction: strin
 async function handleCaptionEditInput(from: string, post: any, instruction: string) {
   await sendText(from, '✍️ Updating caption...');
   const profileContext = await getProfileContextForPhone(from);
-  const newCaption = await refineCaption(post.caption, instruction, profileContext ?? undefined);
+  const newCaption = await refineCaption(post.caption, instruction, profileContext ?? undefined, post.source_prompt ?? undefined);
   await getSupabase().from('pending_posts')
     .update({ caption: newCaption, state: 'pending_approval' })
     .eq('id', post.id);
@@ -1881,6 +1886,101 @@ async function handleSpinReelScript(from: string, sourcePostId: string) {
   );
 }
 
+// Handles a burst video (has media_group_id) arriving outside an active collection.
+// Creates or joins a collecting_carousel session the same way handleAutoCarouselImage
+// does for photos — ensures videos and photos from the same camera-roll selection are
+// always combined into one carousel regardless of arrival order.
+async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId: string) {
+  const supabase = getSupabase();
+
+  const wasArmed = await consumeJournalArmIfActive(from);
+  if (wasArmed) {
+    await captureJournalEntry(from, message, 'video');
+    return;
+  }
+
+  const mediaId = message.video?.id;
+  const mimeType = message.video?.mime_type ?? 'video/mp4';
+  if (!mediaId) return;
+
+  let url: string;
+  try {
+    url = await downloadAndHostMedia(mediaId, mimeType);
+  } catch {
+    await sendText(from, '📎 Couldn\'t download that video — try again.');
+    return;
+  }
+
+  // Find existing session by media_group_id first, then any active session
+  const { data: byGroup } = await supabase
+    .from('pending_posts')
+    .select('id')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'collecting_carousel')
+    .eq('media_group_id', mediaGroupId)
+    .maybeSingle();
+
+  const { data: anySession } = !byGroup ? await supabase
+    .from('pending_posts')
+    .select('id')
+    .eq('whatsapp_phone', from)
+    .eq('state', 'collecting_carousel')
+    .maybeSingle() : { data: null };
+
+  let sessionId: string;
+
+  if (byGroup ?? anySession) {
+    sessionId = (byGroup ?? anySession)!.id;
+  } else {
+    // Discard stale drafts so the lane is clean
+    const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
+      .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit']);
+    for (const d of stale ?? []) {
+      await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+      if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+    }
+
+    const { data: created, error: insertErr } = await supabase.from('pending_posts').insert({
+      whatsapp_phone: from,
+      state: 'collecting_carousel',
+      surface: 'carousel',
+      media_items: [],
+      caption: '',
+      image_url: '',
+      media_group_id: mediaGroupId,
+    }).select('id').single();
+
+    if (insertErr || !created) {
+      if (insertErr?.code !== '23505') {
+        console.error('[carousel session create (video)]', insertErr?.code, insertErr?.message);
+      }
+      const { data: winner } = await supabase.from('pending_posts')
+        .select('id').eq('whatsapp_phone', from).eq('state', 'collecting_carousel').maybeSingle();
+      if (!winner) {
+        await sendText(from, '⚠️ Couldn\'t start a session — please try again.');
+        return;
+      }
+      sessionId = winner.id;
+    } else {
+      sessionId = created.id;
+    }
+  }
+
+  const { data: newCount } = await supabase.rpc('append_carousel_item', {
+    p_post_id: sessionId,
+    p_item: { url, is_video: true },
+  });
+  const count = typeof newCount === 'number' ? newCount : 1;
+
+  if (count >= 10) {
+    await sendText(from, `🎬 Video ${count} added — that's the max! Type *done* to publish.`);
+  } else if (count === 1) {
+    await sendText(from, '🎬 Got your video! Send more photos/videos to make a carousel, or type *done* to post it as a Reel.');
+  } else {
+    await sendText(from, `🎬 Video added (slide ${count}). Send more, or type *done* to publish your ${count}-slide carousel.`);
+  }
+}
+
 // Handles any image sent outside an active edit flow or collecting_carousel session.
 // Creates (or joins) a collecting_carousel session and appends the image directly
 // via the atomic RPC — no sleep, no buffer race, immediate per-image feedback.
@@ -1934,9 +2034,11 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
 
   if (resolvedExisting) {
     sessionId = resolvedExisting.id;
-    if (userCaption && !resolvedExisting.caption) {
-      await supabase.from('pending_posts').update({ caption: userCaption }).eq('id', sessionId);
-    }
+    const updates: Record<string, string> = {};
+    if (userCaption && !resolvedExisting.caption) updates.caption = userCaption;
+    // Store source_prompt on first photo with a caption text
+    if (userCaption && !(resolvedExisting as any).source_prompt) updates.source_prompt = userCaption;
+    if (Object.keys(updates).length) await supabase.from('pending_posts').update(updates).eq('id', sessionId);
   } else {
     // Discard stale drafts so the lane is clean
     const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
@@ -1954,6 +2056,7 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
       caption: userCaption,
       image_url: '',
       ...(imageGroupId ? { media_group_id: imageGroupId } : {}),
+      ...(userCaption ? { source_prompt: userCaption } : {}),
     }).select('id').single();
 
     if (insertErr || !created) {
@@ -2205,17 +2308,19 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
     return;
   }
 
-  await sendText(from, '✍️ Writing caption for your carousel…');
+  const mediaLabel = items.every(i => i.is_video) ? 'videos' : items.some(i => i.is_video) ? 'photos and videos' : 'photos';
+  await sendText(from, `✍️ Writing caption for your ${items.length}-slide carousel (${mediaLabel})…`);
+
+  const sourcePrompt: string | null = (fresh as any)?.source_prompt ?? null;
+  const carouselBase = sourcePrompt
+    ? `${sourcePrompt} — carousel of ${items.length} ${mediaLabel}`
+    : `[Carousel of ${items.length} ${mediaLabel}. Write a single caption that frames the whole set; do not number or itemize each slide.]`;
 
   const [profileContext, recentCaptions] = await Promise.all([
     getProfileContextForPhone(from),
     getRecentCaptions(),
   ]);
-  const variants = await generateCaptionVariants(
-    `[Carousel of ${items.length} photos. Write a single caption that frames the whole set; do not number or itemize each slide.]`,
-    profileContext ?? undefined,
-    recentCaptions,
-  );
+  const variants = await generateCaptionVariants(carouselBase, profileContext ?? undefined, recentCaptions, 'carousel');
   const caption = variants[0] ?? '';
 
   await getSupabase()

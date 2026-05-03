@@ -62,14 +62,14 @@ export async function generateCaption(
     ? `\n\nRecent posts (avoid repeating same themes, phrases, hashtags):\n${recentCaptions.map(c => `- ${c.slice(0, 100)}`).join('\n')}`
     : '';
 
+  const userContent = `Write an engaging Instagram ${surface === 'reels' ? 'Reel' : 'caption'} for: "${prompt}".${recentBlock}`;
+  console.log('[generateCaption] prompt payload →', JSON.stringify({ surface, prompt: prompt.slice(0, 160) }));
+
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: surface === 'reels' ? 220 : 400,
     system: buildSystem(profileContext, surface),
-    messages: [{
-      role: 'user',
-      content: `Write an engaging Instagram ${surface === 'reels' ? 'Reel' : 'caption'} for: "${prompt}".${recentBlock}`,
-    }],
+    messages: [{ role: 'user', content: userContent }],
   });
 
   return msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
@@ -97,14 +97,14 @@ export async function generateCaptionVariants(
     `2) story-led — anecdote or emotional moment\n` +
     `3) CTA-led — direct invitation to act, save, or comment`;
 
+  const variantsContent = `Write 3 distinct Instagram ${surface === 'reels' ? 'Reel captions' : 'caption variants'} for: "${prompt}".${recentBlock}\n\nFormat: ["caption1", "caption2", "caption3"]`;
+  console.log('[generateCaptionVariants] prompt payload →', JSON.stringify({ surface, prompt: prompt.slice(0, 160) }));
+
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: surface === 'reels' ? 600 : 900,
     system: variantSystem,
-    messages: [{
-      role: 'user',
-      content: `Write 3 distinct Instagram ${surface === 'reels' ? 'Reel captions' : 'caption variants'} for: "${prompt}".${recentBlock}\n\nFormat: ["caption1", "caption2", "caption3"]`,
-    }],
+    messages: [{ role: 'user', content: variantsContent }],
   });
 
   const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
@@ -137,16 +137,25 @@ export async function generateImagePrompt(topic: string): Promise<string> {
 export async function refineCaption(
   currentCaption: string,
   instruction: string,
-  profileContext?: string
+  profileContext?: string,
+  originalPrompt?: string,
 ): Promise<string> {
+  const originalBlock = originalPrompt
+    ? `Original user input: "${originalPrompt}"\n\n`
+    : '';
+
+  const userContent =
+    `${originalBlock}Current caption:\n${currentCaption}\n\n` +
+    `Instruction: ${instruction}\n\n` +
+    `Rewrite the caption applying the instruction while strictly preserving the core subject matter from the original user input. Output ONLY the new caption.`;
+
+  console.log('[refineCaption] prompt payload →', JSON.stringify({ originalPrompt, instruction, currentCaption: currentCaption.slice(0, 120) }));
+
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 400,
     system: buildSystem(profileContext),
-    messages: [{
-      role: 'user',
-      content: `Current caption:\n${currentCaption}\n\nInstruction: ${instruction}\n\nRewrite the caption applying the instruction. Output ONLY the new caption.`,
-    }],
+    messages: [{ role: 'user', content: userContent }],
   });
 
   return msg.content[0].type === 'text' ? msg.content[0].text.trim() : currentCaption;
