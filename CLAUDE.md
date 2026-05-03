@@ -6,6 +6,7 @@
 - **Collab rules** → auto-memory (`feedback_kreya_workflow.md`).
 - **External ground-truth map** → auto-memory (`reference_kreya_sources.md`).
 - **Brand patterns & components** → `kreya-brand-identity.html` (read only when building visual artifacts).
+- **Session memory delta** → `.claude/kreya-session-memory.md` (auto-injected by SessionStart hook — do NOT re-read unless verifying a specific fact).
 
 ## Rules (token discipline — non-negotiable)
 1. **No re-reading.** If it's in `imported_knowledge` or above, it's in context. Acting on it does not require reading it.
@@ -37,3 +38,4 @@ Type: **Syne** (display 600/700/800) · **DM Sans** (body 300/400/500) · **Spac
 ## Session-end checklist (skip if no state change)
 - Update `claude-context.json` in one commit (don't paste full diff into chat).
 - Add a durable fact to auto-memory only if it's non-obvious and cross-session useful.
+- Append new cross-session facts (not in `claude-context.json`) to `.claude/kreya-session-memory.md` via Edit.
