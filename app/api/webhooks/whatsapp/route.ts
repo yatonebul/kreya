@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendRetryButton } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -214,6 +214,16 @@ async function processWebhook(body: any) {
             await handleImageStyleInput(from, awaitingImageStyle, message.text.body);
             return;
           }
+          if (messageType === 'audio') {
+            await sendText(from, '🎙️ Transcribing — one sec...');
+            try {
+              const instruction = await transcribeVoice(message.audio?.id, message.audio?.mime_type ?? 'audio/ogg');
+              await handleImageStyleInput(from, awaitingImageStyle, instruction);
+            } catch {
+              await sendText(from, '🎙️ Couldn\'t transcribe — please type your image style instead.');
+            }
+            return;
+          }
           if (['image', 'video', 'document'].includes(messageType)) {
             await handleEditWithNewMedia(from, awaitingImageStyle, message, messageType);
             return;
@@ -232,6 +242,15 @@ async function processWebhook(body: any) {
             .eq('id', awaitingCaptionEdit.id);
         } else if (messageType === 'text') {
           await handleCaptionEditInput(from, awaitingCaptionEdit, message.text.body);
+          return;
+        } else if (messageType === 'audio') {
+          await sendText(from, '🎙️ Transcribing — one sec...');
+          try {
+            const instruction = await transcribeVoice(message.audio?.id, message.audio?.mime_type ?? 'audio/ogg');
+            await handleCaptionEditInput(from, awaitingCaptionEdit, instruction);
+          } catch {
+            await sendText(from, '🎙️ Couldn\'t transcribe — please type your caption instruction instead.');
+          }
           return;
         }
       }
@@ -590,7 +609,10 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     return;
   }
   if (action === 'spin_story' && postId) {
-    await handleSpinStory(from, postId);
+    const parts = postId.split(':');
+    const actualPostId = parts[0];
+    const retryCount = parts[1] ? (parseInt(parts[1], 10) || 0) : 0;
+    await handleSpinStory(from, actualPostId, retryCount);
     return;
   }
 
@@ -1649,7 +1671,7 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   }
 }
 
-async function handleSpinStory(from: string, sourcePostId: string) {
+async function handleSpinStory(from: string, sourcePostId: string, retryCount = 0) {
   const supabase = getSupabase();
   const source = await getPostById(sourcePostId);
   if (!source) {
@@ -1662,7 +1684,13 @@ async function handleSpinStory(from: string, sourcePostId: string) {
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateStorySpin(source.caption, profileContext ?? undefined);
   if (!spin) {
-    await sendText(from, "⚠️ Couldn't generate the Story — try again.");
+    if (retryCount >= 2) {
+      await sendText(from, "⚠️ Story generation kept failing after a few tries. Let's start fresh:");
+      const { data: profile } = await supabase.from('user_profiles').select('brand_name').in('whatsapp_phone', phoneVariants(from)).maybeSingle();
+      await sendConversationStarters(from, profile?.brand_name ?? 'there');
+    } else {
+      await sendRetryButton(from, `spin_story:${sourcePostId}:${retryCount + 1}`, "⚠️ Couldn't generate the Story — want to try again?");
+    }
     return;
   }
 
