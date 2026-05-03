@@ -2,6 +2,10 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
+function stripCodeFences(raw: string): string {
+  return raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+}
+
 const BASE_SYSTEM = 'You are a social media copywriter. Output ONLY the Instagram caption text — nothing else. No notes, no team instructions, no "---" separators, no headers, no meta-commentary. The output will be copy-pasted directly to Instagram as-is.';
 
 export type CaptionSurface = 'feed' | 'reels' | 'carousel';
@@ -184,7 +188,7 @@ export async function generateCarouselSpin(
 
   const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(stripCodeFences(raw));
     if (
       parsed?.caption &&
       Array.isArray(parsed.slides) &&
@@ -233,7 +237,7 @@ export async function generateStorySpin(
 
   const raw = msg.content[0].type === 'text' ? msg.content[0].text.trim() : '';
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(stripCodeFences(raw));
     if (parsed?.hook && parsed?.imagePrompt) {
       return parsed as StorySpin;
     }
