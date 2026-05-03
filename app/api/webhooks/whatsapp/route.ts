@@ -1885,12 +1885,11 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
 
   const myCreatedAt: string = bufRow?.created_at ?? new Date().toISOString();
 
-  // 3-second debounce — WhatsApp batch-sends settle within < 1 s, so 3 s
-  // is enough headroom while keeping the response feeling fast.
-  after(async () => {
-    await new Promise(r => setTimeout(r, 3000));
+  // processWebhook already runs inside the top-level after() in POST, so
+  // WhatsApp's 200 has been sent. Sleep directly — no nested after() needed.
+  await new Promise(r => setTimeout(r, 3000));
 
-    const { data: newer } = await supabase.from('carousel_buffer').select('id')
+  const { data: newer } = await supabase.from('carousel_buffer').select('id')
       .eq('carousel_post_id', sessionId).gt('created_at', myCreatedAt).limit(1);
     if (newer && newer.length > 0) return;
 
@@ -1965,7 +1964,6 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
       }).join('\n\n');
       await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
     }
-  });
 }
 
 async function handleCarouselStart(from: string) {
@@ -2032,55 +2030,51 @@ async function handleCarouselAppend(from: string, post: { id: string; media_item
 
   const myCreatedAt: string = bufRow?.created_at ?? new Date().toISOString();
 
-  // After 4 s, check whether this was the last image in the burst.
-  // If so, flush all buffered items to pending_posts.media_items atomically
-  // and send one consolidated "N photos added" reply.
-  after(async () => {
-    await new Promise(r => setTimeout(r, 4000));
+  // processWebhook runs inside the top-level after() in POST, so the 200
+  // is already sent. Sleep directly — nested after() calls are silently dropped.
+  await new Promise(r => setTimeout(r, 4000));
 
-    // If a newer item arrived after us, that after() will be the flusher.
-    const { data: newer } = await getSupabase()
-      .from('carousel_buffer')
-      .select('id')
-      .eq('carousel_post_id', post.id)
-      .gt('created_at', myCreatedAt)
-      .limit(1);
-    if (newer && newer.length > 0) return;
+  // If a newer item arrived after us, that concurrent call will be the flusher.
+  const { data: newer } = await getSupabase()
+    .from('carousel_buffer')
+    .select('id')
+    .eq('carousel_post_id', post.id)
+    .gt('created_at', myCreatedAt)
+    .limit(1);
+  if (newer && newer.length > 0) return;
 
-    // Fetch everything in this burst (may include items from earlier after() runs
-    // that also found themselves as last — deduplication is handled by the DELETE).
-    const { data: pending } = await getSupabase()
-      .from('carousel_buffer')
-      .select('url, created_at')
-      .eq('carousel_post_id', post.id)
-      .order('created_at', { ascending: true });
-    if (!pending || pending.length === 0) return;
+  // Fetch everything in this burst (deduplication handled by the DELETE below).
+  const { data: pending } = await getSupabase()
+    .from('carousel_buffer')
+    .select('url, created_at')
+    .eq('carousel_post_id', post.id)
+    .order('created_at', { ascending: true });
+  if (!pending || pending.length === 0) return;
 
-    // Atomically append each URL — safe even if a concurrent flush races here.
-    let finalCount = currentItems.length;
-    for (const item of pending) {
-      const { data: newCount } = await getSupabase().rpc('append_carousel_item', {
-        p_post_id: post.id,
-        p_item: { url: item.url, is_video: false },
-      });
-      if (typeof newCount === 'number') finalCount = newCount;
-    }
+  // Atomically append each URL — safe even if a concurrent flush races here.
+  let finalCount = currentItems.length;
+  for (const item of pending) {
+    const { data: newCount } = await getSupabase().rpc('append_carousel_item', {
+      p_post_id: post.id,
+      p_item: { url: item.url, is_video: false },
+    });
+    if (typeof newCount === 'number') finalCount = newCount;
+  }
 
-    // Clear the buffer; if another flush beat us here this is a no-op.
-    await getSupabase().from('carousel_buffer').delete().eq('carousel_post_id', post.id);
+  // Clear the buffer; if another flush beat us here this is a no-op.
+  await getSupabase().from('carousel_buffer').delete().eq('carousel_post_id', post.id);
 
-    const batchSize = pending.length;
-    const remaining = 10 - finalCount;
-    const tail = remaining <= 0
-      ? "That's the max — type *done* to publish."
-      : remaining === 1
-        ? 'Room for 1 more, or type *done* to publish.'
-        : `Send up to ${remaining} more, or type *done* to publish.`;
-    const addedMsg = batchSize === 1
-      ? `✅ Photo *${finalCount}* added. ${tail}`
-      : `✅ *${batchSize} photos* added (${finalCount} total). ${tail}`;
-    await sendText(from, addedMsg);
-  });
+  const batchSize = pending.length;
+  const remaining = 10 - finalCount;
+  const tail = remaining <= 0
+    ? "That's the max — type *done* to publish."
+    : remaining === 1
+      ? 'Room for 1 more, or type *done* to publish.'
+      : `Send up to ${remaining} more, or type *done* to publish.`;
+  const addedMsg = batchSize === 1
+    ? `✅ Photo *${finalCount}* added. ${tail}`
+    : `✅ *${batchSize} photos* added (${finalCount} total). ${tail}`;
+  await sendText(from, addedMsg);
 }
 
 async function handleCarouselFinish(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
