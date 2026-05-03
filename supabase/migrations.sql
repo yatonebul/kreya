@@ -324,6 +324,14 @@ CREATE INDEX IF NOT EXISTS idx_pending_posts_media_group
   WHERE media_group_id IS NOT NULL AND state = 'collecting_carousel';
 
 
+-- 29. pending_posts — original user prompt preservation.
+--     source_prompt stores the raw text/voice-transcript the user sent when
+--     creating the post so caption refinements can chain on the original subject
+--     matter instead of operating blind on the current caption only.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS source_prompt TEXT;
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
