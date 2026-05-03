@@ -332,25 +332,32 @@ export async function publishCarouselToInstagram(
       childIds.push(data.id);
     }
 
-    // Brief processing pause for video children
-    if (items.some(i => i.is_video)) {
-      await new Promise(r => setTimeout(r, 8000));
-    }
+    // Processing pause — videos need more time for Meta to transcode them
+    await new Promise(r => setTimeout(r, items.some(i => i.is_video) ? 20_000 : 3_000));
 
-    // 2. Create the carousel parent container
+    // 2. Create the carousel parent container (retry up to 3x on transient errors)
     const parentParams = new URLSearchParams({
       media_type: 'CAROUSEL',
       children: childIds.join(','),
       caption,
       access_token: accessToken,
     });
-    const parentRes = await fetch(
-      `https://graph.instagram.com/v21.0/${igUserId}/media`,
-      { method: 'POST', body: parentParams },
-    );
-    const parentData = await parentRes.json();
-    if (!parentData.id) {
-      throw new Error(`Carousel container error: ${JSON.stringify(parentData)}`);
+    let parentData: any;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const parentRes = await fetch(
+        `https://graph.instagram.com/v21.0/${igUserId}/media`,
+        { method: 'POST', body: parentParams },
+      );
+      parentData = await parentRes.json();
+      if (parentData.id) break;
+      const isTransient = parentData?.error?.is_transient === true || parentData?.error?.code === 2;
+      if (!isTransient || attempt === 2) {
+        throw new Error(`Carousel container error: ${JSON.stringify(parentData)}`);
+      }
+      await new Promise(r => setTimeout(r, (attempt + 1) * 5000));
+    }
+    if (!parentData?.id) {
+      throw new Error(`Carousel container error after retries: ${JSON.stringify(parentData)}`);
     }
 
     // Small wait before publishing

@@ -300,23 +300,13 @@ async function processWebhook(body: any) {
         }
       }
 
-      // Videos without an active edit flow: check for burst group before Reel processing.
-      // If a media_group_id is present, the video belongs to a camera-roll burst — create
-      // or join a carousel session rather than opening a standalone Reel draft.
+      // All videos outside an active edit flow go into a collecting_carousel session.
+      // handleCarouselFinish decides the surface: 1 video → Reel, 1 photo → Feed, 2+ → Carousel.
+      // This prevents the video-first race where a lone video becomes a Reel before the
+      // user's burst photos arrive and create a separate Carousel session.
       if (messageType === 'video') {
-        const videoGroupId: string | undefined = message.video?.media_group_id;
-        if (videoGroupId) {
-          // Burst video: always route into carousel collection (create session if needed)
-          await handleAutoCarouselVideo(from, message, videoGroupId);
-          return;
-        }
-        // No group id but check for a recently-created session (5s window) for implicit bursts
-        const burst = await findBurstCarouselSession(from, undefined);
-        if (burst) {
-          await handleCarouselAppendVideo(from, burst, message);
-          return;
-        }
-        // No burst — fall through to standard Reel processing in handleNewPost below
+        await handleAutoCarouselVideo(from, message, message.video?.media_group_id ?? null);
+        return;
       }
 
       // All images outside an active edit or collection flow: auto-carousel buffer.
@@ -925,6 +915,12 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     if (post.sibling_id) {
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }
+    // Also discard any orphaned collecting_carousel session — prevents stale
+    // sessions from accumulating items from future bursts after a discard.
+    await getSupabase().from('pending_posts')
+      .update({ state: 'discarded' })
+      .eq('whatsapp_phone', from)
+      .eq('state', 'collecting_carousel');
     await sendText(from, '🗑️ Post discarded. Send a new message whenever you\'re ready!');
   }
 }
@@ -1890,7 +1886,7 @@ async function handleSpinReelScript(from: string, sourcePostId: string) {
 // Creates or joins a collecting_carousel session the same way handleAutoCarouselImage
 // does for photos — ensures videos and photos from the same camera-roll selection are
 // always combined into one carousel regardless of arrival order.
-async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId: string) {
+async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId: string | null) {
   const supabase = getSupabase();
 
   const wasArmed = await consumeJournalArmIfActive(from);
@@ -1911,21 +1907,33 @@ async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId:
     return;
   }
 
-  // Find existing session by media_group_id first, then any active session
-  const { data: byGroup } = await supabase
+  // Find existing session by media_group_id first (most precise), then any
+  // recent session within a 60s burst window — avoids joining a stale session
+  // from a previous upload that the user never typed "done" for.
+  const { data: byGroup } = mediaGroupId ? await supabase
     .from('pending_posts')
     .select('id')
     .eq('whatsapp_phone', from)
     .eq('state', 'collecting_carousel')
     .eq('media_group_id', mediaGroupId)
-    .maybeSingle();
+    .maybeSingle() : { data: null };
 
-  const { data: anySession } = !byGroup ? await supabase
+  const { data: anyCandidateSession } = !byGroup ? await supabase
     .from('pending_posts')
-    .select('id')
+    .select('id, updated_at, created_at')
     .eq('whatsapp_phone', from)
     .eq('state', 'collecting_carousel')
     .maybeSingle() : { data: null };
+
+  // Only join a session that was active within the last 60 seconds
+  const anySession = anyCandidateSession && (
+    Date.now() - new Date((anyCandidateSession as any).updated_at ?? anyCandidateSession.created_at).getTime() <= 60_000
+  ) ? anyCandidateSession : null;
+
+  // Discard stale orphaned session so it doesn't accumulate future items
+  if (anyCandidateSession && !anySession) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', anyCandidateSession.id);
+  }
 
   let sessionId: string;
 
@@ -2281,12 +2289,36 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
   }
 
   if (items.length === 1) {
-    // Single photo — treat exactly like a regular user-photo post
-    await sendText(from, '📥 Processing your photo...');
     const [profileContext, recentCaptions] = await Promise.all([
       getProfileContextForPhone(from),
       getRecentCaptions(),
     ]);
+    if (items[0].is_video) {
+      // Single video — treat as Reel
+      await sendText(from, '📥 Processing your video...');
+      const captionPrompt = (fresh?.caption ?? '') ||
+        '[No description — write a punchy Reel caption. Do not reference any specific product, topic or theme from recent posts.]';
+      const variants = await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions, 'reels');
+      const caption = variants[0] ?? '';
+      await getSupabase().from('pending_posts').update({
+        state: 'pending_approval', surface: 'reels', caption, is_video: true,
+        image_url: items[0].url, user_image_url: items[0].url,
+        image_source: 'user', media_items: null,
+        ...(variants.length > 1 ? { caption_variants: variants } : {}),
+      }).eq('id', post.id);
+      await sendPostPreview(from, items[0].url, caption, post.id, true, 'reels');
+      if (variants.length > 1) {
+        const others = variants.slice(1).map((v, i) => {
+          const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+          return `*${i + 2}.* ${trimmed}`;
+        }).join('\n\n');
+        await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap:\n\n${others}`);
+      }
+      return;
+    }
+
+    // Single photo — treat exactly like a regular user-photo post
+    await sendText(from, '📥 Processing your photo...');
     const captionPrompt = (fresh?.caption ?? '') ||
       '[No description — write a punchy, original caption for a photo post. Do not reference any specific product, topic or theme from recent posts.]';
     const variants = await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions, 'feed');
