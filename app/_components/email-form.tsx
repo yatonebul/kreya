@@ -49,6 +49,8 @@ export function EmailForm() {
       <div className="flex gap-2">
         <input
           type="email"
+          name="email"
+          autoComplete="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="you@example.com"

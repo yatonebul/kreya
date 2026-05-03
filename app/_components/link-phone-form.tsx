@@ -47,10 +47,12 @@ export function LinkPhoneForm({ email }: { email: string }) {
       <div className="flex gap-2">
         <input
           type="tel"
+          name="tel"
+          autoComplete="tel"
           value={phone}
           onChange={e => setPhone(formatPhoneInput(e.target.value))}
           onKeyDown={e => { if (e.key === 'Enter') save(); }}
-          placeholder="+420 723 967 372"
+          placeholder="+1 555 000 1234"
           className="flex-1 px-4 py-2.5 rounded-xl outline-none text-sm"
           style={{ background: 'var(--surf3)', color: 'var(--white)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)', caretColor: 'var(--coral)' }}
         />

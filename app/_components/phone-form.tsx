@@ -85,9 +85,11 @@ export function PhoneForm() {
       <div className="flex gap-2">
         <input
           type="tel"
+          name="tel"
+          autoComplete="tel"
           value={phone}
           onChange={e => setPhone(formatPhoneInput(e.target.value))}
-          placeholder="+420 723 967 372"
+          placeholder="+1 555 000 1234"
           className="flex-1 rounded-full px-5 py-3 text-sm outline-none"
           style={{
             background: 'var(--surf3)',

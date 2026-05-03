@@ -89,6 +89,8 @@ export default function RegisterPage() {
               <label className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>Email *</label>
               <input
                 type="email"
+                name="email"
+                autoComplete="email"
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -101,9 +103,11 @@ export default function RegisterPage() {
               <label className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>WhatsApp number <span style={{ color: 'var(--muted)' }}>(optional — links your existing Kreya data)</span></label>
               <input
                 type="tel"
+                name="tel"
+                autoComplete="tel"
                 value={phone}
                 onChange={e => setPhone(formatPhoneInput(e.target.value))}
-                placeholder="+420 723 967 372"
+                placeholder="+1 555 000 1234"
                 className="w-full px-4 py-3 rounded-xl outline-none text-sm"
                 style={{ background: 'var(--surf2)', color: 'var(--white)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)', caretColor: 'var(--coral)' }}
               />
