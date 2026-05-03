@@ -311,6 +311,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_posts_one_carousel_per_phone
   WHERE state = 'collecting_carousel';
 
 
+-- 28. pending_posts — media grouping + slide-level editing support.
+--     media_group_id: Meta's group ID when user multi-selects from camera roll —
+--     lets us join photos+videos from the same burst into one carousel session.
+--     editing_slide_idx: which carousel slide is being replaced during edit flow.
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS media_group_id    TEXT,
+  ADD COLUMN IF NOT EXISTS editing_slide_idx INTEGER;
+
+CREATE INDEX IF NOT EXISTS idx_pending_posts_media_group
+  ON pending_posts (whatsapp_phone, media_group_id)
+  WHERE media_group_id IS NOT NULL AND state = 'collecting_carousel';
+
+
 -- Auto-clean states older than 15 minutes (run once to register)
 -- SELECT cron.schedule('clean-oauth-states', '*/15 * * * *',
 --   $$DELETE FROM oauth_pending_states WHERE created_at < NOW() - INTERVAL '15 minutes'$$);
