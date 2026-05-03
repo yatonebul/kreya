@@ -1858,10 +1858,15 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
       surface: 'carousel',
       media_items: [],
       caption: userCaption,
+      image_url: '',
     }).select('id').single();
 
     if (insertErr || !created) {
-      // Unique index conflict: a concurrent webhook already created the session.
+      // Could be a unique index conflict (concurrent webhook won the race) or
+      // another DB error. Log the code so we can distinguish in Vercel logs.
+      if (insertErr?.code !== '23505') {
+        console.error('[carousel session create]', insertErr?.code, insertErr?.message);
+      }
       const { data: winner } = await supabase.from('pending_posts')
         .select('id').eq('whatsapp_phone', from).eq('state', 'collecting_carousel').maybeSingle();
       if (!winner) {
@@ -1908,6 +1913,7 @@ async function handleCarouselStart(from: string) {
     surface: 'carousel',
     media_items: [],
     caption: '',
+    image_url: '',
   });
 
   await sendText(
