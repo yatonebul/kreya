@@ -1726,7 +1726,7 @@ async function handleSpinStory(from: string, sourcePostId: string) {
   // Vertical 9:16 image with the hook baked into the prompt so it appears
   // as overlay text. detectStyle picks photoreal vs illustration based
   // on prompt vocabulary.
-  const { url: imageUrl, overflowed: storyOverflowed } = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from);
+  const { url: imageUrl, overflowed: storyOverflowed } = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from, { w: 1080, h: 1920 });
 
   // Discard conflicting drafts so the Story has a clean lane
   const { data: stale } = await supabase
