@@ -557,6 +557,62 @@ export async function sendCarouselSlideSelector(to: string, postId: string, slid
   });
 }
 
+// Button-driven reorder menu. Shows each slide as a tappable row that moves
+// it to the front (most common reorder need). For 2 slides: offers swap.
+export async function sendCarouselReorderMenu(
+  to: string,
+  postId: string,
+  items: { url: string; is_video?: boolean }[],
+  appUrl: string,
+) {
+  const n = items.length;
+
+  if (n === 2) {
+    // For 2 slides, offer a single "Swap" button — unambiguous
+    return wa({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        header: { type: 'text', text: '🔀 Reorder slides' },
+        body: {
+          text: `1. ${items[0].is_video ? '🎬 Video' : '📷 Photo'} — ${appUrl}/p/${postId}/0\n2. ${items[1].is_video ? '🎬 Video' : '📷 Photo'} — ${appUrl}/p/${postId}/1\n\nSwap the two slides?`,
+        },
+        action: {
+          buttons: [
+            { type: 'reply', reply: { id: `reorder_swap:${postId}`, title: '🔄 Swap order' } },
+            { type: 'reply', reply: { id: `carousel_done:${postId}`, title: '✅ Keep as is' } },
+          ],
+        },
+      },
+    });
+  }
+
+  // For 3–10 slides: list with "Put slide N first" + a "Keep order" row
+  const rows = items.map((it, i) => ({
+    id: `reorder_first:${postId}:${i}`,
+    title: `📍 Put slide ${i + 1} first`,
+    description: `${it.is_video ? '🎬 Video' : '📷 Photo'} — ${appUrl}/p/${postId}/${i}`,
+  }));
+  rows.push({ id: `carousel_done:${postId}`, title: '✅ Keep current order', description: 'Proceed without changing order' });
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      header: { type: 'text', text: '🔀 Reorder slides' },
+      body: { text: `${n} slides collected. Tap a slide to move it to position 1, or keep the current order.` },
+      action: {
+        button: 'Reorder',
+        sections: [{ title: 'Move a slide to the front', rows }],
+      },
+    },
+  });
+}
+
 // Shown after each media item is added to a collecting_carousel session.
 // Full list menu so user can pick the output surface or edit the set.
 export async function sendCarouselProgressButtons(to: string, postId: string, slideCount: number, isAtMax = false) {

@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -621,12 +621,22 @@ async function getPostById(id: string) {
   return data;
 }
 
-// Returns the number of slides requested when user says "generate 3 images", etc.
-// Returns null when no multi-image intent is found.
+// Returns the number of slides requested when user says "generate 3 images",
+// "three photos", "5-slide carousel", etc. Handles both digit and word forms.
 function detectMultiImageCount(text: string): number | null {
+  const WORDS: Record<string, number> = {
+    two: 2, three: 3, four: 4, five: 5,
+    six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  };
   const t = text.toLowerCase();
-  // patterns: "3 images", "generate 3 slides", "3-image carousel", "carousel of 3"
-  const m = t.match(/\b([2-9]|10)\s*(?:image|photo|slide|card|picture|page)s?\b|\b(?:image|photo|slide|card|picture|page)s?\s+(?:of\s+)?([2-9]|10)\b/);
+  // Normalise word-form numbers to digits so one regex handles both
+  const normalised = t.replace(
+    /\b(two|three|four|five|six|seven|eight|nine|ten)\b/g,
+    w => String(WORDS[w]),
+  );
+  const m = normalised.match(
+    /\b([2-9]|10)\s*(?:image|photo|slide|card|picture|page)s?\b|\b(?:image|photo|slide|card|picture|page)s?\s+(?:of\s+)?([2-9]|10)\b/,
+  );
   if (!m) return null;
   const n = parseInt(m[1] ?? m[2], 10);
   return n >= 2 && n <= 10 ? n : null;
@@ -946,8 +956,39 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, '📸 Nothing to reorder yet — send at least 2 slides first.');
       return;
     }
-    const list = formatSlideList(items, postId);
-    await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with your preferred order, e.g. *2,1,3*. Tap a link to preview each slide.`);
+    await sendCarouselReorderMenu(from, postId, items, APP_URL);
+    return;
+  }
+  if (action === 'reorder_first' && postId) {
+    // postId = "{actualPostId}:{slideIdx}" — split at last colon
+    const lastColon = postId.lastIndexOf(':');
+    const pid = lastColon >= 0 ? postId.slice(0, lastColon) : postId;
+    const idx = lastColon >= 0 ? parseInt(postId.slice(lastColon + 1), 10) : 0;
+    const post = await getPostById(pid);
+    if (!post || !Array.isArray(post.media_items)) { await sendText(from, 'Post not found.'); return; }
+    const items = post.media_items as CarouselItem[];
+    if (idx < 0 || idx >= items.length) { await sendText(from, 'Invalid slide.'); return; }
+    if (idx === 0) {
+      await sendText(from, '👌 Slide 1 is already first.');
+      await sendCarouselProgressButtons(from, pid, items.length);
+      return;
+    }
+    const reordered = [items[idx], ...items.slice(0, idx), ...items.slice(idx + 1)];
+    await getSupabase().from('pending_posts').update({ media_items: reordered }).eq('id', pid);
+    await sendText(from, `✅ Slide ${idx + 1} moved to position 1.`);
+    await sendCarouselProgressButtons(from, pid, reordered.length);
+    return;
+  }
+  if (action === 'reorder_swap' && postId) {
+    const post = await getPostById(postId);
+    if (!post || !Array.isArray(post.media_items) || post.media_items.length < 2) {
+      await sendText(from, 'Post not found or too few slides.'); return;
+    }
+    const items = post.media_items as CarouselItem[];
+    const swapped = [items[1], items[0], ...items.slice(2)];
+    await getSupabase().from('pending_posts').update({ media_items: swapped }).eq('id', postId);
+    await sendText(from, '✅ Slides swapped.');
+    await sendCarouselProgressButtons(from, postId, swapped.length);
     return;
   }
   if (action === 'carousel_discard' && postId) {
