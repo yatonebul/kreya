@@ -174,12 +174,13 @@ export type CarouselSpin = {
 export async function generateCarouselSpin(
   sourceCaption: string,
   profileContext?: string,
+  slideCount = 5,
 ): Promise<CarouselSpin | null> {
   const system =
     `${buildSystem(profileContext, 'carousel')}\n\n` +
     `Return ONLY a JSON object — no prose, no markdown, no code fences.\n` +
-    `Shape: { "caption": string, "slides": [ { "headline": string, "body": string, "imagePrompt": string } x5 ] }\n` +
-    `- 5 slides exactly. Arc: hook → setup → payoff → insight → CTA.\n` +
+    `Shape: { "caption": string, "slides": [ { "headline": string, "body": string, "imagePrompt": string } x${slideCount} ] }\n` +
+    `- ${slideCount} slides exactly. Arc: hook → setup → payoff → insight → CTA.\n` +
     `- headline: 10-15 chars max, all-caps optional, designed to read on a 1080x1080 image.\n` +
     `- body: ONE short line (under 90 chars), expands the headline.\n` +
     `- imagePrompt: one cinematic background scene per slide. People shown from behind / silhouette only — never close-up faces. No text inside the image (the headline overlay handles that).\n` +
@@ -191,7 +192,7 @@ export async function generateCarouselSpin(
     system,
     messages: [{
       role: 'user',
-      content: `Source post caption (turn this into a 5-slide carousel):\n\n${sourceCaption}\n\nReturn the JSON.`,
+      content: `Topic / source caption (turn this into a ${slideCount}-slide carousel):\n\n${sourceCaption}\n\nReturn the JSON.`,
     }],
   });
 
@@ -201,7 +202,7 @@ export async function generateCarouselSpin(
     if (
       parsed?.caption &&
       Array.isArray(parsed.slides) &&
-      parsed.slides.length === 5 &&
+      parsed.slides.length === slideCount &&
       parsed.slides.every((s: any) => typeof s.headline === 'string' && typeof s.body === 'string' && typeof s.imagePrompt === 'string')
     ) {
       return parsed as CarouselSpin;

@@ -460,6 +460,26 @@ export async function sendPostPreview(
   });
 }
 
+// Shown when user taps "Add Slides" on a single-image post.
+// Lets them choose between uploading photos or generating AI slides.
+export async function sendAddSlidesChoice(to: string, postId: string) {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: '🎞️ *Carousel mode* — your current image is slide 1.\n\nSend more photos to add them, or generate AI slides:' },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `gen_ai_slides:${postId}`, title: '🤖 Generate AI slides' } },
+          { type: 'reply', reply: { id: `cancel_edit:${postId}`,   title: '❌ Cancel' } },
+        ],
+      },
+    },
+  });
+}
+
 export async function sendEditActionsMenu(to: string, postId: string, isVideo: boolean, mediaItemCount = 0) {
   const isCarousel = mediaItemCount > 1;
   const editOptions: { id: string; title: string; description: string }[] = [

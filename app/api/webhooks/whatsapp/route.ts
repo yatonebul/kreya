@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -488,11 +488,17 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     } catch {
       throw Object.assign(new Error('🎙️ Couldn\'t transcribe your voice note — please try again.'), { userFacing: true });
     }
-    await sendText(from, '✍️ Creating your post...');
   } else {
     prompt = message.text?.body ?? '';
-    await sendText(from, '✍️ Generating your post...');
   }
+
+  // Detect multi-image/slide request (e.g. "generate 3 images about X", "5-slide carousel")
+  const multiImageCount = !isUserMedia ? detectMultiImageCount(prompt) : null;
+
+  await sendText(from, multiImageCount
+    ? `🎠 Creating a ${multiImageCount}-slide AI carousel...`
+    : '✍️ Creating your post...'
+  );
 
   const wantsAiAlso = isUserMedia && !isVideo && !isDocument &&
     /\b(also.?generate|ai.?version|generate.?too|ai.?image.?too|both)\b/i.test(prompt);
@@ -502,6 +508,13 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     getRecentCaptions(),
     !isUserMedia || wantsAiAlso ? generateImagePrompt(prompt || 'creative visual') : Promise.resolve(null),
   ]);
+
+  // Multi-image request: bypass single-post flow and build a carousel directly
+  if (multiImageCount) {
+    await handleDirectAiCarousel(from, prompt, multiImageCount, profileContext ?? undefined, recentCaptions);
+    return;
+  }
+
   // Surface routing: any video → Reels (IG no longer has standalone Feed
   // video). Photos and AI-generated images stay on Feed.
   const surface: 'feed' | 'reels' = isVideo ? 'reels' : 'feed';
@@ -606,6 +619,126 @@ async function handleNewPost(from: string, message: any, messageType: string) {
 async function getPostById(id: string) {
   const { data } = await getSupabase().from('pending_posts').select('*').eq('id', id).maybeSingle();
   return data;
+}
+
+// Returns the number of slides requested when user says "generate 3 images", etc.
+// Returns null when no multi-image intent is found.
+function detectMultiImageCount(text: string): number | null {
+  const t = text.toLowerCase();
+  // patterns: "3 images", "generate 3 slides", "3-image carousel", "carousel of 3"
+  const m = t.match(/\b([2-9]|10)\s*(?:image|photo|slide|card|picture|page)s?\b|\b(?:image|photo|slide|card|picture|page)s?\s+(?:of\s+)?([2-9]|10)\b/);
+  if (!m) return null;
+  const n = parseInt(m[1] ?? m[2], 10);
+  return n >= 2 && n <= 10 ? n : null;
+}
+
+// Generates a full AI carousel directly from a user prompt without an existing source post.
+async function handleDirectAiCarousel(
+  from: string,
+  prompt: string,
+  slideCount: number,
+  profileContext: string | undefined,
+  recentCaptions: string[],
+) {
+  const supabase = getSupabase();
+  const spin = await generateCarouselSpin(prompt, profileContext, slideCount);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't build the carousel — try again or send your images manually.");
+    return;
+  }
+
+  const mediaResults = await Promise.all(
+    spin.slides.map(async s => {
+      const imgPrompt = `${s.imagePrompt} | overlay text: "${s.headline}"`;
+      try {
+        return await buildBrandedImage(imgPrompt, detectStyle(s.imagePrompt), from);
+      } catch {
+        return { url: buildImageUrl(imgPrompt, 'realistic'), overflowed: false };
+      }
+    }),
+  );
+  const mediaItems: CarouselItem[] = mediaResults.map(r => ({ url: r.url, is_video: false }));
+  const overflowed = mediaResults.some(r => r.overflowed);
+
+  const { data: stale } = await supabase
+    .from('pending_posts')
+    .select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption: spin.caption,
+      image_url: mediaItems[0].url,
+      image_source: 'ai',
+      is_video: false,
+      surface: 'carousel',
+      state: 'pending_approval',
+      media_items: mediaItems,
+      source_prompt: prompt,
+    })
+    .select('id')
+    .single();
+  if (!post) {
+    await sendText(from, '⚠️ Had trouble saving the carousel — try again.');
+    return;
+  }
+
+  await sendText(
+    from,
+    `📑 *${slideCount}-slide carousel:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
+  );
+  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
+  if (overflowed) {
+    await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
+  }
+}
+
+// Generates AI slides for a post already in collecting_carousel state (from "Add Slides" → "Generate AI").
+// Replaces whatever is currently in media_items with freshly generated slides.
+async function handleGenerateAiSlidesForPost(from: string, post: any) {
+  const supabase = getSupabase();
+  const caption = post.caption ?? post.source_prompt ?? '';
+  await sendText(from, '🎠 Generating AI slides for your carousel — this takes ~30 seconds...');
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateCarouselSpin(caption, profileContext ?? undefined, 3);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't generate the slides — try again.");
+    return;
+  }
+
+  const mediaResults = await Promise.all(
+    spin.slides.map(async s => {
+      const imgPrompt = `${s.imagePrompt} | overlay text: "${s.headline}"`;
+      try {
+        return await buildBrandedImage(imgPrompt, detectStyle(s.imagePrompt), from);
+      } catch {
+        return { url: buildImageUrl(imgPrompt, 'realistic'), overflowed: false };
+      }
+    }),
+  );
+
+  // Keep the user's original image as slide 1, append AI slides
+  const originalSlide: CarouselItem = { url: post.image_url, is_video: false };
+  const aiSlides: CarouselItem[] = mediaResults.map(r => ({ url: r.url, is_video: false }));
+  const allSlides: CarouselItem[] = [originalSlide, ...aiSlides];
+
+  await supabase.from('pending_posts').update({
+    state: 'pending_approval',
+    surface: 'carousel',
+    caption: spin.caption,
+    media_items: allSlides,
+    image_source: 'user',
+  }).eq('id', post.id);
+
+  await sendPostPreview(from, originalSlide.url, spin.caption, post.id, false, 'carousel', allSlides.length);
 }
 
 // Formats a numbered slide list with a preview link per item.
@@ -934,9 +1067,13 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await getSupabase().from('pending_posts')
       .update({ state: 'collecting_carousel', surface: 'carousel', media_items: [firstSlide] })
       .eq('id', postId);
-    await sendText(from,
-      `🎞️ *Carousel mode* — your current image is slide 1.\n\nSend 1–9 more photos, then type *done* to publish, or *cancel* to go back.`
-    );
+    await sendAddSlidesChoice(from, postId);
+    return;
+  }
+  if (action === 'gen_ai_slides' && postId) {
+    const post = await getPostById(postId);
+    if (!post) { await sendText(from, 'Post not found.'); return; }
+    await handleGenerateAiSlidesForPost(from, post);
     return;
   }
   if (action === 'cancel_edit' && postId) {
