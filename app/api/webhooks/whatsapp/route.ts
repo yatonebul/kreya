@@ -290,8 +290,8 @@ async function processWebhook(body: any) {
                 await sendText(from, '📸 Send at least 2 slides before reordering.');
                 return;
               }
-              const list = items.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
-              await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with the new order as numbers, e.g. *2,1,3*.`);
+              const list = formatSlideList(items, collecting.id);
+              await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with the new order as numbers, e.g. *2,1,3*. Tap a link to preview.`);
               return;
             }
 
@@ -307,7 +307,7 @@ async function processWebhook(body: any) {
               if (isValid) {
                 const reordered: CarouselItem[] = indices.map((i: number) => items[i]);
                 await getSupabase().from('pending_posts').update({ media_items: reordered }).eq('id', collecting.id);
-                const list = reordered.map((it: CarouselItem, i: number) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+                const list = formatSlideList(reordered, collecting.id);
                 await sendCarouselProgressButtons(from, collecting.id, reordered.length);
                 await sendText(from, `✅ Reordered!\n\n${list}`);
                 return;
@@ -602,6 +602,14 @@ async function getPostById(id: string) {
   return data;
 }
 
+// Formats a numbered slide list with a preview link per item.
+// Links point to /p/{postId}/{idx} — a lightweight page that shows the image/video.
+function formatSlideList(items: { url: string; is_video?: boolean }[], postId: string): string {
+  return items.map((it, i) =>
+    `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'} — ${APP_URL}/p/${postId}/${i}`,
+  ).join('\n');
+}
+
 function deriveSurface(post: any): 'feed' | 'reels' | 'carousel' | 'story' {
   if (Array.isArray(post.media_items) && post.media_items.length > 1) return 'carousel';
   if (post.surface === 'story') return 'story';
@@ -749,8 +757,8 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await sendText(from, '📸 Nothing to reorder yet — send at least 2 slides first.');
       return;
     }
-    const list = items.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
-    await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with your preferred order as numbers, e.g. *2,1,3* to put slide 2 first.`);
+    const list = formatSlideList(items, postId);
+    await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with your preferred order, e.g. *2,1,3*. Tap a link to preview each slide.`);
     return;
   }
   if (action === 'carousel_discard' && postId) {
@@ -775,7 +783,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', actualPostId);
       return;
     }
-    const list = updated.map((it: CarouselItem, i: number) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+    const list = formatSlideList(updated, actualPostId);
     await sendText(from, `🗑️ Removed slide ${removeIdx + 1}.\n\n*Remaining ${updated.length} Stories:*\n${list}`);
     await sendPostPreview(from, updated[0].url, post.caption, actualPostId, !!updated[0].is_video, 'story', updated.length > 1 ? updated.length : undefined);
     return;
