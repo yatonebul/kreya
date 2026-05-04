@@ -579,6 +579,35 @@ export async function sendCarouselProgressButtons(to: string, postId: string, sl
   });
 }
 
+// Before any repurpose spin, ask whether to reuse originals or generate new AI visuals.
+export async function sendRepurposeAssetChoice(
+  to: string,
+  postId: string,
+  targetSurface: 'carousel' | 'story' | 'reel',
+  assetCount: number,
+) {
+  const label = targetSurface === 'carousel' ? '🎠 Carousel' : targetSurface === 'story' ? '📱 Story' : '🎬 Reel';
+  const assetLabel = assetCount === 1 ? '1 original' : `${assetCount} originals`;
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text: `${label} — *which visuals should I use?*\n\nYou have ${assetLabel} from this post. Use them, or generate fresh AI images?`,
+      },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `spin_${targetSurface}_assets:${postId}`, title: '📸 Use my originals' } },
+          { type: 'reply', reply: { id: `spin_${targetSurface}_ai:${postId}`,     title: '🤖 Generate new' } },
+          { type: 'reply', reply: { id: 'spin_skip',                              title: '❌ Cancel' } },
+        ],
+      },
+    },
+  });
+}
+
 // For multi-story drafts: list each asset with a "Remove" row so user can
 // prune the set before publishing. Unlike carousel, stories are independent
 // so removal makes more sense than replacement.

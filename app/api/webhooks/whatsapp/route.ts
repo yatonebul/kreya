@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton, sendPublishFailureActions } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -709,10 +709,41 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     return;
   }
   if (action === 'spin_carousel' && postId) {
+    const source = await getPostById(postId);
+    const sourceItems: CarouselItem[] = Array.isArray(source?.media_items) ? source.media_items as CarouselItem[] : [];
+    const assetCount = sourceItems.length > 0 ? sourceItems.length : (source?.user_image_url ? 1 : 0);
+    if (assetCount > 0) {
+      await sendRepurposeAssetChoice(from, postId, 'carousel', assetCount);
+    } else {
+      await handleSpinCarousel(from, postId);
+    }
+    return;
+  }
+  if (action === 'spin_carousel_assets' && postId) {
+    await handleSpinCarouselWithAssets(from, postId);
+    return;
+  }
+  if (action === 'spin_carousel_ai' && postId) {
     await handleSpinCarousel(from, postId);
     return;
   }
   if (action === 'spin_reel' && postId) {
+    const source = await getPostById(postId);
+    const sourceItems: CarouselItem[] = Array.isArray(source?.media_items) ? source.media_items as CarouselItem[] : [];
+    const videoAsset = sourceItems.find(i => i.is_video) ?? (source?.is_video && source?.user_image_url ? { url: source.user_image_url as string, is_video: true } : null);
+    const assetCount = sourceItems.length > 0 ? sourceItems.length : (source?.user_image_url ? 1 : 0);
+    if (assetCount > 0 && videoAsset) {
+      await sendRepurposeAssetChoice(from, postId, 'reel', assetCount);
+    } else {
+      await handleSpinReelScript(from, postId);
+    }
+    return;
+  }
+  if (action === 'spin_reel_assets' && postId) {
+    await handleSpinReelWithAssets(from, postId);
+    return;
+  }
+  if (action === 'spin_reel_ai' && postId) {
     await handleSpinReelScript(from, postId);
     return;
   }
@@ -720,7 +751,26 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     const parts = postId.split(':');
     const actualPostId = parts[0];
     const retryCount = parts[1] ? (parseInt(parts[1], 10) || 0) : 0;
-    await handleSpinStory(from, actualPostId, retryCount);
+    const source = await getPostById(actualPostId);
+    const sourceItems: CarouselItem[] = Array.isArray(source?.media_items) ? source.media_items as CarouselItem[] : [];
+    const assetCount = sourceItems.length > 0 ? sourceItems.length : (source?.user_image_url ? 1 : 0);
+    if (assetCount > 0 && retryCount === 0) {
+      await sendRepurposeAssetChoice(from, actualPostId, 'story', assetCount);
+    } else {
+      await handleSpinStory(from, actualPostId, retryCount);
+    }
+    return;
+  }
+  if (action === 'spin_story_assets' && postId) {
+    await handleSpinStory(from, postId, 0);
+    return;
+  }
+  if (action === 'spin_story_ai' && postId) {
+    await handleSpinStoryAiOnly(from, postId);
+    return;
+  }
+  if (action === 'spin_skip') {
+    await sendText(from, '👌 No worries — let me know if you change your mind.');
     return;
   }
 
@@ -1920,6 +1970,186 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
   if (carouselOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
+  }
+}
+
+async function handleSpinCarouselWithAssets(from: string, sourcePostId: string) {
+  const supabase = getSupabase();
+  const source = await getPostById(sourcePostId);
+  if (!source) {
+    await sendText(from, "I couldn't find that post anymore — try a fresh one.");
+    return;
+  }
+
+  const sourceItems: CarouselItem[] = Array.isArray(source.media_items) ? source.media_items as CarouselItem[] : [];
+  const assets: CarouselItem[] = sourceItems.length > 0
+    ? sourceItems
+    : source.user_image_url
+      ? [{ url: source.user_image_url as string, is_video: !!(source.is_video) }]
+      : [];
+
+  if (assets.length < 2) {
+    await sendText(from, "⚠️ You need at least 2 original assets for a carousel. I'll generate new slides instead.");
+    await handleSpinCarousel(from, sourcePostId);
+    return;
+  }
+
+  await sendText(from, `🎠 Building carousel from your ${assets.length} original${assets.length === 1 ? '' : 's'} — writing the caption...`);
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateCarouselSpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't generate the carousel caption — try again.");
+    return;
+  }
+
+  const { data: stale } = await supabase
+    .from('pending_posts')
+    .select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption: spin.caption,
+      image_url: assets[0].url,
+      user_image_url: assets[0].url,
+      image_source: 'user',
+      is_video: false,
+      surface: 'carousel',
+      state: 'pending_approval',
+      media_items: assets,
+      parent_post_id: sourcePostId,
+    })
+    .select('id')
+    .single();
+  if (!post) {
+    await sendText(from, '⚠️ Had trouble creating the carousel draft — try again.');
+    return;
+  }
+
+  await sendPostPreview(from, assets[0].url, spin.caption, post.id, false, 'carousel', assets.length);
+}
+
+async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
+  const supabase = getSupabase();
+  const source = await getPostById(sourcePostId);
+  if (!source) {
+    await sendText(from, "I couldn't find that post anymore — try a fresh one.");
+    return;
+  }
+
+  const sourceItems: CarouselItem[] = Array.isArray(source.media_items) ? source.media_items as CarouselItem[] : [];
+  const videoAsset =
+    sourceItems.find(i => i.is_video) ??
+    (source.is_video && source.user_image_url ? { url: source.user_image_url as string, is_video: true } : null) ??
+    (source.is_video && source.image_url ? { url: source.image_url as string, is_video: true } : null);
+
+  if (!videoAsset) {
+    await sendText(from, '🎬 No video found in your originals. Send a video file to create a Reel.');
+    return;
+  }
+
+  await sendText(from, '🎬 Building your Reel from the original video — writing caption...');
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateReelScriptSpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't generate the Reel caption — try again.");
+    return;
+  }
+
+  const { data: stale } = await supabase
+    .from('pending_posts')
+    .select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption: spin.caption,
+      image_url: videoAsset.url,
+      user_image_url: videoAsset.url,
+      image_source: 'user',
+      is_video: true,
+      surface: 'reels',
+      state: 'pending_approval',
+      parent_post_id: sourcePostId,
+    })
+    .select('id')
+    .single();
+  if (!post) {
+    await sendText(from, '⚠️ Had trouble creating the Reel draft — try again.');
+    return;
+  }
+
+  await sendPostPreview(from, videoAsset.url, spin.caption, post.id, true, 'reels');
+}
+
+// Forces AI image generation even when user assets exist.
+async function handleSpinStoryAiOnly(from: string, sourcePostId: string) {
+  const supabase = getSupabase();
+  const source = await getPostById(sourcePostId);
+  if (!source) {
+    await sendText(from, "I couldn't find that post anymore — try a fresh one.");
+    return;
+  }
+
+  await sendText(from, '🌅 Generating a fresh AI visual for your Story...');
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateStorySpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendText(from, "⚠️ Couldn't generate the Story — try again.");
+    return;
+  }
+
+  const built = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from, { w: 1080, h: 1920 });
+
+  const { data: stale } = await supabase
+    .from('pending_posts')
+    .select('id, sibling_id')
+    .eq('whatsapp_phone', from)
+    .in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .insert({
+      whatsapp_phone: from,
+      caption: spin.hook,
+      image_url: built.url,
+      image_source: 'ai',
+      is_video: false,
+      surface: 'story',
+      state: 'pending_approval',
+      parent_post_id: sourcePostId,
+    })
+    .select('id')
+    .single();
+  if (!post) {
+    await sendText(from, '⚠️ Had trouble creating the Story draft — try again.');
+    return;
+  }
+
+  await sendPostPreview(from, built.url, spin.hook, post.id, false, 'story');
+  if (built.overflowed) {
+    await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
   }
 }
 
