@@ -302,10 +302,10 @@ async function processWebhook(body: any) {
               const items: CarouselItem[] = Array.isArray(collecting.media_items) ? collecting.media_items : [];
               const isValid =
                 indices.length === items.length &&
-                indices.every(i => i >= 0 && i < items.length) &&
+                indices.every((i: number) => i >= 0 && i < items.length) &&
                 new Set(indices).size === indices.length;
               if (isValid) {
-                const reordered = indices.map(i => items[i]);
+                const reordered = indices.map((i: number) => items[i]);
                 await getSupabase().from('pending_posts').update({ media_items: reordered }).eq('id', collecting.id);
                 const list = reordered.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
                 await sendCarouselProgressButtons(from, collecting.id, reordered.length);
