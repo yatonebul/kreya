@@ -289,6 +289,26 @@ export async function sendRetryButton(to: string, retryActionId: string, message
   });
 }
 
+// Shown after a publish failure so the user can retry or discard without typing.
+// retryActionId maps to `approve:${postId}` — tapping re-triggers the full publish flow.
+export async function sendPublishFailureActions(to: string, postId: string, contentType: string) {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: `⚠️ Couldn't post your ${contentType} — Instagram returned a temporary error. Your draft is saved.` },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `approve:${postId}`,  title: '🔄 Try again' } },
+          { type: 'reply', reply: { id: `discard:${postId}`,  title: '🗑️ Discard' } },
+        ],
+      },
+    },
+  });
+}
+
 export async function sendConversationStarters(to: string, name: string) {
   const body = `👋 Hey *${name}*!\n\nWhat would you like to do?`;
   return wa({

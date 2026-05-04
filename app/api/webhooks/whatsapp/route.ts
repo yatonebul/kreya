@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton, sendPublishFailureActions } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -979,10 +979,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
         return;
       }
       const contentType = isCarousel ? 'carousel' : isStory ? 'Story' : 'post';
-      const errorMsg = err.message?.includes('platform') || err.message?.includes('failed')
-        ? `⚠️ Instagram is having trouble posting your ${contentType} right now. Try again in a moment — your draft is saved.`
-        : `⚠️ Couldn't post your ${contentType} right now. Try again in a moment — your draft is saved.`;
-      await sendText(from, errorMsg);
+      await sendPublishFailureActions(from, post.id, contentType);
       return;
     }
 
