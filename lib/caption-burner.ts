@@ -98,7 +98,7 @@ export async function burnCaption(
           '-c:a', 'copy',
         ])
         .output(outPath)
-        .on('end', resolve)
+        .on('end', () => resolve())
         .on('error', (err) => reject(new Error(`FFmpeg caption burn: ${err.message}`)))
         .run();
     });
