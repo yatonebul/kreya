@@ -155,7 +155,7 @@ export async function renderVideo(
         ])
         .output(outPath)
         .on('end', () => resolve())
-        .on('error', (err) => reject(new Error(`FFmpeg: ${err.message}`)))
+        .on('error', (err: Error) => reject(new Error(`FFmpeg: ${err.message}`)))
         .run();
     });
 

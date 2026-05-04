@@ -4,8 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
+import { renderVideo } from '@/lib/video-worker';
+import { burnCaption } from '@/lib/caption-burner';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding } from '@/lib/whatsapp-onboarding';
@@ -878,6 +880,10 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     } else {
       await handleSpinReelScript(from, postId);
     }
+    return;
+  }
+  if (action === 'reel_from_image' && postId) {
+    await handleReelFromImage(from, postId);
     return;
   }
   if (action === 'spin_reel_assets' && postId) {
@@ -1880,6 +1886,77 @@ async function handleUseAccount(from: string, handle: string) {
   await sendText(from, `✓ Switched — I'll post to *@${match.account_name}* from now on.`);
 }
 
+// ── Animate image → Reel ────────────────────────────────────────────
+// User tapped "Animate to Reel" after sending a single photo.
+// Grabs the first media_items URL from the collecting_carousel session,
+// Ken-Burns renders it via VideoWorker, burns the AI caption in via
+// CaptionBurner, and presents the video as a Reel draft.
+async function handleReelFromImage(from: string, sessionId: string) {
+  const supabase = getSupabase();
+
+  const { data: session } = await supabase
+    .from('pending_posts')
+    .select('id, media_items, source_prompt, caption')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  const items: CarouselItem[] = Array.isArray(session?.media_items) ? session.media_items as CarouselItem[] : [];
+  const imageUrl = items[0]?.url;
+  if (!imageUrl) {
+    await sendText(from, "⚠️ Couldn't find your photo — please send it again.");
+    return;
+  }
+
+  // Discard the collecting session before doing the slow work
+  await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', sessionId);
+
+  await sendText(from, '🎬 Animating your photo into a Reel — hang tight...');
+
+  const prompt = (session?.source_prompt || session?.caption || '').trim();
+  const captionPrompt = prompt || '[No description — write a punchy Reel caption for an animated photo.]';
+  const [profileContext, recentCaptions] = await Promise.all([
+    getProfileContextForPhone(from),
+    getRecentCaptions(),
+  ]);
+
+  const reelCaption = await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions, 'reels');
+
+  // Render Ken Burns video then burn the caption text into it
+  const { publicUrl: rawVideoUrl } = await renderVideo(
+    [{ url: imageUrl, type: 'image' }],
+    { aspectRatio: '9:16', durationPerPhoto: 6 },
+  );
+  const { publicUrl: finalVideoUrl } = await burnCaption(rawVideoUrl, reelCaption);
+
+  // Discard any lingering pending drafts before creating the new one
+  const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
+    .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase.from('pending_posts').insert({
+    whatsapp_phone: from,
+    state: 'pending_approval',
+    surface: 'reels',
+    image_url: finalVideoUrl,
+    user_image_url: imageUrl,
+    is_video: true,
+    caption: reelCaption,
+    caption_variants: [reelCaption],
+    source_prompt: prompt,
+  }).select('id').single();
+
+  if (!post) {
+    await sendText(from, '⚠️ Video rendered but draft save failed — try again.');
+    return;
+  }
+
+  await sendVideoMessage(from, finalVideoUrl);
+  await sendPostPreview(from, finalVideoUrl, reelCaption, post.id, true, 'reels');
+}
+
 // ── Phase B repurpose handlers ──────────────────────────────────────
 // Take a published post and spin it into another surface. Source post
 // caption + brand context goes into a Sonnet generator; the returned
@@ -2665,7 +2742,7 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
   if (count >= 10) {
     await sendText(from, `📸 Photo ${count} added — that's the max! Type *done* to publish your carousel.`);
   } else if (count === 1) {
-    await sendText(from, '📸 Got your photo! Send another to make a carousel, or type *done* to post it.');
+    await sendAnimateToReelOffer(from, sessionId);
   } else {
     await sendText(from, `📸 Photo ${count} added. Send more, or type *done* to publish your ${count}-slide carousel.`);
   }

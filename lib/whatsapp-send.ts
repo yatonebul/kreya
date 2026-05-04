@@ -50,6 +50,38 @@ export function sendImageMessage(to: string, url: string, caption?: string): Pro
   });
 }
 
+export function sendVideoMessage(to: string, url: string): Promise<WaResult> {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'video',
+    video: { link: url },
+  });
+}
+
+export function sendAnimateToReelOffer(to: string, sessionId: string): Promise<WaResult> {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text:
+          '📸 *Got your photo!*\n\n' +
+          'I can animate it into a Reel with a Ken Burns zoom and a caption burned in — or just post it as a photo.\n\n' +
+          'Send more photos to build a carousel instead.',
+      },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `reel_from_image:${sessionId}`, title: '🎬 Animate to Reel' } },
+          { type: 'reply', reply: { id: `carousel_done:${sessionId}`,   title: '✅ Post as photo'   } },
+        ],
+      },
+    },
+  });
+}
+
 export function sendText(to: string, text: string): Promise<WaResult> {
   return wa({
     messaging_product: 'whatsapp',
