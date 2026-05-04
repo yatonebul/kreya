@@ -298,7 +298,7 @@ async function processWebhook(body: any) {
             // "2,1,3" or "3, 1, 2" → apply reorder
             const reorderMatch = txt.trim().match(/^(\d+(?:\s*,\s*\d+)+)$/);
             if (reorderMatch) {
-              const indices = reorderMatch[1].split(',').map(s => parseInt(s.trim(), 10) - 1);
+              const indices = reorderMatch[1].split(',').map((s: string) => parseInt(s.trim(), 10) - 1);
               const items: CarouselItem[] = Array.isArray(collecting.media_items) ? collecting.media_items : [];
               const isValid =
                 indices.length === items.length &&
