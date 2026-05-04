@@ -538,26 +538,41 @@ export async function sendCarouselSlideSelector(to: string, postId: string, slid
 }
 
 // Shown after each media item is added to a collecting_carousel session.
-// Buttons let the user finalize, reorder, or bail without typing commands.
+// Full list menu so user can pick the output surface or edit the set.
 export async function sendCarouselProgressButtons(to: string, postId: string, slideCount: number, isAtMax = false) {
+  const header = isAtMax
+    ? `🎞️ ${slideCount} slides — max reached`
+    : `📸 ${slideCount} slide${slideCount === 1 ? '' : 's'} collected`;
   const body = isAtMax
-    ? `🎞️ ${slideCount} slides — that's the max for a carousel! Ready to caption it?`
-    : slideCount === 1
-      ? `📸 1 slide collected. Send more media to build a carousel, or choose an action:`
-      : `📸 ${slideCount} slides collected. Send more, or choose an action:`;
+    ? 'Choose what to create, or send fewer slides first:'
+    : 'Send more media, or choose what to create:';
 
   return wa({
     messaging_product: 'whatsapp',
     to,
     type: 'interactive',
     interactive: {
-      type: 'button',
+      type: 'list',
+      header: { type: 'text', text: header },
       body: { text: body },
       action: {
-        buttons: [
-          { type: 'reply', reply: { id: `carousel_done:${postId}`,    title: '✅ Caption it' } },
-          { type: 'reply', reply: { id: `carousel_reorder:${postId}`, title: '🔀 Re-order' } },
-          { type: 'reply', reply: { id: `carousel_discard:${postId}`, title: '🗑️ Discard' } },
+        button: 'Choose action',
+        sections: [
+          {
+            title: 'Create',
+            rows: [
+              { id: `carousel_done:${postId}`,     title: '🎠 Carousel',    description: 'Write caption & post as a swipeable carousel' },
+              { id: `carousel_as_story:${postId}`, title: '📱 Story strip',  description: 'Post all slides to your 24h Story strip' },
+              { id: `carousel_as_reel:${postId}`,  title: '🎬 Reel',        description: 'Turn the video into a Reel post' },
+            ],
+          },
+          {
+            title: 'Edit',
+            rows: [
+              { id: `carousel_reorder:${postId}`,  title: '🔀 Re-order',    description: 'Change the slide sequence' },
+              { id: `carousel_discard:${postId}`,  title: '🗑️ Discard',     description: 'Delete everything and start over' },
+            ],
+          },
         ],
       },
     },

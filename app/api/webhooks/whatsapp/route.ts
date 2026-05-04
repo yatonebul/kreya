@@ -720,6 +720,24 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleCarouselFinish(from, post as any);
     return;
   }
+  if (action === 'carousel_as_story' && postId) {
+    const post = await getPostById(postId);
+    if (!post || post.state !== 'collecting_carousel') {
+      await sendText(from, '👌 That session has already been finalised.');
+      return;
+    }
+    await handleCarouselFinishAsStory(from, post as any);
+    return;
+  }
+  if (action === 'carousel_as_reel' && postId) {
+    const post = await getPostById(postId);
+    if (!post || post.state !== 'collecting_carousel') {
+      await sendText(from, '👌 That session has already been finalised.');
+      return;
+    }
+    await handleCarouselFinishAsReel(from, post as any);
+    return;
+  }
   if (action === 'carousel_reorder' && postId) {
     const post = await getPostById(postId);
     if (!post || post.state !== 'collecting_carousel') {
@@ -2499,6 +2517,92 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
       return `*${i + 2}.* ${trimmed}`;
     }).join('\n\n');
     await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap the caption:\n\n${others}`);
+  }
+}
+
+// All collected assets → multi-story draft (same logic as handleSpinStory but
+// from a live collecting session rather than a published post).
+async function handleCarouselFinishAsStory(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
+  const supabase = getSupabase();
+  const fresh = await getPostById(post.id);
+  const items: CarouselItem[] = (fresh?.media_items as CarouselItem[] | null) ?? [];
+
+  if (items.length === 0) {
+    await sendText(from, '⚠️ No media yet — send at least one photo or video first.');
+    return;
+  }
+
+  await sendText(from, `📱 Building ${items.length > 1 ? `${items.length} Stories` : 'your Story'} from your visuals...`);
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateStorySpin(
+    (fresh as any)?.source_prompt ?? `[${items.length} visual${items.length > 1 ? 's' : ''}]`,
+    profileContext ?? undefined,
+  );
+  const hook = spin?.hook ?? '✨';
+
+  await supabase.from('pending_posts').update({
+    state: 'pending_approval',
+    surface: 'story',
+    caption: hook,
+    image_url: items[0].url,
+    user_image_url: items[0].url,
+    image_source: 'user',
+    is_video: !!items[0].is_video,
+    ...(items.length > 1 ? { media_items: items } : { media_items: null }),
+  }).eq('id', post.id);
+
+  const storyCount = items.length;
+  await sendText(from,
+    storyCount > 1
+      ? `📱 *${storyCount} Stories ready*\n\nHook: *${hook}*\n\nAll ${storyCount} visuals will publish to your 24h Story strip. Tap *Approve* or use *Edit* to remove any slides.`
+      : `📱 *Story preview*\n\nHook: *${hook}*\n\nApprove to push to your 24h Story strip.`,
+  );
+  await sendPostPreview(from, items[0].url, hook, post.id, !!items[0].is_video, 'story', storyCount > 1 ? storyCount : undefined);
+}
+
+// First video in the collected set → Reel draft; remaining items discarded from session.
+async function handleCarouselFinishAsReel(from: string, post: { id: string; media_items: CarouselItem[] | null }) {
+  const supabase = getSupabase();
+  const fresh = await getPostById(post.id);
+  const items: CarouselItem[] = (fresh?.media_items as CarouselItem[] | null) ?? [];
+
+  const videoItem = items.find(i => i.is_video);
+  if (!videoItem) {
+    await sendText(from, '🎬 No video found in your slides — Reels need a video. Send a video and try again, or choose *🎠 Carousel* instead.');
+    await sendCarouselProgressButtons(from, post.id, items.length);
+    return;
+  }
+
+  await sendText(from, '🎬 Building your Reel draft...');
+
+  const [profileContext, recentCaptions] = await Promise.all([
+    getProfileContextForPhone(from),
+    getRecentCaptions(),
+  ]);
+  const captionPrompt = (fresh as any)?.source_prompt ?? '[No description — write a punchy Reel caption.]';
+  const variants = await generateCaptionVariants(captionPrompt, profileContext ?? undefined, recentCaptions, 'reels');
+  const caption = variants[0] ?? '';
+
+  await supabase.from('pending_posts').update({
+    state: 'pending_approval',
+    surface: 'reels',
+    caption,
+    image_url: videoItem.url,
+    user_image_url: videoItem.url,
+    image_source: 'user',
+    is_video: true,
+    media_items: null,
+    ...(variants.length > 1 ? { caption_variants: variants } : {}),
+  }).eq('id', post.id);
+
+  await sendPostPreview(from, videoItem.url, caption, post.id, true, 'reels');
+  if (variants.length > 1) {
+    const others = variants.slice(1).map((v, i) => {
+      const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
+      return `*${i + 2}.* ${trimmed}`;
+    }).join('\n\n');
+    await sendText(from, `💡 Try a different angle — reply *2* or *3* to swap:\n\n${others}`);
   }
 }
 
