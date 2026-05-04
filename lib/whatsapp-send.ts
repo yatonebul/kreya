@@ -41,6 +41,15 @@ async function wa(body: object): Promise<WaResult> {
   return { ok: true, data };
 }
 
+export function sendImageMessage(to: string, url: string, caption?: string): Promise<WaResult> {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'image',
+    image: { link: url, ...(caption ? { caption } : {}) },
+  });
+}
+
 export function sendText(to: string, text: string): Promise<WaResult> {
   return wa({
     messaging_product: 'whatsapp',

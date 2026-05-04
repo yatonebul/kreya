@@ -183,8 +183,7 @@ export async function generateCarouselSpin(
     `- ${slideCount} slides exactly. Arc: hook → setup → payoff → insight → CTA.\n` +
     `- headline: 10-15 chars max, all-caps optional, designed to read on a 1080x1080 image.\n` +
     `- body: ONE short line (under 90 chars), expands the headline.\n` +
-    `- imagePrompt: one cinematic background scene per slide. People shown from behind / silhouette only — never close-up faces. No text inside the image (the headline overlay handles that).\n` +
-    `- caption: the IG carousel caption itself, ~200 chars body + 3-5 hashtags. Hooks readers to swipe.`;
+    `- imagePrompt: one cinematic atmospheric background scene per slide. NO text, words, typography, signs, or letters anywhere in the image — pure visual atmosphere only. People shown from behind / silhouette only — never close-up faces.`;
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',

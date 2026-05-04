@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -659,11 +659,10 @@ async function handleDirectAiCarousel(
 
   const mediaResults = await Promise.all(
     spin.slides.map(async s => {
-      const imgPrompt = `${s.imagePrompt} | overlay text: "${s.headline}"`;
       try {
-        return await buildBrandedImage(imgPrompt, detectStyle(s.imagePrompt), from);
+        return await buildBrandedImage(s.imagePrompt, detectStyle(s.imagePrompt), from);
       } catch {
-        return { url: buildImageUrl(imgPrompt, 'realistic'), overflowed: false };
+        return { url: buildImageUrl(s.imagePrompt, 'realistic'), overflowed: false };
       }
     }),
   );
@@ -700,10 +699,10 @@ async function handleDirectAiCarousel(
     return;
   }
 
-  await sendText(
-    from,
-    `📑 *${slideCount}-slide carousel:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
-  );
+  // Show each slide as an image preview so the user can see what was generated
+  for (let i = 0; i < mediaItems.length; i++) {
+    await sendImageMessage(from, mediaItems[i].url, `Slide ${i + 1}/${mediaItems.length} — ${spin.slides[i].headline}`);
+  }
   await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
   if (overflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
@@ -726,11 +725,10 @@ async function handleGenerateAiSlidesForPost(from: string, post: any) {
 
   const mediaResults = await Promise.all(
     spin.slides.map(async s => {
-      const imgPrompt = `${s.imagePrompt} | overlay text: "${s.headline}"`;
       try {
-        return await buildBrandedImage(imgPrompt, detectStyle(s.imagePrompt), from);
+        return await buildBrandedImage(s.imagePrompt, detectStyle(s.imagePrompt), from);
       } catch {
-        return { url: buildImageUrl(imgPrompt, 'realistic'), overflowed: false };
+        return { url: buildImageUrl(s.imagePrompt, 'realistic'), overflowed: false };
       }
     }),
   );
@@ -2099,11 +2097,10 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   // slow/throttled generation doesn't abort the entire carousel.
   const mediaResults = await Promise.all(
     spin.slides.map(async s => {
-      const prompt = `${s.imagePrompt} | overlay text: "${s.headline}"`;
       try {
-        return await buildBrandedImage(prompt, detectStyle(s.imagePrompt), from);
+        return await buildBrandedImage(s.imagePrompt, detectStyle(s.imagePrompt), from);
       } catch {
-        return { url: buildImageUrl(prompt, 'realistic'), overflowed: false };
+        return { url: buildImageUrl(s.imagePrompt, 'realistic'), overflowed: false };
       }
     }),
   );
@@ -2141,10 +2138,9 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     return;
   }
 
-  await sendText(
-    from,
-    `📑 *Carousel storyboard:*\n\n${spin.slides.map((s, i) => `${i + 1}. *${s.headline}* — ${s.body}`).join('\n')}`,
-  );
+  for (let i = 0; i < mediaItems.length; i++) {
+    await sendImageMessage(from, mediaItems[i].url, `Slide ${i + 1}/${mediaItems.length} — ${spin.slides[i].headline}`);
+  }
   await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
   if (carouselOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
@@ -2339,12 +2335,14 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
     return;
   }
 
-  // Prefer existing user assets over AI generation — stories are strongest
-  // when they reuse the original photo/video the creator already approved.
+  // Only reuse existing assets if they are user-uploaded (not AI-generated at 1:1).
+  // AI carousel images are 1080x1080 and would look blurry in a 9:16 Story frame —
+  // in that case fall through to fresh generation at 1080x1920.
+  const sourceIsAiGenerated = source.image_source === 'ai';
   const sourceItems: CarouselItem[] = Array.isArray(source.media_items) ? source.media_items as CarouselItem[] : [];
-  const existingAssets: CarouselItem[] = sourceItems.length > 0
+  const existingAssets: CarouselItem[] = !sourceIsAiGenerated && sourceItems.length > 0
     ? sourceItems
-    : source.user_image_url
+    : !sourceIsAiGenerated && source.user_image_url
       ? [{ url: source.user_image_url as string, is_video: !!(source.is_video) }]
       : [];
 
@@ -2352,7 +2350,7 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
 
   await sendText(from, firstAsset
     ? `📱 Building ${existingAssets.length > 1 ? `${existingAssets.length} Stories` : 'your Story'} from your original visuals...`
-    : '🌅 Spinning your idea into a Story — generating the visual...');
+    : '🌅 Generating your Story at portrait resolution...');
 
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateStorySpin(source.caption, profileContext ?? undefined);
@@ -2372,11 +2370,15 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
   let isVideo = false;
   let storyOverflowed = false;
 
-  if (firstAsset) {
+  const sourceIsAi = source.image_source === 'ai';
+  if (firstAsset && !sourceIsAi) {
+    // User-uploaded originals — use as-is
     imageUrl = firstAsset.url;
     imageSource = 'user';
     isVideo = !!firstAsset.is_video;
   } else {
+    // No originals, or originals are AI-generated (e.g. carousel slides) —
+    // generate fresh at 9:16 portrait so stories aren't blurry/cropped
     const built = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from, { w: 1080, h: 1920 });
     imageUrl = built.url;
     imageSource = 'ai';
@@ -2954,33 +2956,62 @@ async function handleCarouselFinishAsStory(from: string, post: { id: string; med
     return;
   }
 
-  await sendText(from, `📱 Building ${items.length > 1 ? `${items.length} Stories` : 'your Story'} from your visuals...`);
+  const isAiSource = (fresh as any)?.image_source === 'ai';
+  await sendText(from, `📱 Building ${items.length > 1 ? `${items.length} Stories` : 'your Story'}${isAiSource ? ' at Story resolution…' : ' from your visuals…'}`);
 
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateStorySpin(
-    (fresh as any)?.source_prompt ?? `[${items.length} visual${items.length > 1 ? 's' : ''}]`,
+    (fresh as any)?.source_prompt ?? (fresh as any)?.caption ?? `[${items.length} visual${items.length > 1 ? 's' : ''}]`,
     profileContext ?? undefined,
   );
   const hook = spin?.hook ?? '✨';
+
+  // AI-generated carousel images are 1:1 — regenerate at 9:16 portrait for Story.
+  // User-uploaded originals are used as-is (IG handles framing).
+  let storyItems: CarouselItem[] = items;
+  if (isAiSource && spin) {
+    const storyPrompts = items.length === 1
+      ? [spin.imagePrompt]
+      : await (async () => {
+          const multiSpin = await generateCarouselSpin(
+            (fresh as any)?.caption ?? '',
+            profileContext ?? undefined,
+            items.length,
+          );
+          return multiSpin ? multiSpin.slides.map(s => s.imagePrompt) : items.map(() => spin.imagePrompt);
+        })();
+
+    const rebuilt = await Promise.all(
+      storyPrompts.map(async p => {
+        try {
+          const r = await buildBrandedImage(p, detectStyle(p), from, { w: 1080, h: 1920 });
+          return { url: r.url, is_video: false } as CarouselItem;
+        } catch {
+          return { url: buildImageUrl(p, 'realistic', { w: 1080, h: 1920 }), is_video: false } as CarouselItem;
+        }
+      }),
+    );
+    storyItems = rebuilt;
+  }
 
   await supabase.from('pending_posts').update({
     state: 'pending_approval',
     surface: 'story',
     caption: hook,
-    image_url: items[0].url,
-    user_image_url: items[0].url,
-    image_source: 'user',
-    is_video: !!items[0].is_video,
-    ...(items.length > 1 ? { media_items: items } : { media_items: null }),
+    image_url: storyItems[0].url,
+    user_image_url: storyItems[0].url,
+    image_source: isAiSource ? 'ai' : 'user',
+    is_video: !!storyItems[0].is_video,
+    ...(storyItems.length > 1 ? { media_items: storyItems } : { media_items: null }),
   }).eq('id', post.id);
 
-  const storyCount = items.length;
+  const storyCount = storyItems.length;
   await sendText(from,
     storyCount > 1
       ? `📱 *${storyCount} Stories ready*\n\nHook: *${hook}*\n\nAll ${storyCount} visuals will publish to your 24h Story strip. Tap *Approve* or use *Edit* to remove any slides.`
       : `📱 *Story preview*\n\nHook: *${hook}*\n\nApprove to push to your 24h Story strip.`,
   );
-  await sendPostPreview(from, items[0].url, hook, post.id, !!items[0].is_video, 'story', storyCount > 1 ? storyCount : undefined);
+  await sendPostPreview(from, storyItems[0].url, hook, post.id, !!storyItems[0].is_video, 'story', storyCount > 1 ? storyCount : undefined);
 }
 
 // First video in the collected set → Reel draft; remaining items discarded from session.
