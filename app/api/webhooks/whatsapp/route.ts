@@ -305,9 +305,9 @@ async function processWebhook(body: any) {
                 indices.every((i: number) => i >= 0 && i < items.length) &&
                 new Set(indices).size === indices.length;
               if (isValid) {
-                const reordered = indices.map((i: number) => items[i]);
+                const reordered: CarouselItem[] = indices.map((i: number) => items[i]);
                 await getSupabase().from('pending_posts').update({ media_items: reordered }).eq('id', collecting.id);
-                const list = reordered.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+                const list = reordered.map((it: CarouselItem, i: number) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
                 await sendCarouselProgressButtons(from, collecting.id, reordered.length);
                 await sendText(from, `✅ Reordered!\n\n${list}`);
                 return;
@@ -626,7 +626,7 @@ async function getRecentCaptions(): Promise<string[]> {
   const { data } = await getSupabase()
     .from('pending_posts').select('caption').eq('state', 'published')
     .order('created_at', { ascending: false }).limit(5);
-  return data?.map(r => r.caption) ?? [];
+  return data?.map((r: any) => r.caption) ?? [];
 }
 
 async function handleButtonReply(from: string, action: string, postId: string | null) {
@@ -1234,7 +1234,7 @@ async function handleStatus(from: string) {
     return;
   }
 
-  const lines = posts.map(p => {
+  const lines = posts.map((p: any) => {
     const preview = p.caption ? p.caption.slice(0, 60) + (p.caption.length > 60 ? '…' : '') : '(no caption)';
     if (p.state === 'scheduled' && p.scheduled_for) {
       const when = new Date(p.scheduled_for).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Prague' });
@@ -1358,7 +1358,7 @@ async function handleContentSearch(from: string, topic: string) {
     return;
   }
 
-  const lines = matches.map((m, i) => {
+  const lines = matches.map((m: any, i: number) => {
     const date = m.published_at
       ? new Date(m.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       : '?';
@@ -1467,7 +1467,7 @@ async function handleJournalList(from: string) {
     return;
   }
 
-  const lines = entries.map((e, i) => {
+  const lines = entries.map((e: any, i: number) => {
     const date    = new Date(e.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     const snippet = (e.caption ?? '').slice(0, 120).replace(/\n+/g, ' ');
     return `*${i + 1}.* ${date}\n   _${snippet}${e.caption && e.caption.length > 120 ? '…' : ''}_`;
@@ -1516,7 +1516,7 @@ async function handleListAccounts(from: string) {
     return;
   }
 
-  const lines = accounts.map(a => {
+  const lines = accounts.map((a: any) => {
     const days = a.token_expires_at
       ? Math.ceil((new Date(a.token_expires_at).getTime() - Date.now()) / 86_400_000)
       : null;
@@ -1546,9 +1546,9 @@ async function handleUseAccount(from: string, handle: string) {
     return;
   }
 
-  const match = accounts.find(a => a.account_name.toLowerCase() === target);
+  const match = accounts.find((a: any) => a.account_name.toLowerCase() === target);
   if (!match) {
-    const choices = accounts.map(a => `• @${a.account_name}`).join('\n');
+    const choices = accounts.map((a: any) => `• @${a.account_name}`).join('\n');
     await sendText(from, `🤔 No *@${handle}* on your phone.\n\nConnected:\n${choices}`);
     return;
   }
@@ -1731,7 +1731,7 @@ async function handleEngagementCommand(
   }
 
   if (cmd.mode === 'status') {
-    const lines = accounts.map(a =>
+    const lines = accounts.map((a: any) =>
       `• *@${a.account_name}*: DM ${a.dm_autoreply_enabled ? '✅ on' : '⚪️ off'} · Comments ${a.comment_autoreply_enabled ? '✅ on' : '⚪️ off'}`,
     ).join('\n');
     await sendText(
