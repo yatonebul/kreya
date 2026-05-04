@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendRetryButton } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendStorySlideManager, sendRetryButton } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -741,6 +741,28 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     return;
   }
 
+  // Remove a single slide from a multi-story draft
+  if (action === 'story_remove' && postId) {
+    const parts = postId.split(':');
+    const actualPostId = parts[0];
+    const removeIdx = parts[1] !== undefined ? parseInt(parts[1], 10) : -1;
+    const post = await getPostById(actualPostId);
+    if (!post || !Array.isArray(post.media_items)) { await sendText(from, 'Post not found.'); return; }
+    const items = post.media_items as CarouselItem[];
+    if (removeIdx < 0 || removeIdx >= items.length) { await sendText(from, 'Invalid slide number.'); return; }
+    const updated = items.filter((_: CarouselItem, i: number) => i !== removeIdx);
+    await getSupabase().from('pending_posts').update({ media_items: updated.length > 0 ? updated : null, image_url: updated[0]?.url ?? post.image_url }).eq('id', actualPostId);
+    if (updated.length === 0) {
+      await sendText(from, '🗑️ All slides removed — draft discarded.');
+      await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', actualPostId);
+      return;
+    }
+    const list = updated.map((it: CarouselItem, i: number) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+    await sendText(from, `🗑️ Removed slide ${removeIdx + 1}.\n\n*Remaining ${updated.length} Stories:*\n${list}`);
+    await sendPostPreview(from, updated[0].url, post.caption, actualPostId, !!updated[0].is_video, 'story', updated.length > 1 ? updated.length : undefined);
+    return;
+  }
+
   // Edit action sub-menu handlers
   if (action === 'edit_caption' && postId) {
     const post = await getPostById(postId);
@@ -779,18 +801,21 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await sendText(from, '🎬 *Replace the video:*\n\nSend your new video now, or reply "cancel" to go back.');
     return;
   }
-  // Carousel slide picker: show list of slides so user can select one to replace
+  // Carousel/story slide picker: replace for carousels, remove for stories
   if (action === 'edit_slide_picker' && postId) {
     const post = await getPostById(postId);
     if (!post) { await sendText(from, 'Post not found.'); return; }
     const items: CarouselItem[] = Array.isArray(post.media_items) ? post.media_items : [];
     if (items.length < 2) {
-      // Fallback to normal image edit if somehow not a carousel
       await getSupabase().from('pending_posts').update({ state: 'awaiting_image_style' }).eq('id', postId);
       await sendText(from, '🖼️ *Regenerate the image:*\n\nWhat style? (e.g. "Moody cinematic", "3D illustration")');
       return;
     }
-    await sendCarouselSlideSelector(from, postId, items.length);
+    if (post.surface === 'story') {
+      await sendStorySlideManager(from, postId, items);
+    } else {
+      await sendCarouselSlideSelector(from, postId, items.length);
+    }
     return;
   }
   // Specific slide selected for replacement
@@ -898,27 +923,55 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     }
 
     const carouselItems: CarouselItem[] | null = Array.isArray(post.media_items) ? post.media_items : null;
-    const isCarousel = carouselItems !== null && carouselItems.length > 1;
+    const isCarousel = carouselItems !== null && carouselItems.length > 1 && post.surface !== 'story';
     const isStory = post.surface === 'story';
+    const storyItems: CarouselItem[] = isStory && Array.isArray(post.media_items) && (post.media_items as CarouselItem[]).length > 1
+      ? post.media_items as CarouselItem[]
+      : [];
+    const isMultiStory = storyItems.length > 1;
     const postSurface: 'feed' | 'reels' = post.surface === 'reels' ? 'reels' : (post.is_video ? 'reels' : 'feed');
 
     await sendText(
       from,
       isCarousel
-        ? `⏳ Publishing carousel (${carouselItems.length} slides)...`
-        : isStory
-          ? '⏳ Publishing to your Story...'
-          : postSurface === 'reels'
-            ? '⏳ Publishing your Reel to Instagram...'
-            : '⏳ Publishing to Instagram...',
+        ? `⏳ Publishing carousel (${carouselItems!.length} slides)...`
+        : isMultiStory
+          ? `⏳ Publishing ${storyItems.length} Stories to your strip...`
+          : isStory
+            ? '⏳ Publishing to your Story...'
+            : postSurface === 'reels'
+              ? '⏳ Publishing your Reel to Instagram...'
+              : '⏳ Publishing to Instagram...',
     );
     let result;
     try {
-      result = isCarousel
-        ? await publishCarouselToInstagram(from, post.caption, carouselItems)
-        : isStory
-          ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
-          : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
+      if (isMultiStory) {
+        // Publish each asset as a separate story, collecting the last successful ID
+        let lastId = '';
+        let lastUrl: string | undefined;
+        let failed = 0;
+        for (const item of storyItems) {
+          try {
+            const r = await publishStoryToInstagram(from, item.url, item.is_video ?? false);
+            lastId = r.postId;
+            lastUrl = r.postUrl;
+            await new Promise(res => setTimeout(res, 1500)); // small gap between stories
+          } catch {
+            failed++;
+          }
+        }
+        if (!lastId) throw new Error('All story items failed to publish');
+        result = { postId: lastId, postUrl: lastUrl, status: 'success' };
+        if (failed > 0) {
+          await sendText(from, `⚠️ ${failed} of ${storyItems.length} Stories couldn't be published — the rest went through.`);
+        }
+      } else {
+        result = isCarousel
+          ? await publishCarouselToInstagram(from, post.caption, carouselItems!)
+          : isStory
+            ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
+            : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
+      }
     } catch (err: any) {
       if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
         const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
@@ -1852,15 +1905,16 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
   // Prefer existing user assets over AI generation — stories are strongest
   // when they reuse the original photo/video the creator already approved.
   const sourceItems: CarouselItem[] = Array.isArray(source.media_items) ? source.media_items as CarouselItem[] : [];
-  const existingAsset: { url: string; isVideo: boolean } | null =
-    source.user_image_url
-      ? { url: source.user_image_url as string, isVideo: !!(source.is_video) }
-      : sourceItems.length > 0
-        ? { url: sourceItems[0].url, isVideo: !!sourceItems[0].is_video }
-        : null;
+  const existingAssets: CarouselItem[] = sourceItems.length > 0
+    ? sourceItems
+    : source.user_image_url
+      ? [{ url: source.user_image_url as string, is_video: !!(source.is_video) }]
+      : [];
 
-  await sendText(from, existingAsset
-    ? '📱 Building your Story using your original visual...'
+  const firstAsset = existingAssets[0] ?? null;
+
+  await sendText(from, firstAsset
+    ? `📱 Building ${existingAssets.length > 1 ? `${existingAssets.length} Stories` : 'your Story'} from your original visuals...`
     : '🌅 Spinning your idea into a Story — generating the visual...');
 
   const profileContext = await getProfileContextForPhone(from);
@@ -1881,13 +1935,11 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
   let isVideo = false;
   let storyOverflowed = false;
 
-  if (existingAsset) {
-    // Use the original photo/video directly — no AI generation
-    imageUrl = existingAsset.url;
+  if (firstAsset) {
+    imageUrl = firstAsset.url;
     imageSource = 'user';
-    isVideo = existingAsset.isVideo;
+    isVideo = !!firstAsset.is_video;
   } else {
-    // No user asset — generate a vertical 9:16 branded image
     const built = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from, { w: 1080, h: 1920 });
     imageUrl = built.url;
     imageSource = 'ai';
@@ -1911,12 +1963,14 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
       whatsapp_phone: from,
       caption: spin.hook,
       image_url: imageUrl,
-      user_image_url: existingAsset?.url ?? null,
+      user_image_url: firstAsset?.url ?? null,
       image_source: imageSource,
       is_video: isVideo,
       surface: 'story',
       state: 'pending_approval',
       parent_post_id: sourcePostId,
+      // Store all assets so the approve handler publishes each as a separate story
+      ...(existingAssets.length > 1 ? { media_items: existingAssets } : {}),
     })
     .select('id')
     .single();
@@ -1925,14 +1979,14 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
     return;
   }
 
+  const storyCount = existingAssets.length > 1 ? existingAssets.length : 1;
   await sendText(
     from,
-    `📱 *Story preview*\n\n` +
-    `Hook (overlay): *${spin.hook}*\n\n` +
-    `Stories don't have a caption — the visual carries the message. ` +
-    `Approve to push to your 24h Story strip.`,
+    storyCount > 1
+      ? `📱 *${storyCount} Stories ready*\n\nHook: *${spin.hook}*\n\nAll ${storyCount} visuals will be published to your 24h Story strip. Tap *Approve* or use *Edit* to remove any slides.`
+      : `📱 *Story preview*\n\nHook (overlay): *${spin.hook}*\n\nStories don't have a caption — the visual carries the message. Approve to push to your 24h Story strip.`,
   );
-  await sendPostPreview(from, imageUrl, spin.hook, post.id, isVideo, 'story');
+  await sendPostPreview(from, imageUrl, spin.hook, post.id, isVideo, 'story', storyCount > 1 ? storyCount : undefined);
   if (storyOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
   }

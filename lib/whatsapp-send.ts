@@ -543,3 +543,30 @@ export async function sendCarouselProgressButtons(to: string, postId: string, sl
     },
   });
 }
+
+// For multi-story drafts: list each asset with a "Remove" row so user can
+// prune the set before publishing. Unlike carousel, stories are independent
+// so removal makes more sense than replacement.
+export async function sendStorySlideManager(to: string, postId: string, items: { url: string; is_video?: boolean }[]) {
+  const rows = items.map((it, i) => ({
+    id: `story_remove:${postId}:${i}`,
+    title: `🗑️ Remove ${it.is_video ? 'Video' : 'Photo'} ${i + 1}`,
+    description: `Drop slide ${i + 1} from your Story strip`,
+  }));
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      header: { type: 'text', text: `📱 ${items.length} Stories ready` },
+      body: { text: 'Tap a slide to remove it from the batch, or approve to publish all:' },
+      footer: { text: 'Removed slides are dropped permanently' },
+      action: {
+        button: 'Manage slides',
+        sections: [{ title: 'Remove a slide', rows }],
+      },
+    },
+  });
+}
