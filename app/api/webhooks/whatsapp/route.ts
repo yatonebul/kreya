@@ -305,6 +305,12 @@ async function processWebhook(body: any) {
                 indices.every((i: number) => i >= 0 && i < items.length) &&
                 new Set(indices).size === indices.length;
               if (isValid) {
+                const isAlreadyInOrder = indices.every((idx: number, pos: number) => idx === pos);
+                if (isAlreadyInOrder) {
+                  await sendText(from, '👌 That\'s already the current order — no changes made.');
+                  await sendCarouselProgressButtons(from, collecting.id, items.length);
+                  return;
+                }
                 const reordered: CarouselItem[] = indices.map((i: number) => items[i]);
                 await getSupabase().from('pending_posts').update({ media_items: reordered }).eq('id', collecting.id);
                 const list = formatSlideList(reordered, collecting.id);
