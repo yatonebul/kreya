@@ -360,8 +360,22 @@ export async function publishCarouselToInstagram(
       throw new Error(`Carousel container error after retries: ${JSON.stringify(parentData)}`);
     }
 
-    // Small wait before publishing
-    await new Promise(r => setTimeout(r, 5000));
+    // Poll until the parent container reaches FINISHED before publishing.
+    // Instagram returns error_subcode 2207027 if media_publish is called while
+    // the container is still IN_PROGRESS — fixed sleep is unreliable for videos.
+    const pollStart = Date.now();
+    while (Date.now() - pollStart < 120_000) {
+      await new Promise(r => setTimeout(r, 5000));
+      const statusRes = await fetch(
+        `https://graph.instagram.com/v21.0/${parentData.id}?fields=status_code&access_token=${accessToken}`,
+      );
+      const { status_code } = await statusRes.json() as { status_code?: string };
+      if (status_code === 'FINISHED') break;
+      if (status_code === 'ERROR' || status_code === 'EXPIRED') {
+        throw new Error(`Carousel container ${parentData.id} entered status: ${status_code}`);
+      }
+      // IN_PROGRESS — keep polling
+    }
 
     // 3. Publish
     const publishRes = await fetch(
