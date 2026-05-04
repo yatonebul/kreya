@@ -11,15 +11,16 @@ function getSupabase() {
 export default async function MediaPreviewPage({
   params,
 }: {
-  params: { postId: string; idx: string };
+  params: Promise<{ postId: string; idx: string }>;
 }) {
-  const idx = parseInt(params.idx, 10);
+  const { postId, idx: idxStr } = await params;
+  const idx = parseInt(idxStr, 10);
   if (isNaN(idx) || idx < 0) notFound();
 
   const { data: post } = await getSupabase()
     .from('pending_posts')
     .select('media_items')
-    .eq('id', params.postId)
+    .eq('id', postId)
     .maybeSingle();
 
   const items: { url: string; is_video?: boolean }[] =
