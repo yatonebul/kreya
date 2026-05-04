@@ -516,3 +516,30 @@ export async function sendCarouselSlideSelector(to: string, postId: string, slid
     },
   });
 }
+
+// Shown after each media item is added to a collecting_carousel session.
+// Buttons let the user finalize, reorder, or bail without typing commands.
+export async function sendCarouselProgressButtons(to: string, postId: string, slideCount: number, isAtMax = false) {
+  const body = isAtMax
+    ? `🎞️ ${slideCount} slides — that's the max for a carousel! Ready to caption it?`
+    : slideCount === 1
+      ? `📸 1 slide collected. Send more media to build a carousel, or choose an action:`
+      : `📸 ${slideCount} slides collected. Send more, or choose an action:`;
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `carousel_done:${postId}`,    title: '✅ Caption it' } },
+          { type: 'reply', reply: { id: `carousel_reorder:${postId}`, title: '🔀 Re-order' } },
+          { type: 'reply', reply: { id: `carousel_discard:${postId}`, title: '🗑️ Discard' } },
+        ],
+      },
+    },
+  });
+}

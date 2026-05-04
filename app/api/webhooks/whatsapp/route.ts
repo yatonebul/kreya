@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendRetryButton } from '@/lib/whatsapp-send';
+import { sendText, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendRetryButton } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -282,7 +282,39 @@ async function processWebhook(body: any) {
             const txt = message.text?.body ?? '';
             if (isCarouselFinishCommand(txt)) { await handleCarouselFinish(from, collecting); return; }
             if (/^cancel/i.test(txt.trim()))  { await handleCarouselCancel(from, collecting); return; }
-            await sendText(from, '📸 Send more photos/videos, or type *done* to publish — *cancel* to bail.');
+
+            // "reorder" → show current order and ask for new sequence
+            if (/^re-?order$/i.test(txt.trim())) {
+              const items: CarouselItem[] = Array.isArray(collecting.media_items) ? collecting.media_items : [];
+              if (items.length < 2) {
+                await sendText(from, '📸 Send at least 2 slides before reordering.');
+                return;
+              }
+              const list = items.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+              await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with the new order as numbers, e.g. *2,1,3*.`);
+              return;
+            }
+
+            // "2,1,3" or "3, 1, 2" → apply reorder
+            const reorderMatch = txt.trim().match(/^(\d+(?:\s*,\s*\d+)+)$/);
+            if (reorderMatch) {
+              const indices = reorderMatch[1].split(',').map(s => parseInt(s.trim(), 10) - 1);
+              const items: CarouselItem[] = Array.isArray(collecting.media_items) ? collecting.media_items : [];
+              const isValid =
+                indices.length === items.length &&
+                indices.every(i => i >= 0 && i < items.length) &&
+                new Set(indices).size === indices.length;
+              if (isValid) {
+                const reordered = indices.map(i => items[i]);
+                await getSupabase().from('pending_posts').update({ media_items: reordered }).eq('id', collecting.id);
+                const list = reordered.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+                await sendCarouselProgressButtons(from, collecting.id, reordered.length);
+                await sendText(from, `✅ Reordered!\n\n${list}`);
+                return;
+              }
+            }
+
+            await sendCarouselProgressButtons(from, collecting.id, Array.isArray(collecting.media_items) ? collecting.media_items.length : 0);
             return;
           }
           if (messageType === 'image') {
@@ -675,6 +707,37 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     const actualPostId = parts[0];
     const retryCount = parts[1] ? (parseInt(parts[1], 10) || 0) : 0;
     await handleSpinStory(from, actualPostId, retryCount);
+    return;
+  }
+
+  // Carousel collection action buttons
+  if (action === 'carousel_done' && postId) {
+    const post = await getPostById(postId);
+    if (!post || post.state !== 'collecting_carousel') {
+      await sendText(from, '👌 That session has already been finalised.');
+      return;
+    }
+    await handleCarouselFinish(from, post as any);
+    return;
+  }
+  if (action === 'carousel_reorder' && postId) {
+    const post = await getPostById(postId);
+    if (!post || post.state !== 'collecting_carousel') {
+      await sendText(from, '👌 That session is no longer active.');
+      return;
+    }
+    const items: CarouselItem[] = Array.isArray(post.media_items) ? post.media_items : [];
+    if (items.length < 2) {
+      await sendText(from, '📸 Nothing to reorder yet — send at least 2 slides first.');
+      return;
+    }
+    const list = items.map((it, i) => `${i + 1}. ${it.is_video ? '🎬 Video' : '📷 Photo'}`).join('\n');
+    await sendText(from, `🔀 *Current order:*\n\n${list}\n\nReply with your preferred order as numbers, e.g. *2,1,3* to put slide 2 first.`);
+    return;
+  }
+  if (action === 'carousel_discard' && postId) {
+    const post = await getPostById(postId);
+    if (post) await handleCarouselCancel(from, post);
     return;
   }
 
@@ -1786,7 +1849,19 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
     return;
   }
 
-  await sendText(from, '🌅 Spinning your idea into a Story — generating the visual...');
+  // Prefer existing user assets over AI generation — stories are strongest
+  // when they reuse the original photo/video the creator already approved.
+  const sourceItems: CarouselItem[] = Array.isArray(source.media_items) ? source.media_items as CarouselItem[] : [];
+  const existingAsset: { url: string; isVideo: boolean } | null =
+    source.user_image_url
+      ? { url: source.user_image_url as string, isVideo: !!(source.is_video) }
+      : sourceItems.length > 0
+        ? { url: sourceItems[0].url, isVideo: !!sourceItems[0].is_video }
+        : null;
+
+  await sendText(from, existingAsset
+    ? '📱 Building your Story using your original visual...'
+    : '🌅 Spinning your idea into a Story — generating the visual...');
 
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateStorySpin(source.caption, profileContext ?? undefined);
@@ -1801,10 +1876,23 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
     return;
   }
 
-  // Vertical 9:16 image with the hook baked into the prompt so it appears
-  // as overlay text. detectStyle picks photoreal vs illustration based
-  // on prompt vocabulary.
-  const { url: imageUrl, overflowed: storyOverflowed } = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from, { w: 1080, h: 1920 });
+  let imageUrl: string;
+  let imageSource: string;
+  let isVideo = false;
+  let storyOverflowed = false;
+
+  if (existingAsset) {
+    // Use the original photo/video directly — no AI generation
+    imageUrl = existingAsset.url;
+    imageSource = 'user';
+    isVideo = existingAsset.isVideo;
+  } else {
+    // No user asset — generate a vertical 9:16 branded image
+    const built = await buildBrandedImage(spin.imagePrompt, detectStyle(spin.imagePrompt), from, { w: 1080, h: 1920 });
+    imageUrl = built.url;
+    imageSource = 'ai';
+    storyOverflowed = built.overflowed;
+  }
 
   // Discard conflicting drafts so the Story has a clean lane
   const { data: stale } = await supabase
@@ -1817,17 +1905,15 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
     if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
   }
 
-  // Stories have no IG caption — store the hook so the preview text
-  // shows it. Publishing path uses publishStoryToInstagram which skips
-  // the caption param entirely.
   const { data: post } = await supabase
     .from('pending_posts')
     .insert({
       whatsapp_phone: from,
       caption: spin.hook,
       image_url: imageUrl,
-      image_source: 'ai',
-      is_video: false,
+      user_image_url: existingAsset?.url ?? null,
+      image_source: imageSource,
+      is_video: isVideo,
       surface: 'story',
       state: 'pending_approval',
       parent_post_id: sourcePostId,
@@ -1841,12 +1927,12 @@ async function handleSpinStory(from: string, sourcePostId: string, retryCount = 
 
   await sendText(
     from,
-    `🌅 *Story preview*\n\n` +
+    `📱 *Story preview*\n\n` +
     `Hook (overlay): *${spin.hook}*\n\n` +
     `Stories don't have a caption — the visual carries the message. ` +
     `Approve to push to your 24h Story strip.`,
   );
-  await sendPostPreview(from, imageUrl, spin.hook, post.id, false, 'story');
+  await sendPostPreview(from, imageUrl, spin.hook, post.id, isVideo, 'story');
   if (storyOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — using standard generation for the rest of today. [Upgrade quota at ${APP_URL}/account]`);
   }
@@ -1979,14 +2065,7 @@ async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId:
     p_item: { url, is_video: true },
   });
   const count = typeof newCount === 'number' ? newCount : 1;
-
-  if (count >= 10) {
-    await sendText(from, `🎬 Video ${count} added — that's the max! Type *done* to publish.`);
-  } else if (count === 1) {
-    await sendText(from, '🎬 Got your video! Send more photos/videos to make a carousel, or type *done* to post it as a Reel.');
-  } else {
-    await sendText(from, `🎬 Video added (slide ${count}). Send more, or type *done* to publish your ${count}-slide carousel.`);
-  }
+  await sendCarouselProgressButtons(from, sessionId, count, count >= 10);
 }
 
 // Handles any image sent outside an active edit flow or collecting_carousel session.
@@ -2149,13 +2228,7 @@ async function handleCarouselAppend(from: string, post: { id: string; media_item
     p_item: { url, is_video: false },
   });
   const count = typeof newCount === 'number' ? newCount : (post.media_items ?? []).length + 1;
-
-  if (count >= 10) {
-    await sendText(from, `📸 Photo ${count} added — that's the max! Type *done* to publish your carousel.`);
-  } else {
-    const remaining = 10 - count;
-    await sendText(from, `📸 Photo ${count} added. Type *done* to publish, or send up to ${remaining} more.`);
-  }
+  await sendCarouselProgressButtons(from, post.id, count, count >= 10);
 }
 
 // Appends a video item to an active carousel session.
@@ -2181,12 +2254,7 @@ async function handleCarouselAppendVideo(from: string, post: { id: string; media
     p_item: { url, is_video: true },
   });
   const count = typeof newCount === 'number' ? newCount : (post.media_items ?? []).length + 1;
-
-  if (count >= 10) {
-    await sendText(from, `🎬 Video added (slide ${count}) — that's the max! Type *done* to publish.`);
-  } else {
-    await sendText(from, `🎬 Video added (slide ${count}). Send more photos/videos, or type *done* to publish.`);
-  }
+  await sendCarouselProgressButtons(from, post.id, count, count >= 10);
 }
 
 // Finds an active collecting_carousel session that a burst video should join.
