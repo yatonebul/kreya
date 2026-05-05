@@ -20,30 +20,6 @@ function getSupabase() {
   );
 }
 
-// Escape special chars for FFmpeg drawtext filter
-function escapeDrawtext(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/:/g, '\\:')
-    .replace(/%/g, '\\%');
-}
-
-function wrapLines(text: string, maxChars = 38): string {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    if ((current + ' ' + word).trim().length > maxChars && current.length) {
-      lines.push(current.trim());
-      current = word;
-    } else {
-      current = (current + ' ' + word).trim();
-    }
-  }
-  if (current) lines.push(current.trim());
-  return lines.join('\n');
-}
 
 // Single-pass Ken Burns + drawtext at 720×1280 (much faster than 1080p + separate burn pass)
 async function renderWithCaption(imageUrl: string, caption: string): Promise<string> {
@@ -56,15 +32,14 @@ async function renderWithCaption(imageUrl: string, caption: string): Promise<str
     if (!res.ok) throw new Error(`Image download failed: ${res.status}`);
     await fs.writeFile(inPath, Buffer.from(await res.arrayBuffer()));
 
-    const wrapped = escapeDrawtext(wrapLines(caption, 38));
-
     // 4 s × 25 fps = 100 frames; zoom step = 0.5 / 100 = 0.005
+    // drawtext requires libfreetype which is not in ffmpeg-static — caption
+    // is sent as the WhatsApp message text via sendPostPreview instead.
     const vf = [
       'scale=1440:2560:force_original_aspect_ratio=increase',
       'crop=1440:2560',
       "zoompan=z='min(zoom+0.005,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=100:s=720x1280:fps=25",
       'setsar=1',
-      `drawtext=text='${wrapped}':fontsize=30:fontcolor=white:font=sans-serif:line_spacing=6:box=1:boxcolor=black@0.55:boxborderw=14:x=(w-text_w)/2:y=h-text_h-50`,
     ].join(',');
 
     await new Promise<void>((resolve, reject) => {
