@@ -47,6 +47,7 @@ function wrapLines(text: string, maxChars = 38): string {
 
 // Single-pass Ken Burns + drawtext at 720×1280 (much faster than 1080p + separate burn pass)
 async function renderWithCaption(imageUrl: string, caption: string): Promise<string> {
+  if (!ffmpegPath) throw new Error('ffmpeg binary not found — check includeFiles in vercel.json');
   const inPath  = path.join(os.tmpdir(), `kreya-src-${Date.now()}.jpg`);
   const outPath = path.join(os.tmpdir(), `kreya-reel-${Date.now()}.mp4`);
 

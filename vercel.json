@@ -3,6 +3,12 @@
   "buildCommand": "next build --webpack",
   "outputDirectory": ".next",
   "installCommand": "npm install",
+  "functions": {
+    "app/api/video/render-reel/route.ts": {
+      "maxDuration": 300,
+      "includeFiles": "node_modules/ffmpeg-static/**"
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/refresh-instagram-tokens",
