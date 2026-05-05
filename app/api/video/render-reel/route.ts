@@ -32,25 +32,24 @@ async function renderWithCaption(imageUrl: string, caption: string): Promise<str
     if (!res.ok) throw new Error(`Image download failed: ${res.status}`);
     await fs.writeFile(inPath, Buffer.from(await res.arrayBuffer()));
 
-    // 4 s × 25 fps = 100 frames; zoom step = 0.5 / 100 = 0.005
-    // drawtext requires libfreetype which is not in ffmpeg-static — caption
-    // is sent as the WhatsApp message text via sendPostPreview instead.
+    // zoompan is too CPU-intensive for Vercel Lambda (times out at 300 s).
+    // Static image→MP4 with ultrafast preset renders in ~2 s.
+    // Ken Burns will be wired to a GPU worker (Modal/Replicate) in a future pass.
     const vf = [
-      'scale=1440:2560:force_original_aspect_ratio=increase',
-      'crop=1440:2560',
-      "zoompan=z='min(zoom+0.005,1.5)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=100:s=720x1280:fps=25",
+      'scale=720:1280:force_original_aspect_ratio=decrease',
+      'pad=720:1280:(ow-iw)/2:(oh-ih)/2:black',
       'setsar=1',
     ].join(',');
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg()
         .input(inPath)
-        .inputOptions(['-loop', '1', '-t', '4'])
+        .inputOptions(['-loop', '1', '-t', '5'])
         .videoFilter(vf)
         .outputOptions([
           '-c:v', 'libx264',
-          '-preset', 'fast',
-          '-crf', '24',
+          '-preset', 'ultrafast',
+          '-crf', '26',
           '-pix_fmt', 'yuv420p',
           '-movflags', '+faststart',
           '-an',
