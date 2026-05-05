@@ -1945,17 +1945,22 @@ async function handleReelFromImage(from: string, sessionId: string) {
     return;
   }
 
-  // Fire-and-forget to the dedicated render endpoint (maxDuration=300).
-  // We intentionally do NOT await — the webhook must return fast.
+  // Await the fetch — render-reel returns 200 immediately and does FFmpeg
+  // in its own after(). We must await here so the webhook's after() callback
+  // doesn't complete (and freeze the Lambda) before the request is sent.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-  fetch(`${appUrl}/api/video/render-reel`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-    body: JSON.stringify({ phone: from, postId: post.id, imageUrl, caption: reelCaption }),
-  }).catch((err) => console.error('[render-reel] fire-and-forget failed:', err.message));
+  try {
+    await fetch(`${appUrl}/api/video/render-reel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ phone: from, postId: post.id, imageUrl, caption: reelCaption }),
+    });
+  } catch (err: any) {
+    console.error('[render-reel] dispatch failed:', err.message);
+  }
 }
 
 // ── Phase B repurpose handlers ──────────────────────────────────────

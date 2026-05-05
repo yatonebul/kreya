@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import ffmpeg from 'fluent-ffmpeg';
@@ -112,20 +113,24 @@ export async function POST(req: NextRequest) {
 
   const supabase = getSupabase();
 
-  try {
-    const videoUrl = await renderWithCaption(imageUrl, caption);
+  // Return 200 immediately so the webhook's awaited fetch completes fast.
+  // after() keeps the Lambda alive while FFmpeg does its work.
+  after(async () => {
+    try {
+      const videoUrl = await renderWithCaption(imageUrl, caption);
 
-    await supabase.from('pending_posts')
-      .update({ state: 'pending_approval', image_url: videoUrl })
-      .eq('id', postId);
+      await supabase.from('pending_posts')
+        .update({ state: 'pending_approval', image_url: videoUrl })
+        .eq('id', postId);
 
-    await sendVideoMessage(phone, videoUrl);
-    await sendPostPreview(phone, videoUrl, caption, postId, true, 'reels');
-  } catch (err: any) {
-    console.error('[render-reel] failed:', err.message);
-    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
-    await sendText(phone, '⚠️ Reel rendering failed — please try again.').catch(() => {});
-  }
+      await sendVideoMessage(phone, videoUrl);
+      await sendPostPreview(phone, videoUrl, caption, postId, true, 'reels');
+    } catch (err: any) {
+      console.error('[render-reel] failed:', err.message);
+      await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
+      await sendText(phone, '⚠️ Reel rendering failed — please try again.').catch(() => {});
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }
