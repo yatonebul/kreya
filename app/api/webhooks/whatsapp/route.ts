@@ -1,5 +1,8 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
+
+// FFmpeg rendering can take 20-40 s on Vercel's shared CPU
+export const maxDuration = 60;
 import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
