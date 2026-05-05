@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // plain file referenced by path string, so we must declare it explicitly.
   outputFileTracingIncludes: {
     '/api/webhooks/whatsapp': ['./node_modules/ffmpeg-static/**/*'],
+    '/api/video/render-reel': ['./node_modules/ffmpeg-static/**/*'],
   },
 };
 

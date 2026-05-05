@@ -9,8 +9,6 @@ import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
 import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
-import { renderVideo } from '@/lib/video-worker';
-import { burnCaption } from '@/lib/caption-burner';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
 import { handleOnboarding } from '@/lib/whatsapp-onboarding';
@@ -1910,10 +1908,9 @@ async function handleReelFromImage(from: string, sessionId: string) {
     return;
   }
 
-  // Discard the collecting session before doing the slow work
   await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', sessionId);
 
-  await sendText(from, '🎬 Animating your photo into a Reel — hang tight...');
+  await sendText(from, '🎬 On it — rendering your Reel. I\'ll send the video in about 30 seconds...');
 
   const prompt = (session?.source_prompt || session?.caption || '').trim();
   const captionPrompt = prompt || '[No description — write a punchy Reel caption for an animated photo.]';
@@ -1921,17 +1918,9 @@ async function handleReelFromImage(from: string, sessionId: string) {
     getProfileContextForPhone(from),
     getRecentCaptions(),
   ]);
-
   const reelCaption = await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions, 'reels');
 
-  // Render Ken Burns video then burn the caption text into it
-  const { publicUrl: rawVideoUrl } = await renderVideo(
-    [{ url: imageUrl, type: 'image' }],
-    { aspectRatio: '9:16', durationPerPhoto: 6 },
-  );
-  const { publicUrl: finalVideoUrl } = await burnCaption(rawVideoUrl, reelCaption);
-
-  // Discard any lingering pending drafts before creating the new one
+  // Discard stale drafts then create the post in rendering_reel state
   const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
     .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit']);
   for (const d of stale ?? []) {
@@ -1941,9 +1930,9 @@ async function handleReelFromImage(from: string, sessionId: string) {
 
   const { data: post } = await supabase.from('pending_posts').insert({
     whatsapp_phone: from,
-    state: 'pending_approval',
+    state: 'rendering_reel',
     surface: 'reels',
-    image_url: finalVideoUrl,
+    image_url: '',
     user_image_url: imageUrl,
     is_video: true,
     caption: reelCaption,
@@ -1952,12 +1941,21 @@ async function handleReelFromImage(from: string, sessionId: string) {
   }).select('id').single();
 
   if (!post) {
-    await sendText(from, '⚠️ Video rendered but draft save failed — try again.');
+    await sendText(from, '⚠️ Couldn\'t queue the render — please try again.');
     return;
   }
 
-  await sendVideoMessage(from, finalVideoUrl);
-  await sendPostPreview(from, finalVideoUrl, reelCaption, post.id, true, 'reels');
+  // Fire-and-forget to the dedicated render endpoint (maxDuration=300).
+  // We intentionally do NOT await — the webhook must return fast.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+  fetch(`${appUrl}/api/video/render-reel`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({ phone: from, postId: post.id, imageUrl, caption: reelCaption }),
+  }).catch((err) => console.error('[render-reel] fire-and-forget failed:', err.message));
 }
 
 // ── Phase B repurpose handlers ──────────────────────────────────────
