@@ -42,8 +42,19 @@
       "captions": "Claude Sonnet 4.6 (anthropic sdk)",
       "image_prompts": "Claude Haiku 4.5",
       "schedule_parsing": "Claude Haiku 4.5",
+      "mood_detection": "Claude Haiku 4.5",
       "voice_transcription": "Groq Whisper (whisper-large-v3-turbo)",
       "image_generation": "Pollinations.ai (free, no key)"
+    },
+    "gpu_compute": {
+      "service": "Modal Labs",
+      "app_name": "kreya-ken-burns",
+      "gpu_type": "L40S (fast, cheap GPU)",
+      "free_tier": "$30/month credit (≈60k Ken Burns transforms)",
+      "cost_per_5s_video": "$0.0005",
+      "ken_burns_worker": "Python + FFmpeg on Modal, called via web endpoint",
+      "deployment": "modal deploy workers/ken_burns_worker.py",
+      "endpoint_env": "MODAL_KEN_BURNS_URL (set in Vercel)"
     },
     "whatsapp": {
       "api": "Meta Cloud API v21.0",
@@ -74,7 +85,13 @@
     "cron_token_refresh": "app/api/cron/refresh-instagram-tokens/route.ts",
     "cron_publish_scheduled": "app/api/cron/publish-scheduled/route.ts",
     "connect_page": "app/connect/page.tsx",
-    "dashboard_page": "app/dashboard/page.tsx"
+    "dashboard_page": "app/dashboard/page.tsx",
+    "video_worker": "lib/video-worker.ts (complex multi-media composition)",
+    "render_reel_simple": "app/api/video/render-reel/route.ts (fallback: static 5s video)",
+    "render_ken_burns": "app/api/video/render-ken-burns/route.ts (Modal GPU Ken Burns)",
+    "ken_burns_worker": "workers/ken_burns_worker.py (Modal Python worker)",
+    "mood_music": "lib/mood-music.ts (mood detection + music selection)",
+    "cover_frame_picker": "lib/cover-frame-picker.ts (frame extraction from video)"
   },
 
   "database_schema": {
@@ -108,7 +125,8 @@
     "ANTHROPIC_API_KEY",
     "GROQ_API_KEY",
     "CRON_SECRET",
-    "NEXT_PUBLIC_APP_URL"
+    "NEXT_PUBLIC_APP_URL",
+    "MODAL_KEN_BURNS_URL (optional; if set, Ken Burns Ken Burns reel rendering via Modal GPU; fallback to simple render-reel if not set)"
   ],
 
   "known_limitations": {
@@ -120,11 +138,14 @@
     "Strategy doc: docs/strategy-chat-first-social-os.md (chat-first social OS vision + phase 1 plan)",
     "Caption variants v1 — generateCaptionVariants returns 3 angles (hook/story/CTA) in one Sonnet 4.6 call. Stored in pending_posts.caption_variants jsonb. User replies bare 1/2/3 to swap active caption.",
     "Style memory v0 — lib/style-memory.ts pulls last 50 IG captions via Graph API, summarizes voice via Haiku into user_profiles.learned_style. Triggered fire-and-forget after OAuth callback; refresh on demand via WA command 'learn my style'. getProfileContextForPhone concatenates brand profile + learned style for every caption call.",
-    "Onboarding & Stripe billing integration — (1) NextStepsChecklist component tracks WhatsApp/Instagram/engagement completion; integrated into /account dashboard. (2) Dynamic pricing on homepage fetches from Stripe API with 1-hour cache. (3) Overflow notifications added to edit refinement and carousel generation flows; story flow already had them. (4) All feature gating verified: train-lora endpoint enforces Pro plan, buildBrandedImage routes Pro→Replicate vs free→Pollinations, daily limit enforced with reset at midnight. Stripe webhook (checkout.session.completed, customer.subscription.updated, customer.subscription.deleted) already implemented and working."
+    "Onboarding & Stripe billing integration — (1) NextStepsChecklist component tracks WhatsApp/Instagram/engagement completion; integrated into /account dashboard. (2) Dynamic pricing on homepage fetches from Stripe API with 1-hour cache. (3) Overflow notifications added to edit refinement and carousel generation flows; story flow already had them. (4) All feature gating verified: train-lora endpoint enforces Pro plan, buildBrandedImage routes Pro→Replicate vs free→Pollinations, daily limit enforced with reset at midnight. Stripe webhook (checkout.session.completed, customer.subscription.updated, customer.subscription.deleted) already implemented and working.",
+    "Hybrid Video Rendering (PR #42, branch: claude/integrate-ffmpeg-api-VqvEH) — (1) Modal Ken Burns GPU: Python FFmpeg worker on Modal L40S GPU for smooth image zoom. app/api/video/render-ken-burns calls web endpoint, returns base64 video. Cost ~$0.0005/5s; $30/mo free = 60k+ transforms. Fallback to local render-reel if MODAL_KEN_BURNS_URL not set. (2) Mood-based music: lib/mood-music.ts uses Haiku to detect emotion from caption, selects from 7-mood Pexels CC0 library. Music mixed into Ken Burns by Modal worker (loops + fade-out at end). (3) Share to Feed toggle: sendReelSurfaceToggle() UI lets users pick Reels (max reach) vs Feed (grid only). set_surface: webhook action updates pending_posts.surface. (4) Cover frame picker: lib/cover-frame-picker.ts extracts keyframes from video; sendCoverFramePicker() shows 5-frame carousel. pick_frame: handler ready (frame extraction integration pending). Setup: docs/MODAL_KEN_BURNS_SETUP.md. Next: deploy Modal worker, set env var in Vercel, integrate frame extraction."
   ],
 
   "next_session_ideas": [
-    "Carousel + Reels support — extend pending_posts with media_items array",
+    "FFmpeg API: Deploy Modal worker & set MODAL_KEN_BURNS_URL in Vercel, test Ken Burns reel generation",
+    "FFmpeg API: Integrate cover frame extraction into render flow (extract → upload → show picker UI → store selection)",
+    "Music: Swap Pexels URLs for Spotify/SoundCloud API (higher quality, artist credits)",
     "24h post-mortem cron — pull IG insights, send WA digest with top metric + suggestion",
     "URL repurposing — TikTok/IG/tweet link → re-encoded media + rewritten caption",
     "Scheduled cron via Supabase pg_cron + pg_net.http_post (Vercel Hobby workaround)",
@@ -132,7 +153,8 @@
   ],
 
   "metadata": {
-    "last_updated": "2026-05-02",
-    "version": "2.2"
+    "last_updated": "2026-05-09",
+    "version": "2.3",
+    "latest_pr": "PR #42 — Hybrid Video Rendering (FFmpeg Ken Burns, mood music, surface toggle, cover picker)"
   }
 }
