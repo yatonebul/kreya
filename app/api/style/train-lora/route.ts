@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { startLoraTraining } from '@/lib/lora';
 
 function getSupabase() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 function phoneVariants(phone: string): string[] {

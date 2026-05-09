@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 async function getAuthenticatedPost(req: NextRequest, id: string) {

@@ -9,7 +9,7 @@ const STRIPE_SECRET_KEY   = process.env.STRIPE_SECRET_KEY   ?? '';
 const STRIPE_PRO_PRICE_ID = process.env.STRIPE_PRO_PRICE_ID ?? '';
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 function phoneVariants(phone: string): string[] {
