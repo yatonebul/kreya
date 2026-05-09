@@ -98,6 +98,17 @@ ALTER TABLE instagram_accounts ALTER COLUMN org_id DROP NOT NULL;
 --     'free' allows one connected IG account; 'pro' / 'agency' will allow
 --     multiple. The OAuth callback / UI does NOT enforce yet — column is
 --     here so the gate can be flipped without another migration.
+
+-- 13. pending_posts — Ken Burns animation preferences for reel rendering.
+--     animation_style: 'subtle' | 'dramatic' | 'slow-pan' | 'cinematic' | 'auto' (default)
+--     animation_duration: seconds (default 5)
+--     animation_zoom: zoom level 1.0-2.5 (default 1.5)
+--     music_selection: 'auto' | 'user-selected' | null (none)
+ALTER TABLE pending_posts
+  ADD COLUMN IF NOT EXISTS animation_style TEXT DEFAULT 'auto',
+  ADD COLUMN IF NOT EXISTS animation_duration INT DEFAULT 5,
+  ADD COLUMN IF NOT EXISTS animation_zoom NUMERIC(3,1) DEFAULT 1.5,
+  ADD COLUMN IF NOT EXISTS music_selection TEXT DEFAULT 'auto';
 ALTER TABLE user_profiles
   ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 
