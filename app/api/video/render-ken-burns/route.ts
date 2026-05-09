@@ -84,7 +84,9 @@ export async function POST(req: NextRequest) {
 
   const { phone, postId, imageUrl, caption, duration, zoomLevel, aspectRatio, musicPreference, animationStyle, isPreview } =
     await req.json();
+
   if (!phone || !postId || !imageUrl || !caption) {
+    console.error('[render-ken-burns] missing required fields:', { phone, postId, imageUrl, caption });
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
   }
 
@@ -92,6 +94,8 @@ export async function POST(req: NextRequest) {
 
   after(async () => {
     try {
+      console.log('[render-ken-burns] start:', { postId, style: animationStyle, music: musicPreference, isPreview });
+
       let musicUrl: string | undefined;
       let musicLabel = '';
 
@@ -122,6 +126,8 @@ export async function POST(req: NextRequest) {
         animationStyle ?? 'auto',
       );
 
+      console.log('[render-ken-burns] video rendered:', videoUrl);
+
       if (isPreview) {
         // Show preview with approval options
         await supabase
@@ -131,6 +137,7 @@ export async function POST(req: NextRequest) {
 
         await sendVideoMessage(phone, videoUrl);
         await sendPreviewOptions(phone, postId, videoUrl);
+        console.log('[render-ken-burns] preview sent');
       } else {
         // Direct approval after preview was accepted
         await supabase
@@ -141,9 +148,10 @@ export async function POST(req: NextRequest) {
         await sendVideoMessage(phone, videoUrl);
         await sendPostPreview(phone, videoUrl, caption, postId, true, 'reels');
         await sendReelSurfaceToggle(phone, postId, 'reels');
+        console.log('[render-ken-burns] finalized and sent');
       }
     } catch (err: any) {
-      console.error('[render-ken-burns] failed:', err.message);
+      console.error('[render-ken-burns] failed:', err.message, err);
       await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
       await sendText(phone, '⚠️ Reel rendering failed — please try again.').catch(() => {});
     }

@@ -1944,12 +1944,21 @@ async function handleReelFromImage(from: string, sessionId: string) {
 
   const { data: session } = await supabase
     .from('pending_posts')
-    .select('id, media_items, source_prompt, caption')
+    .select('id, user_image_url, media_items, source_prompt, caption')
     .eq('id', sessionId)
     .maybeSingle();
 
-  const items: CarouselItem[] = Array.isArray(session?.media_items) ? session.media_items as CarouselItem[] : [];
-  const imageUrl = items[0]?.url;
+  if (!session) {
+    await sendText(from, "⚠️ Couldn't find your post — please try again.");
+    return;
+  }
+
+  // Get image URL: single photo uses user_image_url, carousel uses media_items
+  let imageUrl = session.user_image_url;
+  if (!imageUrl && Array.isArray(session.media_items) && session.media_items.length > 0) {
+    imageUrl = (session.media_items[0] as CarouselItem)?.url;
+  }
+
   if (!imageUrl) {
     await sendText(from, "⚠️ Couldn't find your photo — please send it again.");
     return;
