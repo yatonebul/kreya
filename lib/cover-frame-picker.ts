@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
+import { createClient } from '@supabase/supabase-js';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -14,8 +15,6 @@ export async function extractCoverFrames(
   videoUrl: string,
   frameCount: number = 5,
 ): Promise<string[]> {
-  import { createClient } from '@supabase/supabase-js';
-
   const tmpDir = path.join(os.tmpdir(), `kreya-frames-${Date.now()}`);
   await fs.mkdir(tmpDir, { recursive: true });
 
