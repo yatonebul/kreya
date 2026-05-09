@@ -894,13 +894,19 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
   if (action.startsWith('music_') && postId) {
     const musicPref = action.replace('music_', '');
-    if (musicPref === 'auto' || musicPref === 'none') {
-      await handleMusicChoice(from, postId, musicPref);
-    }
+    await handleMusicChoice(from, postId, musicPref);
     return;
   }
-  if (action === 'render_reel' && postId) {
-    await handleMusicChoice(from, postId, 'auto');
+  if (action === 'approve_reel' && postId) {
+    await handlePreviewApproval(from, postId);
+    return;
+  }
+  if (action === 'retry_anim' && postId) {
+    await handleRetryAnimation(from, postId);
+    return;
+  }
+  if (action === 'retry_music' && postId) {
+    await handleRetryMusic(from, postId);
     return;
   }
   if (action === 'spin_reel_assets' && postId) {
@@ -1994,14 +2000,15 @@ async function handleReelFromImage(from: string, sessionId: string) {
 async function handleAnimationStyleChoice(from: string, postId: string, style: string) {
   const supabase = getSupabase();
 
-  const styleMap: Record<string, { style: string; duration: number; zoom: number }> = {
-    'subtle': { style: 'subtle', duration: 5, zoom: 1.2 },
-    'dramatic': { style: 'dramatic', duration: 5, zoom: 2.0 },
-    'pan': { style: 'slow-pan', duration: 6, zoom: 1.3 },
-    'auto': { style: 'auto', duration: 5, zoom: 1.5 },
+  const styleMap: Record<string, { style: string; duration: number; zoom: number; description: string }> = {
+    'quick': { style: 'quick-zoom', duration: 2, zoom: 2.2, description: '⚡ Quick snappy zoom' },
+    'elegant': { style: 'elegant', duration: 5, zoom: 1.3, description: '✨ Smooth elegant pan' },
+    'cinematic': { style: 'cinematic', duration: 6, zoom: 1.8, description: '🌅 Epic cinematic motion' },
+    'float': { style: 'float', duration: 5, zoom: 1.1, description: '💫 Gentle floating motion' },
+    'focus': { style: 'focus-zoom', duration: 4, zoom: 1.6, description: '🎯 Zoom to focal point' },
   };
 
-  const selected = styleMap[style] || styleMap['auto'];
+  const selected = styleMap[style] || styleMap['elegant'];
 
   await supabase.from('pending_posts').update({
     animation_style: selected.style,
@@ -2017,21 +2024,23 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
   const supabase = getSupabase();
 
   const musicMap: Record<string, string> = {
-    'auto': 'auto',
+    'trending': 'trending',
+    'calm': 'calm',
     'none': 'none',
+    'auto': 'auto',
   };
 
   const selection = musicMap[musicPref] || 'auto';
 
-  // Update state and queue rendering
+  // Update state to rendering_preview (show preview before final approval)
   await supabase.from('pending_posts').update({
     music_selection: selection,
-    state: 'rendering_reel',
+    state: 'rendering_preview',
   }).eq('id', postId);
 
-  await sendText(from, '🎬 Rendering your Reel with motion & music... 📽️ Sending in ~30 seconds');
+  await sendText(from, '🎬 Creating preview... ~15 seconds');
 
-  // Queue the render
+  // Queue the preview render
   const { data: post } = await supabase
     .from('pending_posts')
     .select('user_image_url, caption, animation_duration, animation_zoom, music_selection')
@@ -2057,11 +2066,63 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
         duration: post.animation_duration,
         zoomLevel: post.animation_zoom,
         musicPreference: post.music_selection,
+        isPreview: true,
       }),
     });
   } catch (err: any) {
-    console.error('[render-reel] dispatch failed:', err.message);
+    console.error('[render-preview] dispatch failed:', err.message);
   }
+}
+
+async function handlePreviewApproval(from: string, postId: string) {
+  const supabase = getSupabase();
+
+  await sendText(from, '✅ Publishing your reel...');
+
+  // Finalize render with full quality (not preview)
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('user_image_url, caption, animation_duration, animation_zoom, music_selection')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post) return;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+  try {
+    const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
+    await fetch(`${appUrl}${renderEndpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        phone: from,
+        postId,
+        imageUrl: post.user_image_url,
+        caption: post.caption,
+        duration: post.animation_duration,
+        zoomLevel: post.animation_zoom,
+        musicPreference: post.music_selection,
+        isPreview: false,
+      }),
+    });
+  } catch (err: any) {
+    console.error('[finalize-reel] dispatch failed:', err.message);
+  }
+}
+
+async function handleRetryAnimation(from: string, postId: string) {
+  const supabase = getSupabase();
+  await supabase.from('pending_posts').update({ state: 'waiting_animation_style' }).eq('id', postId);
+  await sendAnimationStyleChoice(from, postId);
+}
+
+async function handleRetryMusic(from: string, postId: string) {
+  const supabase = getSupabase();
+  await supabase.from('pending_posts').update({ state: 'waiting_music_choice' }).eq('id', postId);
+  await sendMusicChoice(from, postId);
 }
 
 // ── Phase B repurpose handlers ──────────────────────────────────────

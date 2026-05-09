@@ -91,18 +91,41 @@ export function sendAnimationStyleChoice(to: string, postId: string): Promise<Wa
       type: 'button',
       body: {
         text:
-          '🎬 *How should I animate this?*\n\n' +
-          '• *Subtle* — gentle zoom, calm vibe\n' +
-          '• *Dramatic* — bold zoom, impactful\n' +
-          '• *Slow Pan* — sweeping camera movement\n' +
-          '• *Auto* — I\'ll pick the best style',
+          '🎬 *Choose your reel style:*\n\n' +
+          '⚡ *Quick Zoom* — Fast, snappy (2s)\n' +
+          '✨ *Elegant* — Slow smooth zoom (5s)\n' +
+          '🌅 *Cinematic* — Epic pan + zoom (6s)\n' +
+          '💫 *Float* — Gentle floating motion\n' +
+          '🎯 *Focus* — Zoom to focal point',
       },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: `anim_subtle:${postId}`, title: '✨ Subtle' } },
-          { type: 'reply', reply: { id: `anim_dramatic:${postId}`, title: '💥 Dramatic' } },
-          { type: 'reply', reply: { id: `anim_pan:${postId}`, title: '🎥 Slow Pan' } },
-          { type: 'reply', reply: { id: `anim_auto:${postId}`, title: '🤖 Auto' } },
+          { type: 'reply', reply: { id: `anim_quick:${postId}`, title: '⚡ Quick Zoom' } },
+          { type: 'reply', reply: { id: `anim_elegant:${postId}`, title: '✨ Elegant' } },
+          { type: 'reply', reply: { id: `anim_cinematic:${postId}`, title: '🌅 Cinematic' } },
+          { type: 'reply', reply: { id: `anim_float:${postId}`, title: '💫 Float' } },
+          { type: 'reply', reply: { id: `anim_focus:${postId}`, title: '🎯 Focus' } },
+        ],
+      },
+    },
+  });
+}
+
+export function sendPreviewOptions(to: string, postId: string, previewUrl: string): Promise<WaResult> {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text: '✅ *Here\'s your preview!*\n\nLike it? Publish to Instagram or try a different animation style.',
+      },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `approve_reel:${postId}`, title: '👍 Looks Good' } },
+          { type: 'reply', reply: { id: `retry_anim:${postId}`, title: '🔄 Different Style' } },
+          { type: 'reply', reply: { id: `retry_music:${postId}`, title: '🎵 Change Music' } },
         ],
       },
     },
@@ -118,16 +141,18 @@ export function sendMusicChoice(to: string, postId: string): Promise<WaResult> {
       type: 'button',
       body: {
         text:
-          '🎵 *Add some music?*\n\n' +
-          '• *Auto* — AI picks mood-matched track\n' +
-          '• *None* — silent video\n' +
-          '• *Custom* — send audio file (coming soon)',
+          '🎵 *Sound it up?*\n\n' +
+          '• *Trending* — Hot audio that matches your vibe\n' +
+          '• *Calm* — Peaceful, soothing background\n' +
+          '• *Silent* — Just the visual (no music)\n' +
+          '• *Skip* — I\'ll decide',
       },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: `music_auto:${postId}`, title: '🎵 Auto' } },
-          { type: 'reply', reply: { id: `music_none:${postId}`, title: '🔇 None' } },
-          { type: 'reply', reply: { id: `render_reel:${postId}`, title: '✅ Continue' } },
+          { type: 'reply', reply: { id: `music_trending:${postId}`, title: '🔥 Trending' } },
+          { type: 'reply', reply: { id: `music_calm:${postId}`, title: '🧘 Calm' } },
+          { type: 'reply', reply: { id: `music_none:${postId}`, title: '🔇 Silent' } },
+          { type: 'reply', reply: { id: `music_auto:${postId}`, title: '🤖 Skip' } },
         ],
       },
     },
