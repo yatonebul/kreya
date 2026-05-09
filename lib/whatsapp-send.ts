@@ -751,3 +751,80 @@ export async function sendStorySlideManager(to: string, postId: string, items: {
     },
   });
 }
+
+export async function sendReelSurfaceToggle(to: string, postId: string, currentSurface: 'reels' | 'feed' = 'reels') {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text:
+          '🎯 *Where should this Reel go?*\n\n' +
+          `Currently set to: *${currentSurface === 'reels' ? 'Reels tab + Grid' : 'Feed / Grid only'}*\n\n` +
+          (currentSurface === 'reels'
+            ? 'Publishing to Reels shows your video on the Reels tab AND your grid for maximum reach.'
+            : 'Publishing to Feed shows your video only on your grid.'),
+      },
+      action: {
+        buttons: [
+          {
+            type: 'reply',
+            reply: {
+              id: `set_surface:${postId}:reels`,
+              title: `${currentSurface === 'reels' ? '✓ ' : ''}🎬 Reels tab + Grid`,
+            },
+          },
+          {
+            type: 'reply',
+            reply: {
+              id: `set_surface:${postId}:feed`,
+              title: `${currentSurface === 'feed' ? '✓ ' : ''}📷 Feed / Grid only`,
+            },
+          },
+        ],
+      },
+    },
+  });
+}
+
+export async function sendCoverFramePicker(to: string, postId: string, frameUrls: string[]) {
+  if (!frameUrls.length) return;
+
+  // Send frames as a carousel of images
+  for (let i = 0; i < frameUrls.length; i++) {
+    await wa({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'image',
+      image: { link: frameUrls[i] },
+    });
+  }
+
+  // Send selection menu
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      header: { type: 'text', text: '🖼️ Pick a cover frame' },
+      body: { text: `Choose which frame should be your Reel thumbnail. You have ${frameUrls.length} keyframes to pick from.` },
+      footer: { text: 'The cover shows on your grid' },
+      action: {
+        button: 'Select frame',
+        sections: [
+          {
+            title: 'Cover frames',
+            rows: frameUrls.map((_, idx) => ({
+              id: `pick_frame:${postId}:${idx}`,
+              title: `Frame ${idx + 1}`,
+              description: `${((idx + 1) / frameUrls.length * 100).toFixed(0)}% through the video`,
+            })),
+          },
+        ],
+      },
+    },
+  });
+}

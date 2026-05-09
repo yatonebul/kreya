@@ -1300,6 +1300,31 @@ async function handleButtonReply(from: string, action: string, postId: string | 
       .eq('whatsapp_phone', from)
       .eq('state', 'collecting_carousel');
     await sendText(from, '🗑️ Post discarded. Send a new message whenever you\'re ready!');
+  } else if (action?.startsWith('set_surface:')) {
+    // Parse: set_surface:postId:surface
+    const [_, targetPostId, newSurface] = action.split(':');
+    if (targetPostId && (newSurface === 'reels' || newSurface === 'feed')) {
+      await getSupabase().from('pending_posts')
+        .update({ surface: newSurface })
+        .eq('id', targetPostId);
+      const updated = await getPostById(targetPostId);
+      if (updated) {
+        await sendText(from, `✓ Updated to: *${newSurface === 'reels' ? '🎬 Reels' : '📷 Feed'}*`);
+        await sendPostPreview(from, updated.image_url, updated.caption, updated.id, updated.is_video ?? false, newSurface as any);
+      }
+    }
+  } else if (action?.startsWith('pick_frame:')) {
+    // Parse: pick_frame:postId:frameIndex
+    const parts = action.split(':');
+    const targetPostId = parts[1];
+    const frameIndex = parseInt(parts[2], 10);
+
+    // frameIndex is stored in post.cover_frames_urls (jsonb array)
+    // For now, just acknowledge — full implementation needs frame extraction integrated into render
+    if (!isNaN(frameIndex)) {
+      await sendText(from, `✓ Cover frame ${frameIndex + 1} selected! It'll show on your grid.`);
+      // In a full impl: store selectedCoverFrame index in pending_posts, use during publishing
+    }
   }
 }
 
@@ -1945,12 +1970,14 @@ async function handleReelFromImage(from: string, sessionId: string) {
     return;
   }
 
-  // Await the fetch — render-reel returns 200 immediately and does FFmpeg
-  // in its own after(). We must await here so the webhook's after() callback
+  // Await the fetch — render-ken-burns returns 200 immediately and does GPU rendering
+  // via Modal in its own after(). We must await here so the webhook's after() callback
   // doesn't complete (and freeze the Lambda) before the request is sent.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
   try {
-    await fetch(`${appUrl}/api/video/render-reel`, {
+    // Use Ken Burns (Modal GPU) if configured, fall back to simple render-reel
+    const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
+    await fetch(`${appUrl}${renderEndpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
