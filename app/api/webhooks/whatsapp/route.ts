@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice } from '@/lib/whatsapp-send';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -885,6 +885,22 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
   if (action === 'reel_from_image' && postId) {
     await handleReelFromImage(from, postId);
+    return;
+  }
+  if (action.startsWith('anim_') && postId) {
+    const style = action.replace('anim_', '');
+    await handleAnimationStyleChoice(from, postId, style);
+    return;
+  }
+  if (action.startsWith('music_') && postId) {
+    const musicPref = action.replace('music_', '');
+    if (musicPref === 'auto' || musicPref === 'none') {
+      await handleMusicChoice(from, postId, musicPref);
+    }
+    return;
+  }
+  if (action === 'render_reel' && postId) {
+    await handleMusicChoice(from, postId, 'auto');
     return;
   }
   if (action === 'spin_reel_assets' && postId) {
@@ -1935,8 +1951,6 @@ async function handleReelFromImage(from: string, sessionId: string) {
 
   await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', sessionId);
 
-  await sendText(from, '🎬 On it — rendering your Reel. I\'ll send the video in about 30 seconds...');
-
   const prompt = (session?.source_prompt || session?.caption || '').trim();
   const captionPrompt = prompt || '[No description — write a punchy Reel caption for an animated photo.]';
   const [profileContext, recentCaptions] = await Promise.all([
@@ -1945,7 +1959,7 @@ async function handleReelFromImage(from: string, sessionId: string) {
   ]);
   const reelCaption = await generateCaption(captionPrompt, profileContext ?? undefined, recentCaptions, 'reels');
 
-  // Discard stale drafts then create the post in rendering_reel state
+  // Discard stale drafts then create the post in waiting_animation_style state
   const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
     .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit']);
   for (const d of stale ?? []) {
@@ -1955,7 +1969,7 @@ async function handleReelFromImage(from: string, sessionId: string) {
 
   const { data: post } = await supabase.from('pending_posts').insert({
     whatsapp_phone: from,
-    state: 'rendering_reel',
+    state: 'waiting_animation_style',
     surface: 'reels',
     image_url: '',
     user_image_url: imageUrl,
@@ -1963,6 +1977,10 @@ async function handleReelFromImage(from: string, sessionId: string) {
     caption: reelCaption,
     caption_variants: [reelCaption],
     source_prompt: prompt,
+    animation_style: 'auto',
+    animation_duration: 5,
+    animation_zoom: 1.5,
+    music_selection: 'auto',
   }).select('id').single();
 
   if (!post) {
@@ -1970,12 +1988,60 @@ async function handleReelFromImage(from: string, sessionId: string) {
     return;
   }
 
-  // Await the fetch — render-ken-burns returns 200 immediately and does GPU rendering
-  // via Modal in its own after(). We must await here so the webhook's after() callback
-  // doesn't complete (and freeze the Lambda) before the request is sent.
+  await sendAnimationStyleChoice(from, post.id);
+}
+
+async function handleAnimationStyleChoice(from: string, postId: string, style: string) {
+  const supabase = getSupabase();
+
+  const styleMap: Record<string, { style: string; duration: number; zoom: number }> = {
+    'subtle': { style: 'subtle', duration: 5, zoom: 1.2 },
+    'dramatic': { style: 'dramatic', duration: 5, zoom: 2.0 },
+    'pan': { style: 'slow-pan', duration: 6, zoom: 1.3 },
+    'auto': { style: 'auto', duration: 5, zoom: 1.5 },
+  };
+
+  const selected = styleMap[style] || styleMap['auto'];
+
+  await supabase.from('pending_posts').update({
+    animation_style: selected.style,
+    animation_duration: selected.duration,
+    animation_zoom: selected.zoom,
+    state: 'waiting_music_choice',
+  }).eq('id', postId);
+
+  await sendMusicChoice(from, postId);
+}
+
+async function handleMusicChoice(from: string, postId: string, musicPref: string) {
+  const supabase = getSupabase();
+
+  const musicMap: Record<string, string> = {
+    'auto': 'auto',
+    'none': 'none',
+  };
+
+  const selection = musicMap[musicPref] || 'auto';
+
+  // Update state and queue rendering
+  await supabase.from('pending_posts').update({
+    music_selection: selection,
+    state: 'rendering_reel',
+  }).eq('id', postId);
+
+  await sendText(from, '🎬 Rendering your Reel with motion & music... 📽️ Sending in ~30 seconds');
+
+  // Queue the render
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('user_image_url, caption, animation_duration, animation_zoom, music_selection')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post) return;
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
   try {
-    // Use Ken Burns (Modal GPU) if configured, fall back to simple render-reel
     const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
     await fetch(`${appUrl}${renderEndpoint}`, {
       method: 'POST',
@@ -1983,7 +2049,15 @@ async function handleReelFromImage(from: string, sessionId: string) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
       },
-      body: JSON.stringify({ phone: from, postId: post.id, imageUrl, caption: reelCaption }),
+      body: JSON.stringify({
+        phone: from,
+        postId,
+        imageUrl: post.user_image_url,
+        caption: post.caption,
+        duration: post.animation_duration,
+        zoomLevel: post.animation_zoom,
+        musicPreference: post.music_selection,
+      }),
     });
   } catch (err: any) {
     console.error('[render-reel] dispatch failed:', err.message);

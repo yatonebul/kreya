@@ -14,15 +14,29 @@ function getSupabase() {
   );
 }
 
+async function getDefaultVisualizationPrompt(caption: string, style: string): Promise<string> {
+  const stylePrompts: Record<string, string> = {
+    'subtle': 'Gentle, elegant zoom creating a calm, sophisticated mood. Focus on natural lighting and soft transitions.',
+    'dramatic': 'Bold, impactful zoom creating visual drama. Emphasize depth and cinematic movement.',
+    'slow-pan': 'Sweeping horizontal camera movement. Pan across the image naturally, revealing details progressively.',
+    'auto': 'Create visually engaging motion that matches the content mood and enhances the caption: ' + caption,
+  };
+  return stylePrompts[style] || stylePrompts['auto'];
+}
+
 async function renderKenBurnsViaModal(
   imageUrl: string,
+  caption: string,
   duration: number = 5,
   zoomLevel: number = 1.5,
   aspectRatio: '9:16' | '1:1' | '16:9' = '9:16',
   musicUrl?: string,
+  animationStyle: string = 'auto',
 ): Promise<string> {
   const modalUrl = process.env.MODAL_KEN_BURNS_URL;
   if (!modalUrl) throw new Error('MODAL_KEN_BURNS_URL not configured');
+
+  const visualizationPrompt = await getDefaultVisualizationPrompt(caption, animationStyle);
 
   const res = await fetch(modalUrl, {
     method: 'POST',
@@ -33,6 +47,8 @@ async function renderKenBurnsViaModal(
       zoom_level: zoomLevel,
       aspect_ratio: aspectRatio,
       music_url: musicUrl,
+      visualization_prompt: visualizationPrompt,
+      animation_style: animationStyle,
     }),
   });
 
@@ -64,7 +80,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const { phone, postId, imageUrl, caption, duration, zoomLevel, aspectRatio } =
+  const { phone, postId, imageUrl, caption, duration, zoomLevel, aspectRatio, musicPreference, animationStyle } =
     await req.json();
   if (!phone || !postId || !imageUrl || !caption) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
@@ -74,16 +90,26 @@ export async function POST(req: NextRequest) {
 
   after(async () => {
     try {
-      // Detect mood from caption and select music
-      const music = await getMusicForCaption(caption).catch(() => null);
-      console.log('[render-ken-burns] mood music:', music?.title ?? 'none');
+      let musicUrl: string | undefined;
+
+      // Handle music preference
+      if (musicPreference === 'auto') {
+        const music = await getMusicForCaption(caption).catch(() => null);
+        musicUrl = music?.musicUrl;
+        console.log('[render-ken-burns] auto music:', music?.title ?? 'none');
+      } else if (musicPreference === 'none') {
+        musicUrl = undefined;
+        console.log('[render-ken-burns] no music requested');
+      }
 
       const videoUrl = await renderKenBurnsViaModal(
         imageUrl,
+        caption,
         duration ?? 5,
         zoomLevel ?? 1.5,
         aspectRatio ?? '9:16',
-        music?.musicUrl,
+        musicUrl,
+        animationStyle ?? 'auto',
       );
 
       await supabase
