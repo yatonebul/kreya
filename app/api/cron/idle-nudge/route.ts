@@ -4,7 +4,7 @@ import { suggestPostTopics } from '@/lib/topic-suggester';
 import { sendText } from '@/lib/whatsapp-send';
 
 function getSupabase() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const IDLE_DAYS_THRESHOLD = 3;          // skip if user posted in the last N days

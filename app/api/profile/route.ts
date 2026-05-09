@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { updateAccountBrandProfileById, updateActiveBrandProfile } from '@/lib/brand-profile';
 
 function getSupabase() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 function phoneVariants(p: string): string[] {

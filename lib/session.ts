@@ -5,7 +5,7 @@ export const SESSION_COOKIE = 'kreya_session';
 export const SESSION_DAYS   = 30;
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 export function hashToken(token: string) {

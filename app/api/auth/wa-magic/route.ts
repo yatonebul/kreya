@@ -5,7 +5,7 @@ import { createSession, hashToken, sessionCookieOptions, SESSION_COOKIE, SESSION
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 // One-tap dashboard link from WhatsApp. Mirrors /api/auth/magic but is

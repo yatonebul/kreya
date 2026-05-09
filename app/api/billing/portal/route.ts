@@ -8,7 +8,7 @@ const APP_URL           = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-gith
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY  ?? '';
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 function phoneVariants(phone: string): string[] {
