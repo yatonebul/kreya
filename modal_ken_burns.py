@@ -78,7 +78,7 @@ def render_ken_burns(
             zoompan_filter = (
                 f"zoompan=z='if(lt(zoom,{zoom_end}),{zoom_start}+({zoom_end}-{zoom_start})"
                 f"/({duration}*fps),{zoom_end})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-                f":d={duration}*{30}:f=30:s={width}x{height}"
+                f":d={duration}*{30}:s={width}x{height}"
             )
 
             # Build FFmpeg command for video
