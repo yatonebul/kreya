@@ -1972,8 +1972,6 @@ async function handleReelFromImage(from: string, sessionId: string) {
     return;
   }
 
-  await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', sessionId);
-
   const prompt = (session?.source_prompt || session?.caption || '').trim();
   const captionPrompt = prompt || '[No description — write a punchy Reel caption for an animated photo.]';
   const [profileContext, recentCaptions] = await Promise.all([
@@ -2007,9 +2005,12 @@ async function handleReelFromImage(from: string, sessionId: string) {
   }).select('id').single();
 
   if (!post) {
-    await sendText(from, '⚠️ Couldn\'t queue the render — please try again.');
+    await sendText(from, '⚠️ Couldn\'t create reel — please try again.');
     return;
   }
+
+  // Only discard the original post after successfully creating the new one
+  await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', sessionId);
 
   await sendAnimationStyleChoice(from, post.id);
 }
