@@ -141,18 +141,38 @@ def render_ken_burns(
                     print(f"[render_ken_burns] music download failed: {music_err}, rendering without music")
                     music_included = False
 
+            print(f"[render_ken_burns] FFmpeg command: {' '.join(cmd[:10])}... (music_included_flag={music_included})")
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
+                print(f"[render_ken_burns] FFmpeg failed: {result.stderr[:500]}")
                 return {
                     "error": f"FFmpeg error: {result.stderr}",
                     "video_b64": None,
                     "music_included": music_included,
                 }
 
+            # Verify audio was included in output
+            if music_included:
+                probe_cmd = [
+                    "ffprobe", "-v", "error",
+                    "-select_streams", "a:0",
+                    "-show_entries", "stream=codec_type",
+                    "-of", "csv=p=0",
+                    str(video_path)
+                ]
+                probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+                has_audio = probe_result.returncode == 0 and probe_result.stdout.strip() == "audio"
+                if not has_audio:
+                    print(f"[render_ken_burns] WARNING: music_included=True but audio track not found in final video")
+                    music_included = False
+                else:
+                    print(f"[render_ken_burns] ✓ Audio track confirmed in final video")
+
             # Encode video as base64
             with open(video_path, "rb") as f:
                 video_b64 = base64.b64encode(f.read()).decode("utf-8")
 
+            print(f"[render_ken_burns] Final result: music_included={music_included}, video_size={len(video_b64) // 1024}KB")
             return {"video_b64": video_b64, "error": None, "music_included": music_included}
 
     except Exception as e:

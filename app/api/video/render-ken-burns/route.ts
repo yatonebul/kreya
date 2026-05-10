@@ -113,16 +113,16 @@ export async function POST(req: NextRequest) {
         const music = await getMusicForCaption(caption).catch(() => null);
         musicUrl = music?.musicUrl;
         musicLabel = music?.title ?? 'trending audio';
-        console.log('[render-ken-burns] music:', musicLabel);
+        console.log('[render-ken-burns] music selected:', { url: musicUrl ? '✓' : '✗', label: musicLabel });
       } else if (musicPreference === 'calm') {
         const music = await getMusicForCaption(caption + ' calm peaceful').catch(() => null);
         musicUrl = music?.musicUrl;
         musicLabel = music?.title ?? 'calm audio';
-        console.log('[render-ken-burns] calm music:', musicLabel);
+        console.log('[render-ken-burns] calm music selected:', { url: musicUrl ? '✓' : '✗', label: musicLabel });
       } else if (musicPreference === 'none') {
         musicUrl = undefined;
         musicLabel = 'no music';
-        console.log('[render-ken-burns] silent');
+        console.log('[render-ken-burns] silent mode');
       }
 
       const { videoUrl, musicIncluded } = await renderKenBurnsViaModal(
@@ -148,8 +148,10 @@ export async function POST(req: NextRequest) {
 
         // Alert if music was requested but failed to load
         if (!musicIncluded && musicPreference !== 'none') {
-          console.log('[render-ken-burns] WARNING: music was requested but not included in video');
-          await sendText(phone, '⚠️ Note: Audio couldn\'t load, video is silent').catch(() => {});
+          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
+          await sendText(phone, '⚠️ Music unavailable: video is silent. (Audio service had an issue)').catch(() => {});
+        } else if (musicIncluded) {
+          console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
         }
 
         await sendPreviewOptions(phone, postId, videoUrl);
@@ -165,8 +167,10 @@ export async function POST(req: NextRequest) {
 
         // Alert if music was requested but failed to load
         if (!musicIncluded && musicPreference !== 'none') {
-          console.log('[render-ken-burns] WARNING: music was requested but not included in video');
-          await sendText(phone, '⚠️ Note: Audio couldn\'t load, video is silent').catch(() => {});
+          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
+          await sendText(phone, '⚠️ Music unavailable: video is silent. (Audio service had an issue)').catch(() => {});
+        } else if (musicIncluded) {
+          console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
         }
 
         await sendPostPreview(phone, videoUrl, caption, postId, true, 'reels');
