@@ -2049,6 +2049,31 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
 
   const selection = musicMap[musicPref] || 'auto';
 
+  // Check if Modal endpoint is configured - if not, fallback to static image
+  if (!process.env.MODAL_KEN_BURNS_URL) {
+    const { data: post } = await supabase
+      .from('pending_posts')
+      .select('user_image_url, caption, surface')
+      .eq('id', postId)
+      .maybeSingle();
+
+    if (!post) {
+      await sendText(from, "⚠️ Post not found — please try again.");
+      return;
+    }
+
+    // Convert to static image post (animation service not available)
+    await supabase.from('pending_posts').update({
+      state: 'pending_approval',
+      is_video: false,
+      image_url: post.user_image_url,
+    }).eq('id', postId);
+
+    await sendText(from, '📸 Animation service unavailable — posting as a static image instead. Here\'s your preview:');
+    await sendPostPreview(from, post.user_image_url, post.caption, postId, false, post.surface ?? 'feed');
+    return;
+  }
+
   // Update state to rendering_preview (show preview before final approval)
   await supabase.from('pending_posts').update({
     music_selection: selection,
