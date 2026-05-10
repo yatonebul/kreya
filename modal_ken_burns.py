@@ -134,26 +134,20 @@ def render_ken_burns(
         return {"error": str(e), "video_b64": None}
 
 
-@app.function(image=image, gpu="t4", timeout=300)
-def render_endpoint(request_dict: dict) -> dict:
-    """Web endpoint for Ken Burns rendering."""
-    return render_ken_burns(
-        image_url=request_dict.get("image_url"),
-        duration=request_dict.get("duration", 5),
-        zoom_level=request_dict.get("zoom_level", 1.5),
-        aspect_ratio=request_dict.get("aspect_ratio", "9:16"),
-        music_url=request_dict.get("music_url"),
-        visualization_prompt=request_dict.get("visualization_prompt"),
-        animation_style=request_dict.get("animation_style", "auto"),
-    )
-
-
 @app.cls(image=image, gpu="t4", timeout=300)
 class KenBurnsAPI:
-    @modal.web_endpoint(method="POST", docs=True)
-    def render(self, request_dict: dict):
+    @modal.fastapi_endpoint(method="POST")
+    async def render(self, request: dict):
         """Render Ken Burns animation with optional music."""
-        result = render_endpoint(request_dict)
+        result = render_ken_burns(
+            image_url=request.get("image_url"),
+            duration=request.get("duration", 5),
+            zoom_level=request.get("zoom_level", 1.5),
+            aspect_ratio=request.get("aspect_ratio", "9:16"),
+            music_url=request.get("music_url"),
+            visualization_prompt=request.get("visualization_prompt"),
+            animation_style=request.get("animation_style", "auto"),
+        )
         if result.get("error"):
             return {"error": result["error"]}, 400
         return result
