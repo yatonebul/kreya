@@ -75,10 +75,12 @@ def render_ken_burns(
                 pan_x, pan_y = 80, 60
 
             # Build FFmpeg zoompan filter
+            total_frames = duration * 30
+            zoom_inc = (zoom_end - zoom_start) / total_frames
             zoompan_filter = (
-                f"zoompan=z='if(lt(zoom,{zoom_end}),{zoom_start}+({zoom_end}-{zoom_start})"
-                f"/({duration}*fps),{zoom_end})':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-                f":d={duration}*{30}:s={width}x{height}"
+                f"zoompan=z='if(lte(zoom,{zoom_end}),zoom+{zoom_inc:.6f},{zoom_end})'"
+                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+                f":d={total_frames}:s={width}x{height}"
             )
 
             # Build FFmpeg command for video
@@ -92,6 +94,7 @@ def render_ken_burns(
                 "-preset", "ultrafast",
                 "-crf", "23",
                 "-t", str(duration),
+                "-r", "30",
                 "-pix_fmt", "yuv420p",
                 "-y",
                 str(video_path),
@@ -121,6 +124,8 @@ def render_ken_burns(
                         "-crf", "23",
                         "-c:a", "aac",
                         "-shortest",
+                        "-t", str(duration),
+                        "-r", "30",
                         "-pix_fmt", "yuv420p",
                         "-y",
                         str(video_path),
