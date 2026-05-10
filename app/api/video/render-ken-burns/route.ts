@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendText, sendVideoMessage, sendPostPreview, sendReelSurfaceToggle, sendPreviewOptions } from '@/lib/whatsapp-send';
+import { sendText, sendVideoMessage, sendPostPreview, sendReelSurfaceToggle, sendPreviewOptions, sendAnimationFailureWithFallbacks, logAnimationError } from '@/lib/whatsapp-send';
 import { getMusicForCaption } from '@/lib/mood-music';
 
 // Ken Burns rendering via Modal (GPU)
@@ -152,8 +152,53 @@ export async function POST(req: NextRequest) {
       }
     } catch (err: any) {
       console.error('[render-ken-burns] failed:', err.message, err);
-      await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
-      await sendText(phone, '⚠️ Reel rendering failed — please try again.').catch(() => {});
+
+      // Categorize error and determine user-friendly message
+      let errorType = 'unknown';
+      let errorReason = 'Animation service is temporarily unavailable. Please try again in a few moments.';
+
+      if (err.message?.includes('MODAL_KEN_BURNS_URL not configured')) {
+        errorType = 'infrastructure_error';
+        errorReason = 'Animation service is not yet configured. Try again later.';
+      } else if (err.message?.includes('Modal Ken Burns failed') && err.message?.includes('404')) {
+        errorType = 'service_unavailable';
+        errorReason = 'Animation service is offline. Please try again later.';
+      } else if (err.message?.includes('Modal Ken Burns failed') && (err.message?.includes('timeout') || err.message?.includes('ECONNREFUSED'))) {
+        errorType = 'timeout_or_connection';
+        errorReason = 'Animation service is not responding. Please try again.';
+      } else if (err.message?.includes('Modal error')) {
+        errorType = 'modal_api_error';
+        errorReason = 'Animation failed due to image processing issue. Please try a different photo.';
+      } else if (err.message?.includes('No video returned')) {
+        errorType = 'no_video_output';
+        errorReason = 'Animation created no output. Please try a different photo or animation style.';
+      } else if (err.message?.includes('Storage upload')) {
+        errorType = 'storage_error';
+        errorReason = 'Couldn\'t save the animation video. Please try again.';
+      } else if (err.message?.includes('fetch')) {
+        errorType = 'network_error';
+        errorReason = 'Network issue while generating animation. Please try again.';
+      }
+
+      // Log detailed error for admin debugging
+      logAnimationError(postId, phone, errorType, err.message, {
+        stack: err.stack?.slice(0, 500),
+        isPreview,
+        animationStyle,
+        musicPreference,
+      });
+
+      // Mark post as failed (not discarded - preserves it for potential retry)
+      await supabase.from('pending_posts').update({ state: 'animation_failed' }).eq('id', postId);
+
+      // Send user-friendly error with fallback options
+      if (isPreview) {
+        // Preview failed - offer retry and discard
+        await sendAnimationFailureWithFallbacks(phone, postId, errorReason).catch(() => {});
+      } else {
+        // Final render failed - offer fallback to static image
+        await sendAnimationFailureWithFallbacks(phone, postId, errorReason).catch(() => {});
+      }
     }
   });
 

@@ -905,3 +905,50 @@ export async function sendCoverFramePicker(to: string, postId: string, frameUrls
     },
   });
 }
+
+// Send animation failure with fallback options to post as static image
+export async function sendAnimationFailureWithFallbacks(
+  to: string,
+  postId: string,
+  errorReason: string,
+) {
+  const messageText = `⚠️ Reel animation couldn't be generated\n\n*Why:* ${errorReason}\n\nYou can still post this with a static image instead.`;
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: messageText },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `animate_fallback_static:${postId}`, title: '📸 Post as static image' } },
+          { type: 'reply', reply: { id: `animate_fallback_retry:${postId}`, title: '🔄 Try animation again' } },
+          { type: 'reply', reply: { id: `discard:${postId}`, title: '🗑️ Discard' } },
+        ],
+      },
+    },
+  });
+}
+
+// Log detailed animation error for admin debugging
+export function logAnimationError(
+  postId: string,
+  phone: string,
+  errorType: string,
+  errorMessage: string,
+  context: Record<string, any> = {},
+) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    postId,
+    phone,
+    errorType,
+    errorMessage,
+    ...context,
+  };
+
+  console.error('[ANIMATION_ERROR]', JSON.stringify(logEntry));
+}
