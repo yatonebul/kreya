@@ -139,7 +139,7 @@ class KenBurnsAPI:
     @modal.fastapi_endpoint(method="POST")
     async def render(self, request: dict):
         """Render Ken Burns animation with optional music."""
-        result = render_ken_burns(
+        result = render_ken_burns.remote(
             image_url=request.get("image_url"),
             duration=request.get("duration", 5),
             zoom_level=request.get("zoom_level", 1.5),
