@@ -91,20 +91,16 @@ export function sendAnimationStyleChoice(to: string, postId: string): Promise<Wa
       type: 'button',
       body: {
         text:
-          '🎬 *Choose your reel style:*\n\n' +
-          '⚡ *Quick Zoom* — Fast, snappy (2s)\n' +
-          '✨ *Elegant* — Slow smooth zoom (5s)\n' +
-          '🌅 *Cinematic* — Epic pan + zoom (6s)\n' +
-          '💫 *Float* — Gentle floating motion\n' +
-          '🎯 *Focus* — Zoom to focal point',
+          '🎬 *Choose your animation style:*\n\n' +
+          '⚡ *Quick* — Fast, snappy zoom\n' +
+          '✨ *Elegant* — Smooth sophisticated pan\n' +
+          '🌅 *Cinematic* — Epic cinematic motion',
       },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: `anim_quick:${postId}`, title: '⚡ Quick Zoom' } },
+          { type: 'reply', reply: { id: `anim_quick:${postId}`, title: '⚡ Quick' } },
           { type: 'reply', reply: { id: `anim_elegant:${postId}`, title: '✨ Elegant' } },
           { type: 'reply', reply: { id: `anim_cinematic:${postId}`, title: '🌅 Cinematic' } },
-          { type: 'reply', reply: { id: `anim_float:${postId}`, title: '💫 Float' } },
-          { type: 'reply', reply: { id: `anim_focus:${postId}`, title: '🎯 Focus' } },
         ],
       },
     },
