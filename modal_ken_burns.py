@@ -139,7 +139,7 @@ class KenBurnsAPI:
     @modal.fastapi_endpoint(method="POST")
     async def render(self, request: dict):
         """Render Ken Burns animation with optional music."""
-        result = await render_ken_burns.aio(
+        result = render_ken_burns.remote(
             image_url=request.get("image_url"),
             duration=request.get("duration", 5),
             zoom_level=request.get("zoom_level", 1.5),
@@ -148,6 +148,8 @@ class KenBurnsAPI:
             visualization_prompt=request.get("visualization_prompt"),
             animation_style=request.get("animation_style", "auto"),
         )
+        print(f"[KenBurnsAPI.render] result: {result}")
         if result.get("error"):
+            print(f"[KenBurnsAPI.render] error in result: {result['error']}")
             return {"error": result["error"]}, 400
         return result
