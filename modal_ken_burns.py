@@ -74,17 +74,22 @@ def render_ken_burns(
                 zoom_start, zoom_end = 0.8, zoom_level
                 pan_x, pan_y = 80, 60
 
-            # Build FFmpeg zoompan filter
+            # Build FFmpeg zoompan filter with smooth pan + easing
             total_frames = duration * 30
-            zoom_inc = (zoom_end - zoom_start) / total_frames
+            # Scale pan values from "direction magnitude" to pixel offset (subtle drift)
+            pan_x_scaled = pan_x / 3.0 if pan_x else 0
+            pan_y_scaled = pan_y / 3.0 if pan_y else 0
+
             zoompan_filter = (
-                f"zoompan=z='if(lte(zoom,{zoom_end}),zoom+{zoom_inc:.6f},{zoom_end})'"
-                f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+                f"zoompan=z='zoom_start:=if(gte(n\\,1)\\,{zoom_start}+(({zoom_end})-({zoom_start}))*pow(n/({total_frames}-1)\\,0.5)\\,{zoom_start})'"
+                f":x='iw/2-(iw/zoom/2)-({pan_x_scaled})*n/({total_frames}-1)'"
+                f":y='ih/2-(ih/zoom/2)-({pan_y_scaled})*n/({total_frames}-1)'"
                 f":d={total_frames}:s={width}x{height}"
             )
 
             # Build FFmpeg command for video
             video_path = tmpdir / "output.mp4"
+            music_included = False
             cmd = [
                 "ffmpeg",
                 "-loop", "1",
@@ -130,25 +135,28 @@ def render_ken_burns(
                         "-y",
                         str(video_path),
                     ]
+                    music_included = True
                 except Exception as music_err:
                     # Fallback to silent video if music download fails
                     print(f"[render_ken_burns] music download failed: {music_err}, rendering without music")
+                    music_included = False
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
                 return {
                     "error": f"FFmpeg error: {result.stderr}",
                     "video_b64": None,
+                    "music_included": music_included,
                 }
 
             # Encode video as base64
             with open(video_path, "rb") as f:
                 video_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-            return {"video_b64": video_b64, "error": None}
+            return {"video_b64": video_b64, "error": None, "music_included": music_included}
 
     except Exception as e:
-        return {"error": str(e), "video_b64": None}
+        return {"error": str(e), "video_b64": None, "music_included": False}
 
 
 @app.cls(image=image, gpu="t4", timeout=300)
