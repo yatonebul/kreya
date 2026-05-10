@@ -917,8 +917,8 @@ export async function sendAnimationFailureWithFallbacks(
       body: { text: messageText },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: `animate_fallback_static:${postId}`, title: '📸 Post as static image' } },
-          { type: 'reply', reply: { id: `animate_fallback_retry:${postId}`, title: '🔄 Try animation again' } },
+          { type: 'reply', reply: { id: `animate_fallback_static:${postId}`, title: '📸 Post Image' } },
+          { type: 'reply', reply: { id: `animate_fallback_retry:${postId}`, title: '🔄 Retry' } },
           { type: 'reply', reply: { id: `discard:${postId}`, title: '🗑️ Discard' } },
         ],
       },

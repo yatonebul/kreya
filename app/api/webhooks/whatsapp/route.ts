@@ -2087,7 +2087,7 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
   // Queue the preview render
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('user_image_url, caption, animation_duration, animation_zoom, music_selection')
+    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection')
     .eq('id', postId)
     .maybeSingle();
 
@@ -2109,6 +2109,7 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
         caption: post.caption,
         duration: post.animation_duration,
         zoomLevel: post.animation_zoom,
+        animationStyle: post.animation_style,
         musicPreference: post.music_selection,
         isPreview: true,
       }),
@@ -2126,7 +2127,7 @@ async function handlePreviewApproval(from: string, postId: string) {
   // Finalize render with full quality (not preview)
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('user_image_url, caption, animation_duration, animation_zoom, music_selection')
+    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection')
     .eq('id', postId)
     .maybeSingle();
 
@@ -2148,6 +2149,7 @@ async function handlePreviewApproval(from: string, postId: string) {
         caption: post.caption,
         duration: post.animation_duration,
         zoomLevel: post.animation_zoom,
+        animationStyle: post.animation_style,
         musicPreference: post.music_selection,
         isPreview: false,
       }),
