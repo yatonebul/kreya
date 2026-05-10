@@ -909,6 +909,14 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleRetryMusic(from, postId);
     return;
   }
+  if (action === 'animate_fallback_static' && postId) {
+    await handleAnimationFallbackStatic(from, postId);
+    return;
+  }
+  if (action === 'animate_fallback_retry' && postId) {
+    await handleAnimationFallbackRetry(from, postId);
+    return;
+  }
   if (action === 'spin_reel_assets' && postId) {
     await handleSpinReelWithAssets(from, postId);
     return;
@@ -2132,6 +2140,54 @@ async function handleRetryMusic(from: string, postId: string) {
   const supabase = getSupabase();
   await supabase.from('pending_posts').update({ state: 'waiting_music_choice' }).eq('id', postId);
   await sendMusicChoice(from, postId);
+}
+
+async function handleAnimationFallbackStatic(from: string, postId: string) {
+  const supabase = getSupabase();
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('id, user_image_url, caption, surface')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post) {
+    await sendText(from, "⚠️ Post not found — please try again.");
+    return;
+  }
+
+  // Convert to static image post (no animation)
+  await supabase.from('pending_posts').update({
+    state: 'pending_approval',
+    is_video: false,
+    image_url: post.user_image_url,
+  }).eq('id', postId);
+
+  await sendText(from, '📸 Posting as a static image instead. Here\'s what it will look like:');
+  await sendPostPreview(from, post.user_image_url, post.caption, postId, false, post.surface ?? 'feed');
+}
+
+async function handleAnimationFallbackRetry(from: string, postId: string) {
+  const supabase = getSupabase();
+
+  // Check if post still exists
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('id, state')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post) {
+    await sendText(from, "⚠️ Post not found — please try again.");
+    return;
+  }
+
+  // Reset to animation style selection
+  await supabase.from('pending_posts').update({
+    state: 'waiting_animation_style',
+  }).eq('id', postId);
+
+  await sendText(from, '🔄 Let\'s try again! Pick an animation style:');
+  await sendAnimationStyleChoice(from, postId);
 }
 
 // ── Phase B repurpose handlers ──────────────────────────────────────
