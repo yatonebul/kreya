@@ -99,23 +99,35 @@ def render_ken_burns(
 
             # Add music if provided
             if music_url:
-                music_path = tmpdir / "music.mp3"
-                urllib.request.urlretrieve(music_url, music_path)
-                cmd = [
-                    "ffmpeg",
-                    "-loop", "1",
-                    "-i", str(image_path),
-                    "-i", str(music_path),
-                    "-vf", zoompan_filter,
-                    "-c:v", "libx264",
-                    "-preset", "ultrafast",
-                    "-crf", "23",
-                    "-c:a", "aac",
-                    "-shortest",
-                    "-pix_fmt", "yuv420p",
-                    "-y",
-                    str(video_path),
-                ]
+                try:
+                    music_path = tmpdir / "music.mp3"
+                    # Add headers to avoid 403 Forbidden from Pexels
+                    req = urllib.request.Request(
+                        music_url,
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                    )
+                    with urllib.request.urlopen(req) as response:
+                        with open(music_path, 'wb') as f:
+                            f.write(response.read())
+
+                    cmd = [
+                        "ffmpeg",
+                        "-loop", "1",
+                        "-i", str(image_path),
+                        "-i", str(music_path),
+                        "-vf", zoompan_filter,
+                        "-c:v", "libx264",
+                        "-preset", "ultrafast",
+                        "-crf", "23",
+                        "-c:a", "aac",
+                        "-shortest",
+                        "-pix_fmt", "yuv420p",
+                        "-y",
+                        str(video_path),
+                    ]
+                except Exception as music_err:
+                    # Fallback to silent video if music download fails
+                    print(f"[render_ken_burns] music download failed: {music_err}, rendering without music")
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
