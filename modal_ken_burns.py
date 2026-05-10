@@ -11,7 +11,7 @@ app = modal.App("kreya-ken-burns")
 image = (
     modal.Image.debian_slim()
     .apt_install("ffmpeg", "wget", "ca-certificates")
-    .pip_install("pillow", "requests")
+    .pip_install("pillow", "requests", "fastapi")
 )
 
 
