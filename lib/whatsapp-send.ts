@@ -138,17 +138,15 @@ export function sendMusicChoice(to: string, postId: string): Promise<WaResult> {
       body: {
         text:
           '🎵 *Sound it up?*\n\n' +
-          '• *Trending* — Hot audio that matches your vibe\n' +
-          '• *Calm* — Peaceful, soothing background\n' +
-          '• *Silent* — Just the visual (no music)\n' +
-          '• *Skip* — I\'ll decide',
+          '🔥 *Trending* — Hot audio that matches your vibe\n' +
+          '🧘 *Calm* — Peaceful, soothing background\n' +
+          '🔇 *Silent* — Just the visual (no music)',
       },
       action: {
         buttons: [
           { type: 'reply', reply: { id: `music_trending:${postId}`, title: '🔥 Trending' } },
           { type: 'reply', reply: { id: `music_calm:${postId}`, title: '🧘 Calm' } },
           { type: 'reply', reply: { id: `music_none:${postId}`, title: '🔇 Silent' } },
-          { type: 'reply', reply: { id: `music_auto:${postId}`, title: '🤖 Skip' } },
         ],
       },
     },
