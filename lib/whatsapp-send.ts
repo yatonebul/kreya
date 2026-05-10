@@ -82,27 +82,44 @@ export function sendAnimateToReelOffer(to: string, sessionId: string): Promise<W
   });
 }
 
-export function sendAnimationStyleChoice(to: string, postId: string): Promise<WaResult> {
+export function sendAnimationStyleChoice(to: string, postId: string, includeQuick: boolean = false): Promise<WaResult> {
+  let body: string;
+  let buttons: Array<{ type: 'reply'; reply: { id: string; title: string } }>;
+
+  if (includeQuick) {
+    // Multi-photo mode: include quick-zoom transitions
+    body =
+      '🎬 *Choose your animation style:*\n\n' +
+      '⚡ *Quick* — Fast transitions\n' +
+      '✨ *Elegant* — Smooth pan\n' +
+      '🌅 *Cinematic* — Epic motion';
+    buttons = [
+      { type: 'reply', reply: { id: `anim_quick:${postId}`, title: '⚡ Quick' } },
+      { type: 'reply', reply: { id: `anim_elegant:${postId}`, title: '✨ Elegant' } },
+      { type: 'reply', reply: { id: `anim_cinematic:${postId}`, title: '🌅 Cinematic' } },
+    ];
+  } else {
+    // Single photo mode: skip quick-zoom (no cuts to make), show other styles
+    body =
+      '🎬 *Choose your animation style:*\n\n' +
+      '✨ *Elegant* — Smooth pan\n' +
+      '🌅 *Cinematic* — Epic motion\n' +
+      '💫 *Float* — Gentle drift';
+    buttons = [
+      { type: 'reply', reply: { id: `anim_elegant:${postId}`, title: '✨ Elegant' } },
+      { type: 'reply', reply: { id: `anim_cinematic:${postId}`, title: '🌅 Cinematic' } },
+      { type: 'reply', reply: { id: `anim_float:${postId}`, title: '💫 Float' } },
+    ];
+  }
+
   return wa({
     messaging_product: 'whatsapp',
     to,
     type: 'interactive',
     interactive: {
       type: 'button',
-      body: {
-        text:
-          '🎬 *Choose your animation style:*\n\n' +
-          '⚡ *Quick* — Fast, snappy zoom\n' +
-          '✨ *Elegant* — Smooth sophisticated pan\n' +
-          '🌅 *Cinematic* — Epic cinematic motion',
-      },
-      action: {
-        buttons: [
-          { type: 'reply', reply: { id: `anim_quick:${postId}`, title: '⚡ Quick' } },
-          { type: 'reply', reply: { id: `anim_elegant:${postId}`, title: '✨ Elegant' } },
-          { type: 'reply', reply: { id: `anim_cinematic:${postId}`, title: '🌅 Cinematic' } },
-        ],
-      },
+      body: { text: body },
+      action: { buttons },
     },
   });
 }

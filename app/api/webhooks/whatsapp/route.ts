@@ -2013,17 +2013,17 @@ async function handleReelFromImage(from: string, sessionId: string) {
   // Only discard the original post after successfully creating the new one
   await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', sessionId);
 
-  await sendAnimationStyleChoice(from, post.id);
+  await sendAnimationStyleChoice(from, post.id, false);
 }
 
 async function handleAnimationStyleChoice(from: string, postId: string, style: string) {
   const supabase = getSupabase();
 
   const styleMap: Record<string, { style: string; duration: number; zoom: number; description: string }> = {
-    'quick': { style: 'quick-zoom', duration: 2, zoom: 2.2, description: '⚡ Quick snappy zoom' },
+    'quick': { style: 'quick-zoom', duration: 3, zoom: 2.2, description: '⚡ Quick snappy zoom' },
     'elegant': { style: 'elegant', duration: 5, zoom: 1.3, description: '✨ Smooth elegant pan' },
     'cinematic': { style: 'cinematic', duration: 6, zoom: 1.8, description: '🌅 Epic cinematic motion' },
-    'float': { style: 'float', duration: 5, zoom: 1.1, description: '💫 Gentle floating motion' },
+    'float': { style: 'float', duration: 4, zoom: 1.1, description: '💫 Gentle floating motion' },
     'focus': { style: 'focus-zoom', duration: 4, zoom: 1.6, description: '🎯 Zoom to focal point' },
   };
 
@@ -2162,7 +2162,7 @@ async function handlePreviewApproval(from: string, postId: string) {
 async function handleRetryAnimation(from: string, postId: string) {
   const supabase = getSupabase();
   await supabase.from('pending_posts').update({ state: 'waiting_animation_style' }).eq('id', postId);
-  await sendAnimationStyleChoice(from, postId);
+  await sendAnimationStyleChoice(from, postId, false);
 }
 
 async function handleRetryMusic(from: string, postId: string) {
@@ -2216,7 +2216,7 @@ async function handleAnimationFallbackRetry(from: string, postId: string) {
   }).eq('id', postId);
 
   await sendText(from, '🔄 Let\'s try again! Pick an animation style:');
-  await sendAnimationStyleChoice(from, postId);
+  await sendAnimationStyleChoice(from, postId, false);
 }
 
 // ── Phase B repurpose handlers ──────────────────────────────────────
