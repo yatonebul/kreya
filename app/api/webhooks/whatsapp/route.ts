@@ -1988,7 +1988,7 @@ async function handleReelFromImage(from: string, sessionId: string) {
     if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
   }
 
-  const { data: post } = await supabase.from('pending_posts').insert({
+  const { data: post, error: insertErr } = await supabase.from('pending_posts').insert({
     whatsapp_phone: from,
     state: 'waiting_animation_style',
     surface: 'reels',
@@ -2004,7 +2004,8 @@ async function handleReelFromImage(from: string, sessionId: string) {
     music_selection: 'auto',
   }).select('id').single();
 
-  if (!post) {
+  if (!post || insertErr) {
+    console.error('[handleReelFromImage] insert failed:', insertErr?.message ?? 'null result');
     await sendText(from, '⚠️ Couldn\'t create reel — please try again.');
     return;
   }
