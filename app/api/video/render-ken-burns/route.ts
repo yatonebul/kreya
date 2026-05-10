@@ -40,22 +40,27 @@ async function renderKenBurnsViaModal(
 
   const visualizationPrompt = await getDefaultVisualizationPrompt(caption, animationStyle);
 
+  const requestBody = {
+    image_url: imageUrl,
+    duration,
+    zoom_level: zoomLevel,
+    aspect_ratio: aspectRatio,
+    music_url: musicUrl,
+    visualization_prompt: visualizationPrompt,
+    animation_style: animationStyle,
+  };
+
+  console.log('[renderKenBurnsViaModal] request to Modal:', JSON.stringify(requestBody, null, 2));
+
   const res = await fetch(modalUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image_url: imageUrl,
-      duration,
-      zoom_level: zoomLevel,
-      aspect_ratio: aspectRatio,
-      music_url: musicUrl,
-      visualization_prompt: visualizationPrompt,
-      animation_style: animationStyle,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
     const text = await res.text();
+    console.error('[renderKenBurnsViaModal] Modal error response:', { status: res.status, statusText: res.statusText, body: text });
     throw new Error(`Modal Ken Burns failed: ${res.status} ${text}`);
   }
 
