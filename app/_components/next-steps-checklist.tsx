@@ -171,7 +171,7 @@ export function NextStepsChecklist({
                   href={step.cta.href}
                   className="text-xs px-3 py-1.5 rounded-full font-medium flex-shrink-0 transition-opacity hover:opacity-80 whitespace-nowrap"
                   style={{
-                    background: 'var(--coral)',
+                    background: step.cta.label.toLowerCase().includes('upgrade') ? 'var(--upgrade)' : 'var(--coral)',
                     color: '#fff',
                     fontFamily: 'var(--font-dm-sans)',
                   }}

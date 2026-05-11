@@ -7,7 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
+import { getAdaptersForPlatforms } from '@/lib/adapters';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
 import { transcribeVoice } from '@/lib/transcribe';
@@ -17,9 +18,26 @@ import { hasScheduleIntent, parseScheduleTime, formatScheduleConfirmation } from
 import { findBestTimeForUser, nextOccurrenceOfBestTime, type BestTime } from '@/lib/best-time';
 import { adminUrlToken, createWaMagicToken } from '@/lib/session';
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'kreya_whatsapp_2026';
-const APP_URL      = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
-const ADMIN_PHONE  = process.env.ADMIN_WHATSAPP_PHONE ?? '';
+const VERIFY_TOKEN   = process.env.WHATSAPP_VERIFY_TOKEN!;
+const APP_URL        = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
+const ADMIN_PHONE    = process.env.ADMIN_WHATSAPP_PHONE ?? '';
+const SUPPORT_PHONE  = process.env.SUPPORT_PHONE ?? '';
+
+// Returns all platforms the user has connected accounts for.
+async function getConnectedPlatforms(phone: string): Promise<string[]> {
+  const supabase = getSupabase();
+  const phones = phoneVariants(phone);
+  const platforms: string[] = [];
+
+  const [{ data: ig }, { data: tt }] = await Promise.all([
+    supabase.from('instagram_accounts').select('id').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle(),
+    supabase.from('tiktok_accounts').select('id').in('whatsapp_phone', phones).eq('is_active', true).maybeSingle(),
+  ]);
+
+  if (ig) platforms.push('instagram');
+  if (tt) platforms.push('tiktok');
+  return platforms;
+}
 
 // WhatsApp sends phone without '+'; manual DB entries may have '+'. Query both.
 function phoneVariants(phone: string): string[] {
@@ -1192,6 +1210,28 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
   if (action === 'eng_off' && postId) {
     await handleEngagementToggle(from, postId, { dm: false, comment: false });
+    return;
+  }
+
+  // Pre-flight: publish to all connected platforms
+  if (action === 'preflight_all' && postId) {
+    await handlePreFlightPublish(from, postId, null);
+    return;
+  }
+  // Pre-flight: publish to Instagram only
+  if (action === 'preflight_ig' && postId) {
+    await handlePreFlightPublish(from, postId, ['instagram']);
+    return;
+  }
+  // Pre-flight: publish to TikTok only
+  if (action === 'preflight_tt' && postId) {
+    await handlePreFlightPublish(from, postId, ['tiktok']);
+    return;
+  }
+  // Pre-flight: show customize platform menu
+  if (action === 'preflight_customize' && postId) {
+    const connectedPlatforms = await getConnectedPlatforms(from);
+    await sendPlatformCustomizeMenu(from, postId, connectedPlatforms);
     return;
   }
 
@@ -2798,6 +2838,80 @@ async function handleSpinReelScript(from: string, sourcePostId: string) {
   );
 }
 
+// Publishes a post to all specified platforms (or all connected ones when platforms is null).
+// Uses the SocialAdapter registry — each platform runs through validate → format → publish.
+async function handlePreFlightPublish(from: string, postId: string, platforms: string[] | null) {
+  const post = await getPostById(postId);
+  if (!post) {
+    await sendText(from, '⚠️ Post not found. It may have been discarded.');
+    return;
+  }
+
+  const targetPlatforms = platforms ?? await getConnectedPlatforms(from);
+  if (targetPlatforms.length === 0) {
+    await sendText(from, '⚠️ No connected platforms found. Connect Instagram or TikTok first.');
+    return;
+  }
+
+  // Persist target_platforms on the draft
+  await getSupabase()
+    .from('pending_posts')
+    .update({ target_platforms: targetPlatforms })
+    .eq('id', postId);
+
+  const assets = Array.isArray(post.media_items) && (post.media_items as any[]).length > 0
+    ? (post.media_items as any[]).map((item: any) => ({ url: item.url, is_video: !!item.is_video }))
+    : [{ url: post.image_url, is_video: !!post.is_video }];
+
+  const platformList = targetPlatforms.map(p => p === 'instagram' ? 'Instagram' : p === 'tiktok' ? 'TikTok' : p).join(' + ');
+  await sendText(from, `⏳ Publishing to ${platformList}...`);
+
+  const adapters = getAdaptersForPlatforms(targetPlatforms);
+  const results = await Promise.allSettled(
+    adapters.map(async adapter => {
+      const validation = await adapter.validate(assets, post.caption);
+      if (!validation.ok) throw new Error(`${adapter.platform}: ${validation.error}`);
+      const payload = await adapter.format(assets, post.caption, post.surface ?? 'feed', from);
+      return adapter.publish(payload);
+    }),
+  );
+
+  const receipts: string[] = [];
+  let anySuccess = false;
+
+  for (const [i, result] of results.entries()) {
+    const platform = targetPlatforms[i] ?? 'unknown';
+    if (result.status === 'fulfilled') {
+      const receipt = result.value;
+      if (receipt.status === 'published') {
+        anySuccess = true;
+        receipts.push(`✅ ${platform === 'instagram' ? 'Instagram' : 'TikTok'}: published`);
+        if (platform === 'tiktok') {
+          await getSupabase().from('pending_posts')
+            .update({ tiktok_post_id: receipt.postId })
+            .eq('id', postId);
+        }
+      } else {
+        receipts.push(`⚠️ ${platform}: ${receipt.error ?? 'failed'}`);
+      }
+    } else {
+      receipts.push(`⚠️ ${platform}: ${(result.reason as Error)?.message ?? 'failed'}`);
+    }
+  }
+
+  if (anySuccess) {
+    await getSupabase().from('pending_posts')
+      .update({ state: 'published', published_at: new Date().toISOString() })
+      .eq('id', postId);
+  }
+
+  await sendText(from, receipts.join('\n'));
+
+  if (anySuccess) {
+    await sendPostPublishedActions(from, postId, post.image_url, false);
+  }
+}
+
 // Handles a burst video (has media_group_id) arriving outside an active collection.
 // Creates or joins a collecting_carousel session the same way handleAutoCarouselImage
 // does for photos — ensures videos and photos from the same camera-roll selection are
@@ -2841,9 +2955,9 @@ async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId:
     .eq('state', 'collecting_carousel')
     .maybeSingle() : { data: null };
 
-  // Only join a session that was active within the last 60 seconds
+  // Only join a session that started within the last 5 seconds (5-second collection window)
   const anySession = anyCandidateSession && (
-    Date.now() - new Date((anyCandidateSession as any).updated_at ?? anyCandidateSession.created_at).getTime() <= 60_000
+    Date.now() - new Date((anyCandidateSession as any).updated_at ?? anyCandidateSession.created_at).getTime() <= 5_000
   ) ? anyCandidateSession : null;
 
   // Discard stale orphaned session so it doesn't accumulate future items
@@ -2895,7 +3009,11 @@ async function handleAutoCarouselVideo(from: string, message: any, mediaGroupId:
     p_item: { url, is_video: true },
   });
   const count = typeof newCount === 'number' ? newCount : 1;
-  await sendCarouselProgressButtons(from, sessionId, count, count >= 10);
+  if (count >= 10) {
+    await sendText(from, `🎬 Carousel Draft — ${count} slides. That's the max! Type *done* to publish.`);
+  } else {
+    await sendText(from, `🎬 Carousel Draft — ${count} slides. Send more photos/videos, or type *done* to publish.`);
+  }
 }
 
 // Handles any image sent outside an active edit flow or collecting_carousel session.
@@ -2939,13 +3057,17 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
   }
 
   const { data: existing } = await existingQuery.maybeSingle();
-  // Fallback: find any active session if group-id search found nothing
-  const { data: anyExisting } = !existing ? await supabase
+  // Fallback: find any active session within the 5-second collection window
+  const { data: anyCandidate } = !existing ? await supabase
     .from('pending_posts')
-    .select('id, caption')
+    .select('id, caption, created_at')
     .eq('whatsapp_phone', from)
     .eq('state', 'collecting_carousel')
     .maybeSingle() : { data: null };
+
+  const anyExisting = anyCandidate && (
+    Date.now() - new Date((anyCandidate as any).created_at).getTime() <= 5_000
+  ) ? anyCandidate : null;
 
   const resolvedExisting = existing ?? anyExisting;
 
@@ -3000,11 +3122,11 @@ async function handleAutoCarouselImage(from: string, message: any, userCaption: 
   const count = typeof newCount === 'number' ? newCount : 1;
 
   if (count >= 10) {
-    await sendText(from, `📸 Photo ${count} added — that's the max! Type *done* to publish your carousel.`);
+    await sendText(from, `📸 Carousel Draft — ${count} slides. That's the max! Type *done* to publish.`);
   } else if (count === 1) {
     await sendAnimateToReelOffer(from, sessionId);
   } else {
-    await sendText(from, `📸 Photo ${count} added. Send more, or type *done* to publish your ${count}-slide carousel.`);
+    await sendText(from, `📸 Carousel Draft — ${count} slides. Send more, or type *done* to publish.`);
   }
 }
 
@@ -3270,7 +3392,12 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
     if (error) console.warn('[caption_variants update]', error.message);
   }
 
-  await sendPostPreview(from, items[0].url, caption, post.id, false, 'carousel', items.length);
+  const connectedPlatforms = await getConnectedPlatforms(from);
+  if (connectedPlatforms.length > 1) {
+    await sendPreFlightMenu(from, post.id, items[0].url, caption, connectedPlatforms);
+  } else {
+    await sendPostPreview(from, items[0].url, caption, post.id, false, 'carousel', items.length);
+  }
 
   if (variants.length > 1) {
     const others = variants.slice(1).map((v, i) => {

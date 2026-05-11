@@ -140,21 +140,26 @@ export async function refineCaption(
   profileContext?: string,
   originalPrompt?: string,
 ): Promise<string> {
-  const originalBlock = originalPrompt
-    ? `Original user input: "${originalPrompt}"\n\n`
-    : '';
+  const refineSystem = [
+    'Role: Social Media Editor',
+    'Refine the caption according to the New Instruction while preserving the Original Intent and brand voice.',
+    'Output ONLY the revised caption text — no commentary, no explanation, no labels.',
+    profileContext ?? '',
+  ].filter(Boolean).join('\n\n');
 
-  const userContent =
-    `${originalBlock}Current caption:\n${currentCaption}\n\n` +
-    `Instruction: ${instruction}\n\n` +
-    `Rewrite the caption applying the instruction while strictly preserving the core subject matter from the original user input. Output ONLY the new caption.`;
+  const userContent = [
+    originalPrompt ? `Original Intent: "${originalPrompt}"` : null,
+    `Current Version:\n${currentCaption}`,
+    `New Instruction: ${instruction}`,
+    'Output ONLY the revised caption.',
+  ].filter(Boolean).join('\n\n');
 
-  console.log('[refineCaption] prompt payload →', JSON.stringify({ originalPrompt, instruction, currentCaption: currentCaption.slice(0, 120) }));
+  console.log('[refineCaption] →', JSON.stringify({ originalPrompt, instruction, currentCaption: currentCaption.slice(0, 120) }));
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 400,
-    system: buildSystem(profileContext),
+    system: refineSystem,
     messages: [{ role: 'user', content: userContent }],
   });
 

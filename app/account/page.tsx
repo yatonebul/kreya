@@ -394,7 +394,7 @@ export default async function AccountPage({
                   <a
                     href={`/api/billing/create-checkout?phone=${encodeURIComponent(queryId)}`}
                     className="inline-flex items-center gap-2 text-sm px-5 py-2.5 rounded-full font-semibold transition-opacity hover:opacity-90"
-                    style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}
+                    style={{ background: 'var(--upgrade)', color: '#fff', fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}
                   >
                     Upgrade to Pro
                   </a>

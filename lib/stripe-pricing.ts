@@ -20,9 +20,9 @@ export async function getProPrice(): Promise<{
   if (!STRIPE_SECRET_KEY || !STRIPE_PRO_PRICE_ID) {
     // Fallback to env var label or default
     return {
-      amount: 1999,
+      amount: 2000,
       currency: 'usd',
-      formattedPrice: process.env.NEXT_PUBLIC_PRO_PRICE_LABEL ?? '$19.99',
+      formattedPrice: process.env.NEXT_PUBLIC_PRO_PRICE_LABEL ?? '$20',
     };
   }
 

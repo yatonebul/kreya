@@ -1,4 +1,4 @@
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? '1079839465213735';
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID!;
 
 // WA error codes we care about handling explicitly (vs generic 5xx).
 // 131030 — recipient phone not in test allowlist (Meta app in Dev mode);
@@ -923,6 +923,98 @@ export async function sendAnimationFailureWithFallbacks(
           { type: 'reply', reply: { id: `animate_fallback_retry:${postId}`, title: '🔄 Try animation again' } },
           { type: 'reply', reply: { id: `discard:${postId}`, title: '🗑️ Discard' } },
         ],
+      },
+    },
+  });
+}
+
+// Pre-Flight menu — shown after "Done" or collection close when multiple platforms are connected.
+// Sends a composite preview (first asset image + caption) then a 3-button choice:
+//   🚀 ALL PLATFORMS — publish everywhere connected
+//   ⚙️ CUSTOMIZE     — pick specific platforms
+//   ✍️ EDIT CAPTION  — refine caption before posting
+export async function sendPreFlightMenu(
+  to: string,
+  postId: string,
+  previewUrl: string,
+  caption: string,
+  connectedPlatforms: string[],
+): Promise<WaResult> {
+  // Send preview image so user sees what they're posting
+  if (previewUrl) {
+    await wa({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'image',
+      image: { link: previewUrl },
+    });
+  }
+
+  const platformList = connectedPlatforms.map(p => {
+    if (p === 'instagram') return 'Instagram';
+    if (p === 'tiktok') return 'TikTok';
+    return p;
+  }).join(' + ');
+
+  await wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'text',
+    text: { body: `🎙️ *Caption:*\n\n${caption}` },
+  });
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      header: { type: 'text', text: '🚀 Ready to publish?' },
+      body: { text: `Connected: ${platformList}\n\nWhere do you want to post?` },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `preflight_all:${postId}`, title: '🚀 All Platforms' } },
+          { type: 'reply', reply: { id: `preflight_customize:${postId}`, title: '⚙️ Customize' } },
+          { type: 'reply', reply: { id: `edit:${postId}`, title: '✍️ Edit Caption' } },
+        ],
+      },
+    },
+  });
+}
+
+// Customize menu — platform toggle list for picking specific destinations.
+// Action IDs use flat prefixes (no colons within the prefix) to work with
+// the webhook router which splits on the FIRST colon only.
+export async function sendPlatformCustomizeMenu(
+  to: string,
+  postId: string,
+  connectedPlatforms: string[],
+): Promise<WaResult> {
+  const platformActionMap: Record<string, string> = {
+    instagram: 'preflight_ig',
+    tiktok: 'preflight_tt',
+  };
+
+  const rows = connectedPlatforms.map(p => {
+    const label = p === 'instagram' ? 'Instagram' : p === 'tiktok' ? 'TikTok' : p;
+    const actionPrefix = platformActionMap[p] ?? `preflight_${p}`;
+    return { id: `${actionPrefix}:${postId}`, title: `📲 ${label} only`, description: `Post to ${label} only` };
+  });
+
+  rows.push({ id: `preflight_all:${postId}`, title: '🚀 All platforms', description: 'Publish everywhere' });
+
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'list',
+      header: { type: 'text', text: '⚙️ Choose where to post' },
+      body: { text: 'Select a destination for this post.' },
+      footer: { text: 'You can also post to individual platforms' },
+      action: {
+        button: 'Select platform',
+        sections: [{ title: 'Platforms', rows }],
       },
     },
   });

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { sendBrandSuggestion, sendText } from '@/lib/whatsapp-send';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 
-const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
+const APP_ID = process.env.INSTAGRAM_APP_ID!;
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
 const REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI ?? 'https://kreya-github.vercel.app/api/auth/instagram/callback';
 const CONNECT_URL = process.env.NEXT_PUBLIC_APP_URL
