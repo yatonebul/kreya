@@ -8,7 +8,19 @@ FFmpeg Ken Burns rendering on GPU (Modal). Enables smooth zoom-in effects on ree
 - Enough for ~5,000+ Ken Burns transformations (5s each, ~GPU $0.0001/sec)
 - After credits, pay-as-you-go (~$0.04/hr on L40S GPU)
 
-## Setup (5 min)
+## Quick Start: If You Already Have Modal Endpoint URL
+
+**Skip to [VERCEL_ENV_SETUP.md](./VERCEL_ENV_SETUP.md)** to wire up your endpoint in Vercel.
+
+All you need to do:
+1. Copy your Modal endpoint URL (e.g., `https://your-workspace--ken-burns-endpoint.modal.run`)
+2. Add it to Vercel as `MODAL_KEN_BURNS_URL` env var
+3. Redeploy
+4. Done! ✅
+
+---
+
+## Full Setup (if deploying worker from scratch)
 
 ### 1. Create Modal Account & Token
 
