@@ -622,7 +622,14 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     }
   }
 
-  await sendPostPreview(from, imageUrl, caption, primaryPost.id, isVideo);
+  // Show pre-flight menu when user has >1 platform connected; otherwise
+  // fall through to standard IG-only preview (backward-compatible).
+  const connectedPlatforms = await getConnectedPlatforms(from);
+  if (connectedPlatforms.length > 1) {
+    await sendPreFlightMenu(from, primaryPost.id, imageUrl, caption, connectedPlatforms);
+  } else {
+    await sendPostPreview(from, imageUrl, caption, primaryPost.id, isVideo);
+  }
 
   if (variants.length > 1) {
     const others = variants.slice(1).map((v, i) => {
@@ -2885,14 +2892,20 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
       const receipt = result.value;
       if (receipt.status === 'published') {
         anySuccess = true;
-        receipts.push(`✅ ${platform === 'instagram' ? 'Instagram' : 'TikTok'}: published`);
-        if (platform === 'tiktok') {
+        const label = platform === 'instagram' ? 'Instagram' : 'TikTok';
+        const linkSuffix = receipt.postUrl ? ` — ${receipt.postUrl}` : '';
+        receipts.push(`✅ ${label}: published${linkSuffix}`);
+        if (platform === 'instagram') {
+          await getSupabase().from('pending_posts')
+            .update({ ig_post_id: receipt.postId, ig_post_url: receipt.postUrl ?? null })
+            .eq('id', postId);
+        } else if (platform === 'tiktok') {
           await getSupabase().from('pending_posts')
             .update({ tiktok_post_id: receipt.postId })
             .eq('id', postId);
         }
       } else {
-        receipts.push(`⚠️ ${platform}: ${receipt.error ?? 'failed'}`);
+        receipts.push(`⚠️ ${platform === 'instagram' ? 'Instagram' : 'TikTok'}: ${receipt.error ?? 'failed'}`);
       }
     } else {
       receipts.push(`⚠️ ${platform}: ${(result.reason as Error)?.message ?? 'failed'}`);
