@@ -2,6 +2,7 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendBrandSuggestion, sendText } from '@/lib/whatsapp-send';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
+import { encryptToken, decryptToken } from '@/lib/encryption';
 
 const APP_ID = process.env.INSTAGRAM_APP_ID ?? '761297643580425';
 const APP_SECRET = process.env.INSTAGRAM_APP_SECRET!;
@@ -130,9 +131,10 @@ export async function GET(request: NextRequest) {
         throw new Error(`Failed to demote siblings: ${demoteErr.message}`);
       }
 
+      const encryptedToken = encryptToken(accessToken);
       const { error: updateErr } = await getSupabase().from('instagram_accounts').update({
         account_name: meData.username,
-        access_token: accessToken,
+        access_token_encrypted: encryptedToken,
         token_expires_at: expiresAt,
         is_active: true,
         ...(whatsappPhone ? { whatsapp_phone: whatsappPhone } : {}),
@@ -192,10 +194,11 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      const encryptedToken = encryptToken(accessToken);
       const insertData: any = {
         account_name: meData.username,
         instagram_user_id: meData.id,
-        access_token: accessToken,
+        access_token_encrypted: encryptedToken,
         token_expires_at: expiresAt,
         is_active: true,
         ...backfill,
@@ -231,7 +234,7 @@ export async function GET(request: NextRequest) {
         ).catch(() => {});
 
         try {
-          const result = await learnStyleFromInstagram(phone, igUserId, token);
+          const result = await learnStyleFromInstagram(phone, igUserId, token); // token is plaintext at this point
           if (!result.ok || result.captionsFound === 0) return;
 
           await sendText(

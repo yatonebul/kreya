@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendText } from '@/lib/whatsapp-send';
+import { decryptToken, encryptToken } from '@/lib/encryption';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kreya-github.vercel.app';
 
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
 
   const { data: accounts, error } = await supabase
     .from('instagram_accounts')
-    .select('id, account_name, access_token, token_expires_at, whatsapp_phone')
+    .select('id, account_name, access_token_encrypted, token_expires_at, whatsapp_phone')
     .lt('token_expires_at', cutoff.toISOString());
 
   if (error) {
@@ -47,8 +48,11 @@ export async function GET(request: NextRequest) {
 
   for (const account of accounts) {
     try {
+      // Decrypt stored token
+      const decryptedToken = decryptToken(account.access_token_encrypted);
+
       const res = await fetch(
-        `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${account.access_token}`
+        `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${decryptedToken}`
       );
       const data = await res.json();
 
@@ -57,10 +61,11 @@ export async function GET(request: NextRequest) {
       }
 
       const expiresAt = new Date(Date.now() + data.expires_in * 1000).toISOString();
+      const encryptedNewToken = encryptToken(data.access_token);
 
       await supabase
         .from('instagram_accounts')
-        .update({ access_token: data.access_token, token_expires_at: expiresAt })
+        .update({ access_token_encrypted: encryptedNewToken, token_expires_at: expiresAt })
         .eq('id', account.id);
 
       console.log(`[token-refresh] ${account.account_name} refreshed → expires ${expiresAt}`);

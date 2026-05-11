@@ -1,11 +1,19 @@
 import { createHash, randomBytes } from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
+// Validate secrets on module load
+if (process.env.OTP_SECRET === 'kreya-otp-v1' || !process.env.OTP_SECRET) {
+  throw new Error(
+    'OTP_SECRET must be explicitly set in environment. ' +
+    'Using default "kreya-otp-v1" is not allowed in production.'
+  );
+}
+
 export const SESSION_COOKIE = 'kreya_session';
 export const SESSION_DAYS   = 30;
 
 function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 export function hashToken(token: string) {

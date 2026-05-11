@@ -3,7 +3,13 @@ import postgres from 'postgres';
 
 // One-time idempotent setup route — creates auth tables if they don't exist.
 // Protected by a static key so it can be called from CI / bash without exposing secrets.
-const SETUP_KEY = process.env.SETUP_KEY ?? 'kreya-init-2026';
+if (!process.env.SETUP_KEY || process.env.SETUP_KEY === 'kreya-init-2026') {
+  throw new Error(
+    'SETUP_KEY must be explicitly set in environment. ' +
+    'Using default "kreya-init-2026" is not allowed.'
+  );
+}
+const SETUP_KEY = process.env.SETUP_KEY;
 
 const DDL = `
 create table if not exists otp_codes (
