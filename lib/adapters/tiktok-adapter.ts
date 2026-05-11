@@ -13,15 +13,55 @@ async function getTikTokToken(whatsappPhone: string): Promise<string> {
 
   const { data } = await getSupabase()
     .from('tiktok_accounts')
-    .select('access_token, token_expires_at')
+    .select('open_id, access_token, refresh_token, token_expires_at, refresh_expires_at')
     .in('whatsapp_phone', phones)
     .eq('is_active', true)
     .maybeSingle();
 
   if (!data?.access_token) throw new Error('No TikTok account connected for this user');
 
-  const expired = data.token_expires_at && new Date(data.token_expires_at) < new Date();
-  if (expired) throw new Error('TikTok access token expired — reconnect your TikTok account');
+  const now = new Date();
+  const accessExpired = data.token_expires_at && new Date(data.token_expires_at) < now;
+
+  if (accessExpired) {
+    // Attempt silent refresh if we have a refresh token and it hasn't expired
+    const refreshExpired = data.refresh_expires_at && new Date(data.refresh_expires_at) < now;
+    if (!data.refresh_token || refreshExpired) {
+      throw new Error('TikTok access token expired — reconnect your TikTok account');
+    }
+
+    const res = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_key:    process.env.TIKTOK_CLIENT_KEY!,
+        client_secret: process.env.TIKTOK_CLIENT_SECRET!,
+        grant_type:    'refresh_token',
+        refresh_token: data.refresh_token,
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.access_token) {
+      throw new Error('TikTok token refresh failed — reconnect your TikTok account');
+    }
+
+    const newAccessExpiry = new Date(Date.now() + body.expires_in * 1000).toISOString();
+    const newRefreshExpiry = body.refresh_expires_in
+      ? new Date(Date.now() + body.refresh_expires_in * 1000).toISOString()
+      : data.refresh_expires_at;
+
+    await getSupabase()
+      .from('tiktok_accounts')
+      .update({
+        access_token:       body.access_token,
+        refresh_token:      body.refresh_token ?? data.refresh_token,
+        token_expires_at:   newAccessExpiry,
+        refresh_expires_at: newRefreshExpiry,
+      })
+      .eq('open_id', data.open_id);
+
+    return body.access_token as string;
+  }
 
   return data.access_token;
 }

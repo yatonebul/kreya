@@ -2905,10 +2905,16 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
             .eq('id', postId);
         }
       } else {
-        receipts.push(`⚠️ ${platform === 'instagram' ? 'Instagram' : 'TikTok'}: ${receipt.error ?? 'failed'}`);
+        const errMsg = receipt.error ?? 'failed';
+        const needsReconnect = platform === 'tiktok' && (errMsg.includes('expired') || errMsg.includes('reconnect'));
+        const suffix = needsReconnect ? `\nReconnect: ${APP_URL}/connect?phone=${encodeURIComponent(from)}` : '';
+        receipts.push(`⚠️ ${platform === 'instagram' ? 'Instagram' : 'TikTok'}: ${errMsg}${suffix}`);
       }
     } else {
-      receipts.push(`⚠️ ${platform}: ${(result.reason as Error)?.message ?? 'failed'}`);
+      const errMsg = (result.reason as Error)?.message ?? 'failed';
+      const needsReconnect = platform === 'tiktok' && (errMsg.includes('expired') || errMsg.includes('reconnect'));
+      const suffix = needsReconnect ? `\nReconnect: ${APP_URL}/connect?phone=${encodeURIComponent(from)}` : '';
+      receipts.push(`⚠️ ${platform}: ${errMsg}${suffix}`);
     }
   }
 
@@ -2921,7 +2927,9 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
   await sendText(from, receipts.join('\n'));
 
   if (anySuccess) {
-    await sendPostPublishedActions(from, postId, post.image_url, false);
+    const freshPost = await getPostById(postId);
+    const postLabel = freshPost?.surface === 'reels' ? 'Reel' : freshPost?.surface === 'story' ? 'Story' : 'post';
+    await sendPostPublishedActions(from, freshPost?.ig_post_url ?? undefined, postLabel);
   }
 }
 
@@ -3339,7 +3347,12 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
         image_source: 'user', media_items: null,
         ...(variants.length > 1 ? { caption_variants: variants } : {}),
       }).eq('id', post.id);
-      await sendPostPreview(from, items[0].url, caption, post.id, true, 'reels');
+      const connectedPlatformsReel = await getConnectedPlatforms(from);
+      if (connectedPlatformsReel.length > 1) {
+        await sendPreFlightMenu(from, post.id, items[0].url, caption, connectedPlatformsReel);
+      } else {
+        await sendPostPreview(from, items[0].url, caption, post.id, true, 'reels');
+      }
       if (variants.length > 1) {
         const others = variants.slice(1).map((v, i) => {
           const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
@@ -3526,7 +3539,12 @@ async function handleCarouselFinishAsReel(from: string, post: { id: string; medi
     ...(variants.length > 1 ? { caption_variants: variants } : {}),
   }).eq('id', post.id);
 
-  await sendPostPreview(from, videoItem.url, caption, post.id, true, 'reels');
+  const connectedPlatformsAsReel = await getConnectedPlatforms(from);
+  if (connectedPlatformsAsReel.length > 1) {
+    await sendPreFlightMenu(from, post.id, videoItem.url, caption, connectedPlatformsAsReel);
+  } else {
+    await sendPostPreview(from, videoItem.url, caption, post.id, true, 'reels');
+  }
   if (variants.length > 1) {
     const others = variants.slice(1).map((v, i) => {
       const trimmed = v.length > 140 ? v.slice(0, 140).trimEnd() + '…' : v;
