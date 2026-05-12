@@ -124,7 +124,8 @@ export function sendAnimationStyleChoice(to: string, postId: string, includeQuic
   });
 }
 
-export function sendPreviewOptions(to: string, postId: string, previewUrl: string): Promise<WaResult> {
+export function sendPreviewOptions(to: string, postId: string, previewUrl: string, caption?: string): Promise<WaResult> {
+  const captionLine = caption ? `\n\n*Caption:*\n${caption}` : '';
   return wa({
     messaging_product: 'whatsapp',
     to,
@@ -132,13 +133,13 @@ export function sendPreviewOptions(to: string, postId: string, previewUrl: strin
     interactive: {
       type: 'button',
       body: {
-        text: '✅ *Here\'s your preview!*\n\nLike it? Publish to Instagram or try a different animation style.',
+        text: `✅ *Here's your preview!*${captionLine}\n\nLike it? Approve or adjust.`,
       },
       action: {
         buttons: [
-          { type: 'reply', reply: { id: `approve_reel:${postId}`, title: '👍 Looks Good' } },
+          { type: 'reply', reply: { id: `approve_reel:${postId}`, title: '👍 Approve' } },
+          { type: 'reply', reply: { id: `edit_caption:${postId}`, title: '✏️ Edit text' } },
           { type: 'reply', reply: { id: `retry_anim:${postId}`, title: '🔄 Different Style' } },
-          { type: 'reply', reply: { id: `retry_music:${postId}`, title: '🎵 Change Music' } },
         ],
       },
     },

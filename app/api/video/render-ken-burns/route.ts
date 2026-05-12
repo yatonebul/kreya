@@ -154,7 +154,14 @@ export async function POST(req: NextRequest) {
           console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
         }
 
-        await sendPreviewOptions(phone, postId, videoUrl);
+        // Fetch caption from database to show in preview
+        const { data: post } = await supabase
+          .from('pending_posts')
+          .select('caption')
+          .eq('id', postId)
+          .maybeSingle();
+
+        await sendPreviewOptions(phone, postId, videoUrl, post?.caption);
         console.log('[render-ken-burns] preview sent');
       } else {
         // Direct approval after preview was accepted
