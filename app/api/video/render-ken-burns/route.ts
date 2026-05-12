@@ -34,34 +34,41 @@ async function renderKenBurnsViaModal(
   aspectRatio: '9:16' | '1:1' | '16:9' = '9:16',
   musicUrl?: string,
   animationStyle: string = 'auto',
-): Promise<string> {
+): Promise<{ videoUrl: string; musicIncluded: boolean }> {
   const modalUrl = process.env.MODAL_KEN_BURNS_URL;
   if (!modalUrl) throw new Error('MODAL_KEN_BURNS_URL not configured');
 
   const visualizationPrompt = await getDefaultVisualizationPrompt(caption, animationStyle);
 
+  const requestBody = {
+    image_url: imageUrl,
+    duration,
+    zoom_level: zoomLevel,
+    aspect_ratio: aspectRatio,
+    music_url: musicUrl,
+    visualization_prompt: visualizationPrompt,
+    animation_style: animationStyle,
+  };
+
+  console.log('[renderKenBurnsViaModal] request to Modal:', JSON.stringify(requestBody, null, 2));
+
   const res = await fetch(modalUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image_url: imageUrl,
-      duration,
-      zoom_level: zoomLevel,
-      aspect_ratio: aspectRatio,
-      music_url: musicUrl,
-      visualization_prompt: visualizationPrompt,
-      animation_style: animationStyle,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
     const text = await res.text();
+    console.error('[renderKenBurnsViaModal] Modal error response:', { status: res.status, statusText: res.statusText, body: text });
     throw new Error(`Modal Ken Burns failed: ${res.status} ${text}`);
   }
 
   const result = await res.json();
   if (result.error) throw new Error(`Modal error: ${result.error}`);
   if (!result.video_b64) throw new Error('No video returned from Modal');
+
+  console.log('[renderKenBurnsViaModal] music_included:', result.music_included);
 
   // Decode base64 to buffer
   const videoBuffer = Buffer.from(result.video_b64, 'base64');
@@ -73,7 +80,9 @@ async function renderKenBurnsViaModal(
     .upload(storagePath, videoBuffer, { contentType: 'video/mp4', upsert: false });
 
   if (error) throw new Error(`Storage upload: ${error.message}`);
-  return supabase.storage.from('user-media').getPublicUrl(data.path).data.publicUrl;
+
+  const videoUrl = supabase.storage.from('user-media').getPublicUrl(data.path).data.publicUrl;
+  return { videoUrl, musicIncluded: result.music_included ?? false };
 }
 
 export async function POST(req: NextRequest) {
@@ -104,19 +113,19 @@ export async function POST(req: NextRequest) {
         const music = await getMusicForCaption(caption).catch(() => null);
         musicUrl = music?.musicUrl;
         musicLabel = music?.title ?? 'trending audio';
-        console.log('[render-ken-burns] music:', musicLabel);
+        console.log('[render-ken-burns] music selected:', { url: musicUrl ? '✓' : '✗', label: musicLabel });
       } else if (musicPreference === 'calm') {
         const music = await getMusicForCaption(caption + ' calm peaceful').catch(() => null);
         musicUrl = music?.musicUrl;
         musicLabel = music?.title ?? 'calm audio';
-        console.log('[render-ken-burns] calm music:', musicLabel);
+        console.log('[render-ken-burns] calm music selected:', { url: musicUrl ? '✓' : '✗', label: musicLabel });
       } else if (musicPreference === 'none') {
         musicUrl = undefined;
         musicLabel = 'no music';
-        console.log('[render-ken-burns] silent');
+        console.log('[render-ken-burns] silent mode');
       }
 
-      const videoUrl = await renderKenBurnsViaModal(
+      const { videoUrl, musicIncluded } = await renderKenBurnsViaModal(
         imageUrl,
         caption,
         duration ?? 5,
@@ -126,7 +135,7 @@ export async function POST(req: NextRequest) {
         animationStyle ?? 'auto',
       );
 
-      console.log('[render-ken-burns] video rendered:', videoUrl);
+      console.log('[render-ken-burns] video rendered:', { videoUrl, musicIncluded });
 
       if (isPreview) {
         // Show preview with approval options
@@ -136,7 +145,23 @@ export async function POST(req: NextRequest) {
           .eq('id', postId);
 
         await sendVideoMessage(phone, videoUrl);
-        await sendPreviewOptions(phone, postId, videoUrl);
+
+        // Alert if music was requested but failed to load
+        if (!musicIncluded && musicPreference !== 'none') {
+          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
+          await sendText(phone, '⚠️ Music unavailable: video is silent. (Audio service had an issue)').catch(() => {});
+        } else if (musicIncluded) {
+          console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
+        }
+
+        // Fetch caption from database to show in preview
+        const { data: post } = await supabase
+          .from('pending_posts')
+          .select('caption')
+          .eq('id', postId)
+          .maybeSingle();
+
+        await sendPreviewOptions(phone, postId, videoUrl, post?.caption);
         console.log('[render-ken-burns] preview sent');
       } else {
         // Direct approval after preview was accepted
@@ -146,6 +171,15 @@ export async function POST(req: NextRequest) {
           .eq('id', postId);
 
         await sendVideoMessage(phone, videoUrl);
+
+        // Alert if music was requested but failed to load
+        if (!musicIncluded && musicPreference !== 'none') {
+          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
+          await sendText(phone, '⚠️ Music unavailable: video is silent. (Audio service had an issue)').catch(() => {});
+        } else if (musicIncluded) {
+          console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
+        }
+
         await sendPostPreview(phone, videoUrl, caption, postId, true, 'reels');
         await sendReelSurfaceToggle(phone, postId, 'reels');
         console.log('[render-ken-burns] finalized and sent');
