@@ -414,8 +414,17 @@ async function processWebhook(body: any) {
           }
 
           if (scheduleTime && scheduleTime > new Date()) {
+            // Preserve target_platforms already set by pre-flight; otherwise resolve connected platforms
+            const existingTargets = (pendingApproval.target_platforms as string[] | null)?.length
+              ? (pendingApproval.target_platforms as string[])
+              : await getConnectedPlatforms(from);
+
             await getSupabase().from('pending_posts')
-              .update({ state: 'scheduled', scheduled_for: scheduleTime.toISOString() })
+              .update({
+                state: 'scheduled',
+                scheduled_for: scheduleTime.toISOString(),
+                target_platforms: existingTargets,
+              })
               .eq('id', pendingApproval.id);
 
             const baseLabel = formatScheduleConfirmation(scheduleTime);
@@ -424,7 +433,7 @@ async function processWebhook(body: any) {
               : bestTimeMeta?.source === 'default'
                 ? `${baseLabel} — using a sensible default (Tue 7pm). I'll personalise once you have ~5 posts with insights.`
                 : baseLabel;
-            await sendScheduledActions(from, label);
+            await sendScheduledActions(from, label, existingTargets);
             return;
           }
         }
@@ -622,11 +631,13 @@ async function handleNewPost(from: string, message: any, messageType: string) {
     }
   }
 
-  // Show pre-flight menu when user has >1 platform connected; otherwise
+  // Show pre-flight menu when user has >1 eligible platform connected; otherwise
   // fall through to standard IG-only preview (backward-compatible).
+  // TikTok only supports video — exclude it for photo posts.
   const connectedPlatforms = await getConnectedPlatforms(from);
-  if (connectedPlatforms.length > 1) {
-    await sendPreFlightMenu(from, primaryPost.id, imageUrl, caption, connectedPlatforms);
+  const eligiblePlatforms = connectedPlatforms.filter(p => p !== 'tiktok' || isVideo);
+  if (eligiblePlatforms.length > 1) {
+    await sendPreFlightMenu(from, primaryPost.id, imageUrl, caption, eligiblePlatforms);
   } else {
     await sendPostPreview(from, imageUrl, caption, primaryPost.id, isVideo);
   }
@@ -2885,6 +2896,8 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
 
   const receipts: string[] = [];
   let anySuccess = false;
+  let publishedPostUrl: string | undefined;
+  const successfulPlatforms: string[] = [];
 
   for (const [i, result] of results.entries()) {
     const platform = targetPlatforms[i] ?? 'unknown';
@@ -2892,6 +2905,8 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
       const receipt = result.value;
       if (receipt.status === 'published') {
         anySuccess = true;
+        successfulPlatforms.push(platform);
+        if (receipt.postUrl && !publishedPostUrl) publishedPostUrl = receipt.postUrl;
         const label = platform === 'instagram' ? 'Instagram' : 'TikTok';
         const linkSuffix = receipt.postUrl ? ` — ${receipt.postUrl}` : '';
         receipts.push(`✅ ${label}: published${linkSuffix}`);
@@ -2922,6 +2937,10 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
     await getSupabase().from('pending_posts')
       .update({ state: 'published', published_at: new Date().toISOString() })
       .eq('id', postId);
+    // Discard AI sibling (dual-draft flow) so it doesn't linger as pending_approval
+    if (post.sibling_id) {
+      await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
+    }
   }
 
   await sendText(from, receipts.join('\n'));
@@ -2929,7 +2948,7 @@ async function handlePreFlightPublish(from: string, postId: string, platforms: s
   if (anySuccess) {
     const freshPost = await getPostById(postId);
     const postLabel = freshPost?.surface === 'reels' ? 'Reel' : freshPost?.surface === 'story' ? 'Story' : 'post';
-    await sendPostPublishedActions(from, freshPost?.ig_post_url ?? undefined, postLabel);
+    await sendPostPublishedActions(from, publishedPostUrl ?? freshPost?.ig_post_url ?? undefined, postLabel, successfulPlatforms);
   }
 }
 
@@ -3419,8 +3438,11 @@ async function handleCarouselFinish(from: string, post: { id: string; media_item
   }
 
   const connectedPlatforms = await getConnectedPlatforms(from);
-  if (connectedPlatforms.length > 1) {
-    await sendPreFlightMenu(from, post.id, items[0].url, caption, connectedPlatforms);
+  // TikTok supports only a single video; exclude it for multi-slide or photo-only carousels
+  const isSingleVideo = items.length === 1 && !!items[0].is_video;
+  const eligiblePlatformsCarousel = connectedPlatforms.filter(p => p !== 'tiktok' || isSingleVideo);
+  if (eligiblePlatformsCarousel.length > 1) {
+    await sendPreFlightMenu(from, post.id, items[0].url, caption, eligiblePlatformsCarousel);
   } else {
     await sendPostPreview(from, items[0].url, caption, post.id, false, 'carousel', items.length);
   }

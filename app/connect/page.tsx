@@ -36,6 +36,14 @@ async function getTikTokAccountsForPhone(phone: string) {
   return data ?? [];
 }
 
+async function getAllTikTokAccounts() {
+  const { data } = await getSupabase()
+    .from('tiktok_accounts')
+    .select('account_name, open_id, token_expires_at, is_active')
+    .order('account_name');
+  return data ?? [];
+}
+
 function humanizeIgError(raw: string): string {
   const s = decodeURIComponent(raw).toLowerCase();
   if (s.includes('missing_phone')) {
@@ -83,7 +91,7 @@ export default async function ConnectPage({
   const phone = params.phone?.trim();
 
   const accounts      = phone ? await getAccountsForPhone(phone) : await getAllAccounts();
-  const ttAccounts    = phone ? await getTikTokAccountsForPhone(phone) : [];
+  const ttAccounts    = phone ? await getTikTokAccountsForPhone(phone) : await getAllTikTokAccounts();
   const hasWhatsApp   = !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
   const hasTikTokApp  = !!(process.env.TIKTOK_CLIENT_KEY);
   const connectHref   = `/api/auth/instagram${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`;
@@ -207,7 +215,7 @@ export default async function ConnectPage({
         </section>
 
         {/* TikTok — only shown when phone is known and TikTok app is configured */}
-        {isPersonalized && hasTikTokApp && (
+        {hasTikTokApp && (
           <section className="rounded-2xl p-6 flex flex-col gap-5" style={{ background: 'var(--surf2)' }}>
             <div className="flex items-center gap-3">
               <span className="text-2xl">🎵</span>

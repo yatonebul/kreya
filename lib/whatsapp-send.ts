@@ -443,9 +443,12 @@ export async function sendConversationStarters(to: string, name: string) {
   });
 }
 
-export async function sendPostPublishedActions(to: string, postUrl: string | undefined, postLabel: string) {
+export async function sendPostPublishedActions(to: string, postUrl: string | undefined, postLabel: string, platforms?: string[]) {
   const linkLine = postUrl ? `\n\n🔗 ${postUrl}` : '';
-  const body = `🎉 Your ${postLabel} is live!${linkLine}\n\nKeep the streak going — what's next?`;
+  const platformSuffix = platforms && platforms.length > 1
+    ? ` on ${platforms.map(p => p === 'instagram' ? 'Instagram' : 'TikTok').join(' + ')}`
+    : '';
+  const body = `🎉 Your ${postLabel} is live${platformSuffix}!${linkLine}\n\nKeep the streak going — what's next?`;
   return wa({
     messaging_product: 'whatsapp',
     to,
@@ -467,7 +470,10 @@ export async function sendPostPublishedActions(to: string, postUrl: string | und
 // Used after a draft is approved-and-scheduled (state='scheduled') so the
 // user gets the same post-publish engagement loop, just with a different
 // confirmation line.
-export async function sendScheduledActions(to: string, scheduledForLabel: string) {
+export async function sendScheduledActions(to: string, scheduledForLabel: string, platforms?: string[]) {
+  const platformSuffix = platforms && platforms.length > 0
+    ? ` on ${platforms.map(p => p === 'instagram' ? 'Instagram' : 'TikTok').join(' + ')}`
+    : '';
   return wa({
     messaging_product: 'whatsapp',
     to,
@@ -475,7 +481,7 @@ export async function sendScheduledActions(to: string, scheduledForLabel: string
     interactive: {
       type: 'button',
       body: {
-        text: `📅 Scheduled for *${scheduledForLabel}*. I'll post it automatically — no need to do anything else.\n\nWhile you're here:`,
+        text: `📅 Scheduled for *${scheduledForLabel}*${platformSuffix}. I'll post it automatically — no need to do anything else.\n\nWhile you're here:`,
       },
       action: {
         buttons: [

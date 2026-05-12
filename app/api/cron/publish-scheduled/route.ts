@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
           await sendText(post.whatsapp_phone, `⚠️ Some platforms failed:\n${failed.join('\n')}`);
         }
 
-        await sendPostPublishedActions(post.whatsapp_phone, post.id, post.image_url, false);
+        await sendPostPublishedActions(post.whatsapp_phone, igUrl ?? undefined, 'post', published);
         results.push({ id: post.id, status: 'published', platforms: published });
       } else {
         // All platforms failed — leave in scheduled state so cron retries
