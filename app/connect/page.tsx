@@ -27,6 +27,23 @@ async function getAllAccounts() {
   return data ?? [];
 }
 
+async function getTikTokAccountsForPhone(phone: string) {
+  const { data } = await getSupabase()
+    .from('tiktok_accounts')
+    .select('account_name, open_id, token_expires_at, is_active')
+    .eq('whatsapp_phone', phone)
+    .order('account_name');
+  return data ?? [];
+}
+
+async function getAllTikTokAccounts() {
+  const { data } = await getSupabase()
+    .from('tiktok_accounts')
+    .select('account_name, open_id, token_expires_at, is_active')
+    .order('account_name');
+  return data ?? [];
+}
+
 function humanizeIgError(raw: string): string {
   const s = decodeURIComponent(raw).toLowerCase();
   if (s.includes('missing_phone')) {
@@ -68,14 +85,17 @@ function TokenBadge({ days }: { days: number | null }) {
 export default async function ConnectPage({
   searchParams,
 }: {
-  searchParams: Promise<{ connected?: string; error?: string; phone?: string }>;
+  searchParams: Promise<{ connected?: string; tiktok_connected?: string; error?: string; phone?: string }>;
 }) {
   const params = await searchParams;
   const phone = params.phone?.trim();
 
-  const accounts = phone ? await getAccountsForPhone(phone) : await getAllAccounts();
-  const hasWhatsApp = !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
-  const connectHref = `/api/auth/instagram${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`;
+  const accounts      = phone ? await getAccountsForPhone(phone) : await getAllAccounts();
+  const ttAccounts    = phone ? await getTikTokAccountsForPhone(phone) : await getAllTikTokAccounts();
+  const hasWhatsApp   = !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+  const hasTikTokApp  = !!(process.env.TIKTOK_CLIENT_KEY);
+  const connectHref   = `/api/auth/instagram${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`;
+  const ttConnectHref = `/api/auth/tiktok${phone ? `?phone=${encodeURIComponent(phone)}` : ''}`;
   const isPersonalized = !!phone;
 
   return (
@@ -104,10 +124,16 @@ export default async function ConnectPage({
 
       <div className="flex-1 px-6 md:px-12 py-12 pb-28 md:pb-12 max-w-2xl mx-auto w-full flex flex-col gap-6">
 
-        {/* Toast */}
-        {params.connected && (
+        {/* Toast — Instagram connected */}
+        {params.connected && !String(params.connected).startsWith('tt:') && (
           <div className="rounded-2xl px-5 py-4 text-sm font-medium" style={{ background: 'rgba(0,229,160,0.12)', border: '1px solid var(--mint)', color: 'var(--mint)', fontFamily: 'var(--font-dm-sans)' }}>
-            ✓ @{params.connected} connected successfully
+            ✓ @{params.connected} connected to Instagram successfully
+          </div>
+        )}
+        {/* Toast — TikTok connected */}
+        {params.tiktok_connected && (
+          <div className="rounded-2xl px-5 py-4 text-sm font-medium" style={{ background: 'rgba(0,229,160,0.12)', border: '1px solid var(--mint)', color: 'var(--mint)', fontFamily: 'var(--font-dm-sans)' }}>
+            ✓ @{params.tiktok_connected} connected to TikTok successfully
           </div>
         )}
         {params.error && (
@@ -118,12 +144,12 @@ export default async function ConnectPage({
         )}
 
         <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-syne)' }}>
-          {isPersonalized ? 'Connect Instagram' : 'Connections'}
+          {isPersonalized ? 'Connect Platforms' : 'Connections'}
         </h1>
 
         {isPersonalized && accounts.length === 0 && !params.connected && (
           <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
-            Tap the button below to connect your Instagram account. You'll be redirected to Instagram to authorize Kreya — it only takes a moment.
+            Connect your social accounts below. Once connected, Kreya will offer multi-platform publishing directly from WhatsApp.
           </p>
         )}
 
@@ -187,6 +213,67 @@ export default async function ConnectPage({
             {accounts.length ? '+ Add account' : 'Connect Instagram'}
           </a>
         </section>
+
+        {/* TikTok — only shown when phone is known and TikTok app is configured */}
+        {hasTikTokApp && (
+          <section className="rounded-2xl p-6 flex flex-col gap-5" style={{ background: 'var(--surf2)' }}>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎵</span>
+              <h2 className="text-lg font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>TikTok</h2>
+              <span className="text-xs px-2 py-1 rounded-full ml-auto" style={{ fontFamily: 'var(--font-space-mono)', background: 'rgba(94,53,255,0.15)', color: 'var(--violet)', border: '1px solid rgba(94,53,255,0.3)' }}>
+                Pro
+              </span>
+            </div>
+
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+              Once connected, Kreya will offer a pre-flight menu after every post — choose to publish to Instagram only, TikTok only, or both at once.
+            </p>
+
+            {ttAccounts.length > 0 && (
+              <div className="flex flex-col gap-3">
+                {ttAccounts.map(acc => {
+                  const days = daysUntil(acc.token_expires_at);
+                  const activeRing = acc.is_active
+                    ? '0 0 0 1px rgba(0,229,160,0.45) inset'
+                    : 'none';
+                  return (
+                    <div
+                      key={acc.open_id}
+                      className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
+                      style={{ background: 'var(--surf3)', boxShadow: activeRing }}
+                    >
+                      <div className="flex flex-col gap-1 min-w-0 flex-1">
+                        <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-dm-sans)' }}>
+                          @{acc.account_name ?? acc.open_id}
+                        </span>
+                        <div className="text-xs flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
+                          <TokenBadge days={days} />
+                        </div>
+                      </div>
+                      <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: acc.is_active ? 'var(--mint)' : 'var(--muted2)' }}>
+                        {acc.is_active ? '● Active' : 'inactive'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <a
+              href={ttConnectHref}
+              className="self-start inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-full transition-opacity hover:opacity-90"
+              style={{ background: 'var(--ink)', color: 'var(--white)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)' }}
+            >
+              {ttAccounts.length ? '+ Add TikTok account' : 'Connect TikTok'}
+            </a>
+
+            {!hasTikTokApp && (
+              <p className="text-xs" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>
+                TikTok integration requires <code style={{ color: 'var(--gold)' }}>TIKTOK_CLIENT_KEY</code> and <code style={{ color: 'var(--gold)' }}>TIKTOK_CLIENT_SECRET</code> in your environment.
+              </p>
+            )}
+          </section>
+        )}
 
         {/* WhatsApp — only shown in admin (non-personalized) view */}
         {!isPersonalized && (

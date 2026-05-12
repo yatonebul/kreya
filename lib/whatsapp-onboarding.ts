@@ -14,8 +14,12 @@ const Q1 = `👋 Welcome to Kreya!\n\nI write captions and post to Instagram for
 const Q2 = (name: string) => `Nice, ${name}! 🙌\n\nWhat's your *niche*? — fitness, food, travel, photography, fashion, tech, lifestyle… or your own.`;
 const Q3 = `Last one — how should I sound?\n\n*Casual & fun · Polished & pro · Bold & edgy · Inspirational · Educational…* (or describe your own).`;
 const DONE = (name: string) => `✅ *${name}* is set up!`;
-const INSTAGRAM_CONNECT = (phone: string) =>
-  `📸 *One last step* — connect your Instagram account so I can post for you:\n\n${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(phone)}\n\nTap the link and authorize. Once connected, send me any message, photo, or voice note to create your first post! 🚀`;
+const INSTAGRAM_CONNECT = (phone: string) => {
+  const hasTikTok = !!process.env.TIKTOK_CLIENT_KEY;
+  const base = `📸 *One last step* — connect your Instagram account so I can post for you:\n\n${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(phone)}\n\nTap the link and authorize. Once connected, send me any message, photo, or voice note to create your first post! 🚀`;
+  if (!hasTikTok) return base;
+  return base + `\n\n*Also on TikTok?* Connect it too from your account page — I'll offer to publish your videos to both platforms at once:\n${APP_URL}/connect?phone=${encodeURIComponent(phone)}`;
+};
 
 export function buildProfileContext(brandName: string, niche: string, tone: string): string {
   return `Brand: ${brandName}. Niche: ${niche}. Tone: ${tone}. Write captions that feel authentic to this brand — avoid generic phrases and mirror the described tone exactly.`;

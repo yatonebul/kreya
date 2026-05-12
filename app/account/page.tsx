@@ -175,7 +175,7 @@ export default async function AccountPage({
   const phones  = dataPhone ? [dataPhone, `+${dataPhone}`] : [];
   const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const [{ data: phoneProfile }, { data: allAccounts }, { data: posts }, { data: scheduled }] = await Promise.all([
+  const [{ data: phoneProfile }, { data: allAccounts }, { data: ttAccounts }, { data: posts }, { data: scheduled }] = await Promise.all([
     supabase.from('user_profiles').select('brand_name, niche, tone, plan').eq('whatsapp_phone', queryId).maybeSingle(),
     phones.length
       ? supabase.from('instagram_accounts')
@@ -183,6 +183,12 @@ export default async function AccountPage({
           .in('whatsapp_phone', phones)
           .order('account_name')
       : Promise.resolve({ data: [] as Array<{ id: string; account_name: string; token_expires_at: string | null; brand_name: string | null; niche: string | null; tone: string | null; is_active: boolean; lora_status: string | null; lora_trained_at: string | null; dm_autoreply_enabled: boolean; comment_autoreply_enabled: boolean }> }),
+    phones.length
+      ? supabase.from('tiktok_accounts')
+          .select('open_id, account_name, token_expires_at, is_active')
+          .in('whatsapp_phone', phones)
+          .order('account_name')
+      : Promise.resolve({ data: [] as Array<{ open_id: string; account_name: string | null; token_expires_at: string | null; is_active: boolean }> }),
     dataPhone
       ? supabase.from('pending_posts').select('id, caption, image_url, is_video, ig_post_url, created_at, state')
           .eq('whatsapp_phone', dataPhone).eq('state', 'published')
@@ -274,9 +280,13 @@ export default async function AccountPage({
     return <OnboardingWizard phone={queryId} />;
   }
   // Active is what the rest of the page (token banner, etc.) cares about.
-  const igAccount = activeAccount;
-  const igDays     = daysUntil(igAccount?.token_expires_at ?? null);
-  const connectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(dataPhone ?? queryId)}`;
+  const igAccount    = activeAccount;
+  const igDays       = daysUntil(igAccount?.token_expires_at ?? null);
+  const connectUrl   = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(dataPhone ?? queryId)}`;
+  const hasTikTokApp = !!process.env.TIKTOK_CLIENT_KEY;
+  const ttConnectUrl = `${APP_URL}/api/auth/tiktok?phone=${encodeURIComponent(dataPhone ?? queryId)}`;
+  const ttAccount    = (ttAccounts ?? [])[0] ?? null;
+  const ttDays       = daysUntil(ttAccount?.token_expires_at ?? null);
 
   return (
     <main className="min-h-screen flex flex-col" style={{ background: 'var(--dark)' }}>
@@ -394,7 +404,7 @@ export default async function AccountPage({
                   <a
                     href={`/api/billing/create-checkout?phone=${encodeURIComponent(queryId)}`}
                     className="inline-flex items-center gap-2 text-sm px-5 py-2.5 rounded-full font-semibold transition-opacity hover:opacity-90"
-                    style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}
+                    style={{ background: 'var(--upgrade)', color: '#fff', fontFamily: 'var(--font-dm-sans)', whiteSpace: 'nowrap' }}
                   >
                     Upgrade to Pro
                   </a>
@@ -519,6 +529,49 @@ export default async function AccountPage({
             </div>
           )}
         </section>
+
+        {/* TikTok — only shown when TikTok app is configured */}
+        {hasTikTokApp && (
+          <section className="rounded-2xl p-6 flex flex-col gap-4" style={{ background: 'var(--surf2)' }}>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold" style={{ fontFamily: 'var(--font-syne)' }}>TikTok</h2>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ fontFamily: 'var(--font-space-mono)', background: 'rgba(94,53,255,0.15)', color: 'var(--violet)', border: '1px solid rgba(94,53,255,0.3)' }}>Pro</span>
+            </div>
+            {ttAccount ? (
+              <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surf3)' }}>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium" style={{ fontFamily: 'var(--font-dm-sans)' }}>
+                    @{ttAccount.account_name ?? ttAccount.open_id}
+                  </span>
+                  <TokenBadge days={ttDays} />
+                </div>
+                <a
+                  href={ttConnectUrl}
+                  className="text-xs px-3 py-1.5 rounded-full font-medium transition-opacity hover:opacity-80"
+                  style={{ background: 'var(--surf)', color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)' }}
+                >
+                  Reconnect
+                </a>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: 'var(--surf3)' }}>
+                <span className="text-sm" style={{ color: 'var(--muted)', fontFamily: 'var(--font-dm-sans)' }}>Not connected</span>
+                <a
+                  href={ttConnectUrl}
+                  className="text-xs px-3 py-1.5 rounded-full font-medium transition-opacity hover:opacity-90"
+                  style={{ background: 'var(--ink)', color: '#fff', fontFamily: 'var(--font-dm-sans)', border: '1px solid var(--surf3)' }}
+                >
+                  Connect
+                </a>
+              </div>
+            )}
+            {ttDays !== null && ttDays <= 7 && (
+              <p className="text-xs" style={{ color: 'var(--coral)', fontFamily: 'var(--font-dm-sans)' }}>
+                ⚠️ TikTok token expires in {ttDays}d — <a href={ttConnectUrl} style={{ textDecoration: 'underline' }}>reconnect now</a> to avoid interruptions.
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Link WhatsApp — only shown for email users without a linked phone */}
         {isEmailSession && !dataPhone && (

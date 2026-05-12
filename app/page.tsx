@@ -307,7 +307,7 @@ export default async function Home() {
             <a
               href={session ? `/api/billing/create-checkout` : '/register?intent=pro'}
               className="w-full py-3 rounded-full text-sm font-semibold text-center transition-opacity hover:opacity-90"
-              style={{ background: 'var(--coral)', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}
+              style={{ background: 'var(--upgrade)', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}
             >
               {session ? 'Upgrade to Pro' : 'Get Pro'}
             </a>
