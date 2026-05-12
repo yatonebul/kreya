@@ -1,17 +1,22 @@
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+const ALGORITHM = 'aes-256-gcm';
 
-if (!ENCRYPTION_KEY) {
-  throw new Error('ENCRYPTION_KEY environment variable is required for token encryption');
+function getEncryptionKey(): string {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error('ENCRYPTION_KEY environment variable is required for token encryption');
+  }
+  return key;
 }
 
 // Derive a fixed-length key from ENCRYPTION_KEY (32 bytes for AES-256)
-const derivedKey = crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
-
-const ALGORITHM = 'aes-256-gcm';
+function getDerivedKey(): Buffer {
+  return crypto.createHash('sha256').update(getEncryptionKey()).digest();
+}
 
 export function encryptToken(token: string): string {
+  const derivedKey = getDerivedKey();
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, derivedKey, iv);
 
@@ -25,6 +30,7 @@ export function encryptToken(token: string): string {
 }
 
 export function decryptToken(encryptedToken: string): string {
+  const derivedKey = getDerivedKey();
   const parts = encryptedToken.split(':');
   if (parts.length !== 3) {
     throw new Error('Invalid encrypted token format');

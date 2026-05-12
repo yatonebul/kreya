@@ -3,13 +3,16 @@ import postgres from 'postgres';
 
 // One-time idempotent setup route — creates auth tables if they don't exist.
 // Protected by a static key so it can be called from CI / bash without exposing secrets.
-if (!process.env.SETUP_KEY || process.env.SETUP_KEY === 'kreya-init-2026') {
-  throw new Error(
-    'SETUP_KEY must be explicitly set in environment. ' +
-    'Using default "kreya-init-2026" is not allowed.'
-  );
+function getSetupKey(): string {
+  const key = process.env.SETUP_KEY;
+  if (!key || key === 'kreya-init-2026') {
+    throw new Error(
+      'SETUP_KEY must be explicitly set in environment. ' +
+      'Using default "kreya-init-2026" is not allowed.'
+    );
+  }
+  return key;
 }
-const SETUP_KEY = process.env.SETUP_KEY;
 
 const DDL = `
 create table if not exists otp_codes (
@@ -46,7 +49,7 @@ create index if not exists email_reg_status on email_registrations(status, creat
 
 export async function POST(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('key') ?? req.headers.get('x-setup-key');
-  if (key !== SETUP_KEY) {
+  if (key !== getSetupKey()) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
