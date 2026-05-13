@@ -9,15 +9,26 @@ export type MoodMusic = {
   artist: string;
 };
 
-// Map moods to Freesound search keywords
-const MOOD_KEYWORDS: Record<Mood, string> = {
-  energetic: 'upbeat energetic electronic dance',
-  calm: 'ambient peaceful relaxing meditation',
-  romantic: 'romantic love soft piano',
-  dramatic: 'epic dramatic orchestral cinematic',
-  humorous: 'funny playful comedy upbeat',
-  inspirational: 'inspirational motivational uplifting triumphant',
-  melancholic: 'sad melancholic emotional piano',
+// Freesound search queries per mood
+const MOOD_QUERIES: Record<Mood, string> = {
+  energetic: 'upbeat electronic music background',
+  calm: 'calm ambient background music',
+  romantic: 'romantic acoustic background music',
+  dramatic: 'dramatic cinematic background music',
+  humorous: 'playful fun background music',
+  inspirational: 'inspirational uplifting background music',
+  melancholic: 'melancholic sad background music',
+};
+
+// Incompetech fallback (Kevin MacLeod CC-licensed) — used if Freesound fails
+const FALLBACK_TRACKS: Record<Mood, MoodMusic> = {
+  energetic: { mood: 'energetic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3', title: 'Carefree', artist: 'Kevin MacLeod' },
+  calm: { mood: 'calm', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Relaxing%20Piano%20Music.mp3', title: 'Relaxing Piano Music', artist: 'Kevin MacLeod' },
+  romantic: { mood: 'romantic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Scheherazade.mp3', title: 'Scheherazade', artist: 'Kevin MacLeod' },
+  dramatic: { mood: 'dramatic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher.mp3', title: 'Cipher', artist: 'Kevin MacLeod' },
+  humorous: { mood: 'humorous', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Snitch.mp3', title: 'Sneaky Snitch', artist: 'Kevin MacLeod' },
+  inspirational: { mood: 'inspirational', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Inspired.mp3', title: 'Inspired', artist: 'Kevin MacLeod' },
+  melancholic: { mood: 'melancholic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Wallpaper.mp3', title: 'Wallpaper', artist: 'Kevin MacLeod' },
 };
 
 /**
@@ -66,60 +77,43 @@ What mood does this convey?`;
   return { mood: 'calm', confidence: 0.3 };
 }
 
-/**
- * Fetch music from Freesound API for the given mood
- * Uses Freesound's free tier to search for CC-licensed audio
- */
-async function getFreesoundMusicForMood(mood: Mood): Promise<MoodMusic | null> {
-  const apiKey = process.env.FREESOUND_API_KEY;
-  if (!apiKey) {
-    console.warn('[mood-music] FREESOUND_API_KEY not configured, music will be unavailable');
-    return null;
+async function selectMusicForMood(mood: Mood): Promise<MoodMusic | null> {
+  const token = process.env.FREESOUND_API_KEY;
+  if (token) {
+    try {
+      const query = encodeURIComponent(MOOD_QUERIES[mood]);
+      const url = `https://freesound.org/apiv2/search/text/?query=${query}&token=${token}&page_size=10&fields=id,name,username,previews&filter=duration:[5+TO+120]`;
+      console.log('[mood-music] Freesound request:', url.replace(token, 'REDACTED'));
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) {
+        console.warn('[mood-music] Freesound HTTP error:', res.status, res.statusText);
+      } else {
+        const data = await res.json();
+        const results: any[] = data.results ?? [];
+        // Pick a random result that has an HQ mp3 preview
+        const candidates = results.filter(r => r.previews?.['preview-hq-mp3']);
+        if (candidates.length > 0) {
+          const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          const musicUrl: string = pick.previews['preview-hq-mp3'];
+          console.log('[mood-music] Freesound picked:', pick.name, 'by', pick.username, musicUrl);
+          return { mood, musicUrl, title: pick.name, artist: pick.username };
+        }
+        console.warn('[mood-music] Freesound returned no usable results for mood:', mood);
+      }
+    } catch (e) {
+      console.warn('[mood-music] Freesound fetch failed, falling back to Incompetech:', e);
+    }
+  } else {
+    console.warn('[mood-music] FREESOUND_API_KEY not set, using Incompetech fallback');
   }
 
-  const keywords = MOOD_KEYWORDS[mood];
-  const url = `https://freesound.org/api/v2/search/text/?query=${encodeURIComponent(keywords)}&token=${apiKey}&page_size=5&sort=rating&filter=duration:[30 TO 600]`;
-
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error('[mood-music] Freesound API error:', res.status);
-      return null;
-    }
-
-    const data = await res.json() as any;
-    const results = data.results || [];
-    if (!results.length) {
-      console.log('[mood-music] no Freesound results for mood:', mood);
-      return null;
-    }
-
-    // Pick a random track from top results for variety
-    const track = results[Math.floor(Math.random() * Math.min(results.length, 3))];
-    if (!track.previews?.['preview-hq-mp3']) {
-      console.log('[mood-music] track has no preview URL:', track.id);
-      return null;
-    }
-
-    return {
-      mood,
-      musicUrl: track.previews['preview-hq-mp3'],
-      title: track.name || 'Freesound Music',
-      artist: track.username || 'Freesound Creator',
-    };
-  } catch (err) {
-    console.error('[mood-music] Freesound API failed:', err);
-    return null;
-  }
+  return FALLBACK_TRACKS[mood] ?? null;
 }
 
-/**
- * Full pipeline: caption → detect mood → fetch music from Freesound
- */
 export async function getMusicForCaption(
   caption: string,
   brandContext?: string,
 ): Promise<MoodMusic | null> {
   const { mood } = await detectMood(caption, brandContext);
-  return getFreesoundMusicForMood(mood);
+  return selectMusicForMood(mood);
 }

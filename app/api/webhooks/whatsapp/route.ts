@@ -945,6 +945,12 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleRetryMusic(from, postId);
     return;
   }
+  if (action === 'discard_reel' && postId) {
+    const supabase = getSupabase();
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
+    await sendText(from, '🗑️ Reel discarded. Send a new photo whenever you\'re ready!');
+    return;
+  }
   if (action === 'animate_fallback_static' && postId) {
     await handleAnimationFallbackStatic(from, postId);
     return;
