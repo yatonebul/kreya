@@ -9,15 +9,15 @@ export type MoodMusic = {
   artist: string;
 };
 
-// Map moods to Pixabay search keywords
+// Map moods to Freesound search keywords
 const MOOD_KEYWORDS: Record<Mood, string> = {
-  energetic: 'upbeat energetic dance',
-  calm: 'calm peaceful ambient',
-  romantic: 'romantic love soft',
-  dramatic: 'epic dramatic orchestral',
-  humorous: 'fun playful comedy',
-  inspirational: 'inspirational motivational uplifting',
-  melancholic: 'sad melancholic emotional',
+  energetic: 'upbeat energetic electronic dance',
+  calm: 'ambient peaceful relaxing meditation',
+  romantic: 'romantic love soft piano',
+  dramatic: 'epic dramatic orchestral cinematic',
+  humorous: 'funny playful comedy upbeat',
+  inspirational: 'inspirational motivational uplifting triumphant',
+  melancholic: 'sad melancholic emotional piano',
 };
 
 /**
@@ -67,52 +67,59 @@ What mood does this convey?`;
 }
 
 /**
- * Fetch music from Pixabay API for the given mood
+ * Fetch music from Freesound API for the given mood
+ * Uses Freesound's free tier to search for CC-licensed audio
  */
-async function getPixabayMusicForMood(mood: Mood): Promise<MoodMusic | null> {
-  const apiKey = process.env.PIXABAY_MUSIC_API_KEY;
+async function getFreesoundMusicForMood(mood: Mood): Promise<MoodMusic | null> {
+  const apiKey = process.env.FREESOUND_API_KEY;
   if (!apiKey) {
-    console.warn('[mood-music] PIXABAY_MUSIC_API_KEY not configured, music will be unavailable');
+    console.warn('[mood-music] FREESOUND_API_KEY not configured, music will be unavailable');
     return null;
   }
 
   const keywords = MOOD_KEYWORDS[mood];
-  const url = `https://pixabay.com/api/videos/?key=${apiKey}&q=${encodeURIComponent(keywords)}&min_duration=300&max_duration=600&order=popular&per_page=3`;
+  const url = `https://freesound.org/api/v2/search/text/?query=${encodeURIComponent(keywords)}&token=${apiKey}&page_size=5&sort=rating&filter=duration:[30 TO 600]`;
 
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`Pixabay API: ${res.status}`);
-
-    const data = await res.json() as any;
-    const hits = data.hits || [];
-    if (!hits.length) {
-      console.log('[mood-music] no results for mood:', mood);
+    if (!res.ok) {
+      console.error('[mood-music] Freesound API error:', res.status);
       return null;
     }
 
-    const video = hits[Math.floor(Math.random() * Math.min(hits.length, 3))];
-    const audioUrl = video.videos?.medium?.url;
-    if (!audioUrl) return null;
+    const data = await res.json() as any;
+    const results = data.results || [];
+    if (!results.length) {
+      console.log('[mood-music] no Freesound results for mood:', mood);
+      return null;
+    }
+
+    // Pick a random track from top results for variety
+    const track = results[Math.floor(Math.random() * Math.min(results.length, 3))];
+    if (!track.previews?.['preview-hq-mp3']) {
+      console.log('[mood-music] track has no preview URL:', track.id);
+      return null;
+    }
 
     return {
       mood,
-      musicUrl: audioUrl,
-      title: video.tags?.[0] || 'Pixabay Music',
-      artist: video.user || 'Pixabay',
+      musicUrl: track.previews['preview-hq-mp3'],
+      title: track.name || 'Freesound Music',
+      artist: track.username || 'Freesound Creator',
     };
   } catch (err) {
-    console.error('[mood-music] Pixabay API failed:', err);
+    console.error('[mood-music] Freesound API failed:', err);
     return null;
   }
 }
 
 /**
- * Full pipeline: caption → detect mood → fetch music from Pixabay
+ * Full pipeline: caption → detect mood → fetch music from Freesound
  */
 export async function getMusicForCaption(
   caption: string,
   brandContext?: string,
 ): Promise<MoodMusic | null> {
   const { mood } = await detectMood(caption, brandContext);
-  return getPixabayMusicForMood(mood);
+  return getFreesoundMusicForMood(mood);
 }
