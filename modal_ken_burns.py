@@ -58,21 +58,29 @@ def render_ken_burns(
             # Determine zoom parameters based on animation style
             zoom_start, zoom_end = 1.0, zoom_level
             pan_x, pan_y = 0, 0
+            easing_power = 0.5  # Default: sqrt curve (smooth acceleration)
 
             if animation_style == "quick-zoom":
                 zoom_start, zoom_end = 1.0, zoom_level * 1.2
+                easing_power = 0.4  # Slightly snappier
             elif animation_style == "elegant":
-                zoom_start, zoom_end = zoom_level * 0.9, 1.0
-                pan_x, pan_y = 30, 20
+                # FIXED: was zooming OUT, now zooms IN gently
+                zoom_start, zoom_end = 1.0, zoom_level * 1.1
+                pan_x, pan_y = 20, 15  # Reduced pan for elegance
+                easing_power = 0.6  # Slower, more graceful
             elif animation_style == "cinematic":
                 zoom_start, zoom_end = 1.0, zoom_level * 1.3
                 pan_x, pan_y = 50, 30
+                easing_power = 0.5
             elif animation_style == "float":
-                zoom_start, zoom_end = 1.0, 1.1
-                pan_x, pan_y = 20, 15
+                # FIXED: was too jittery, now gentler with linear easing
+                zoom_start, zoom_end = 1.0, 1.08
+                pan_x, pan_y = 15, 10  # Reduced for drift effect
+                easing_power = 1.0  # Linear: smooth drift without acceleration
             elif animation_style == "focus-zoom":
                 zoom_start, zoom_end = 0.8, zoom_level
                 pan_x, pan_y = 80, 60
+                easing_power = 0.5
 
             # Build FFmpeg zoompan filter with smooth pan + easing
             total_frames = duration * 30
@@ -80,12 +88,20 @@ def render_ken_burns(
             pan_x_scaled = pan_x / 3.0 if pan_x else 0
             pan_y_scaled = pan_y / 3.0 if pan_y else 0
 
+            # Use style-specific easing curve
+            # easing_power < 1: acceleration (snappy) | > 1: deceleration (smooth) | = 1: linear (float)
             zoompan_filter = (
-                f"zoompan=z='zoom_start:=if(gte(n\\,1)\\,{zoom_start}+(({zoom_end})-({zoom_start}))*pow(n/({total_frames}-1)\\,0.5)\\,{zoom_start})'"
+                f"zoompan=z='zoom_start:=if(gte(n\\,1)\\,{zoom_start}+(({zoom_end})-({zoom_start}))*pow(n/({total_frames}-1)\\,{easing_power})\\,{zoom_start})'"
                 f":x='iw/2-(iw/zoom/2)-({pan_x_scaled})*n/({total_frames}-1)'"
                 f":y='ih/2-(ih/zoom/2)-({pan_y_scaled})*n/({total_frames}-1)'"
                 f":d={total_frames}:s={width}x{height}"
             )
+
+            # Add vignette effect for polish (subtle edge darkening)
+            vignette_filter = "vignette=0.12"
+
+            # Combine filters: zoompan → vignette → enhance contrast slightly
+            full_filter = f"{zoompan_filter},{vignette_filter},eq=contrast=1.05:saturation=1.08"
 
             # Build FFmpeg command for video
             video_path = tmpdir / "output.mp4"
@@ -94,7 +110,7 @@ def render_ken_burns(
                 "ffmpeg",
                 "-loop", "1",
                 "-i", str(image_path),
-                "-vf", zoompan_filter,
+                "-vf", full_filter,
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
                 "-crf", "23",
@@ -123,7 +139,7 @@ def render_ken_burns(
                         "-loop", "1",
                         "-i", str(image_path),
                         "-i", str(music_path),
-                        "-vf", zoompan_filter,
+                        "-vf", full_filter,
                         "-c:v", "libx264",
                         "-preset", "ultrafast",
                         "-crf", "23",
