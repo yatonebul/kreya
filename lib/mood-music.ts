@@ -9,77 +9,15 @@ export type MoodMusic = {
   artist: string;
 };
 
-// Curated free music tracks from Pexels (public domain / CC0)
-// Each mood has 3-5 tracks to vary
-const MOOD_TRACKS: Record<Mood, MoodMusic[]> = {
-  energetic: [
-    {
-      mood: 'energetic',
-      musicUrl: 'https://www.pexels.com/download/6489/pexels-ali-arazo-6489.mp3',
-      title: 'Summer Breeze',
-      artist: 'Ali Arazo',
-    },
-    {
-      mood: 'energetic',
-      musicUrl: 'https://www.pexels.com/download/1409986/pexels-life-of-pix-1409986.mp3',
-      title: 'Upbeat Music',
-      artist: 'Life of Pix',
-    },
-  ],
-  calm: [
-    {
-      mood: 'calm',
-      musicUrl: 'https://www.pexels.com/download/3721392/pexels-simon-sun-3721392.mp3',
-      title: 'Ambient Relaxation',
-      artist: 'Simon Sun',
-    },
-    {
-      mood: 'calm',
-      musicUrl: 'https://www.pexels.com/download/4950476/pexels-michael-shaw-4950476.mp3',
-      title: 'Peaceful Meditation',
-      artist: 'Michael Shaw',
-    },
-  ],
-  romantic: [
-    {
-      mood: 'romantic',
-      musicUrl: 'https://www.pexels.com/download/1256662/pexels-nico-santos-1256662.mp3',
-      title: 'Love in the Air',
-      artist: 'Nico Santos',
-    },
-  ],
-  dramatic: [
-    {
-      mood: 'dramatic',
-      musicUrl: 'https://www.pexels.com/download/5278666/pexels-graham-reynolds-5278666.mp3',
-      title: 'Epic Journey',
-      artist: 'Graham Reynolds',
-    },
-  ],
-  humorous: [
-    {
-      mood: 'humorous',
-      musicUrl: 'https://www.pexels.com/download/3373879/pexels-kevin-macleod-3373879.mp3',
-      title: 'Funky Fun',
-      artist: 'Kevin MacLeod',
-    },
-  ],
-  inspirational: [
-    {
-      mood: 'inspirational',
-      musicUrl: 'https://www.pexels.com/download/5063699/pexels-zitherwind-5063699.mp3',
-      title: 'Rise Up',
-      artist: 'Zitherwind',
-    },
-  ],
-  melancholic: [
-    {
-      mood: 'melancholic',
-      musicUrl: 'https://www.pexels.com/download/3730823/pexels-david-renda-3730823.mp3',
-      title: 'Sad Piano',
-      artist: 'David Renda',
-    },
-  ],
+// Map moods to Pixabay search keywords
+const MOOD_KEYWORDS: Record<Mood, string> = {
+  energetic: 'upbeat energetic dance',
+  calm: 'calm peaceful ambient',
+  romantic: 'romantic love soft',
+  dramatic: 'epic dramatic orchestral',
+  humorous: 'fun playful comedy',
+  inspirational: 'inspirational motivational uplifting',
+  melancholic: 'sad melancholic emotional',
 };
 
 /**
@@ -129,21 +67,52 @@ What mood does this convey?`;
 }
 
 /**
- * Select a random track for the given mood.
+ * Fetch music from Pixabay API for the given mood
  */
-export function selectMusicForMood(mood: Mood): MoodMusic | null {
-  const tracks = MOOD_TRACKS[mood];
-  if (!tracks || !tracks.length) return null;
-  return tracks[Math.floor(Math.random() * tracks.length)];
+async function getPixabayMusicForMood(mood: Mood): Promise<MoodMusic | null> {
+  const apiKey = process.env.PIXABAY_MUSIC_API_KEY;
+  if (!apiKey) {
+    console.warn('[mood-music] PIXABAY_MUSIC_API_KEY not configured, music will be unavailable');
+    return null;
+  }
+
+  const keywords = MOOD_KEYWORDS[mood];
+  const url = `https://pixabay.com/api/videos/?key=${apiKey}&q=${encodeURIComponent(keywords)}&min_duration=300&max_duration=600&order=popular&per_page=3`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Pixabay API: ${res.status}`);
+
+    const data = await res.json() as any;
+    const hits = data.hits || [];
+    if (!hits.length) {
+      console.log('[mood-music] no results for mood:', mood);
+      return null;
+    }
+
+    const video = hits[Math.floor(Math.random() * Math.min(hits.length, 3))];
+    const audioUrl = video.videos?.medium?.url;
+    if (!audioUrl) return null;
+
+    return {
+      mood,
+      musicUrl: audioUrl,
+      title: video.tags?.[0] || 'Pixabay Music',
+      artist: video.user || 'Pixabay',
+    };
+  } catch (err) {
+    console.error('[mood-music] Pixabay API failed:', err);
+    return null;
+  }
 }
 
 /**
- * Full pipeline: caption → detect mood → select music
+ * Full pipeline: caption → detect mood → fetch music from Pixabay
  */
 export async function getMusicForCaption(
   caption: string,
   brandContext?: string,
 ): Promise<MoodMusic | null> {
   const { mood } = await detectMood(caption, brandContext);
-  return selectMusicForMood(mood);
+  return getPixabayMusicForMood(mood);
 }
