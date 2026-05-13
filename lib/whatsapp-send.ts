@@ -131,15 +131,22 @@ export function sendPreviewOptions(to: string, postId: string, previewUrl: strin
     to,
     type: 'interactive',
     interactive: {
-      type: 'button',
+      type: 'list',
       body: {
         text: `✅ *Here's your preview!*${captionLine}\n\nHappy with it? Or tweak before posting.`,
       },
       action: {
-        buttons: [
-          { type: 'reply', reply: { id: `approve_reel:${postId}`, title: '👍 Continue' } },
-          { type: 'reply', reply: { id: `retry_music:${postId}`, title: '🎵 Different music' } },
-          { type: 'reply', reply: { id: `discard_reel:${postId}`, title: '🗑️ Discard' } },
+        button: '⚙️ Options',
+        sections: [
+          {
+            rows: [
+              { id: `approve_reel:${postId}`,  title: '👍 Continue',         description: 'Looks great — publish it' },
+              { id: `retry_music:${postId}`,   title: '🎵 Different music',  description: 'Pick a new track' },
+              { id: `retry_anim:${postId}`,    title: '🎨 Different style',  description: 'Change animation style' },
+              { id: `edit_caption:${postId}`,  title: '✏️ Edit caption',     description: 'Change the caption text' },
+              { id: `discard_reel:${postId}`,  title: '🗑️ Discard',          description: 'Throw this away and start fresh' },
+            ],
+          },
         ],
       },
     },
