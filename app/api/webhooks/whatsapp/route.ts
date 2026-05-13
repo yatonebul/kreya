@@ -2481,6 +2481,13 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     return;
   }
 
+  // Get original image/reel to use as slide 1
+  const originalUrl = source.image_url || source.user_image_url;
+  if (!originalUrl) {
+    await sendText(from, "⚠️ Couldn't find the original image — try again.");
+    return;
+  }
+
   await sendText(from, '🖼️ Spinning your idea into a 5-slide carousel — this takes ~30 seconds...');
 
   const profileContext = await getProfileContextForPhone(from);
@@ -2490,10 +2497,11 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     return;
   }
 
-  // One AI image per slide — failures fall back to Pollinations so a single
-  // slow/throttled generation doesn't abort the entire carousel.
+  // Generate 4 new AI slides (slide 1 will be the original)
+  // Generate only first 4 slides from spin (we'll prepend the original)
+  const newSlides = spin.slides.slice(0, 4);
   const mediaResults = await Promise.all(
-    spin.slides.map(async s => {
+    newSlides.map(async s => {
       try {
         return await buildBrandedImage(s.imagePrompt, detectStyle(s.imagePrompt), from);
       } catch {
@@ -2501,8 +2509,13 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
       }
     }),
   );
-  const mediaItems: CarouselItem[] = mediaResults.map(r => ({ url: r.url, is_video: false }));
   const carouselOverflowed = mediaResults.some(r => r.overflowed);
+
+  // Build mediaItems: [original, ...4 new AI slides]
+  const mediaItems: CarouselItem[] = [
+    { url: originalUrl, is_video: source.is_video ?? false },
+    ...mediaResults.map(r => ({ url: r.url, is_video: false })),
+  ];
 
   // Discard any other pending drafts so the new carousel has the lane to itself
   const { data: stale } = await supabase
@@ -2521,7 +2534,7 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
       whatsapp_phone: from,
       caption: spin.caption,
       image_url: mediaItems[0].url,
-      image_source: 'ai',
+      image_source: 'mixed',
       is_video: false,
       surface: 'carousel',
       state: 'pending_approval',
@@ -2535,8 +2548,10 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
     return;
   }
 
-  for (let i = 0; i < mediaItems.length; i++) {
-    await sendImageMessage(from, mediaItems[i].url, `Slide ${i + 1}/${mediaItems.length} — ${spin.slides[i].headline}`);
+  // Send all slides with headlines
+  await sendImageMessage(from, mediaItems[0].url, `Slide 1/5 — Your original`);
+  for (let i = 1; i < mediaItems.length; i++) {
+    await sendImageMessage(from, mediaItems[i].url, `Slide ${i + 1}/5 — ${newSlides[i - 1].headline}`);
   }
   await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
   if (carouselOverflowed) {
