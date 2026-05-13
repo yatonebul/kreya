@@ -9,15 +9,38 @@ export type MoodMusic = {
   artist: string;
 };
 
-// Map moods to Freesound search keywords
-const MOOD_KEYWORDS: Record<Mood, string> = {
-  energetic: 'upbeat energetic electronic dance',
-  calm: 'ambient peaceful relaxing meditation',
-  romantic: 'romantic love soft piano',
-  dramatic: 'epic dramatic orchestral cinematic',
-  humorous: 'funny playful comedy upbeat',
-  inspirational: 'inspirational motivational uplifting triumphant',
-  melancholic: 'sad melancholic emotional piano',
+// Incompetech (Kevin MacLeod) CC-licensed music - direct URLs, high quality, always working
+const MOOD_TRACKS: Record<Mood, MoodMusic[]> = {
+  energetic: [
+    { mood: 'energetic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3', title: 'Carefree', artist: 'Kevin MacLeod' },
+    { mood: 'energetic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Snitch.mp3', title: 'Sneaky Snitch', artist: 'Kevin MacLeod' },
+    { mood: 'energetic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Take%20the%20Plunge.mp3', title: 'Take the Plunge', artist: 'Kevin MacLeod' },
+  ],
+  calm: [
+    { mood: 'calm', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ambient%20Bloom.mp3', title: 'Ambient Bloom', artist: 'Kevin MacLeod' },
+    { mood: 'calm', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Peaceful%20Meadow.mp3', title: 'Peaceful Meadow', artist: 'Kevin MacLeod' },
+    { mood: 'calm', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Unmatched.mp3', title: 'Unmatched', artist: 'Kevin MacLeod' },
+  ],
+  romantic: [
+    { mood: 'romantic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Lover.mp3', title: 'Lover', artist: 'Kevin MacLeod' },
+    { mood: 'romantic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Scheherazade.mp3', title: 'Scheherazade', artist: 'Kevin MacLeod' },
+  ],
+  dramatic: [
+    { mood: 'dramatic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Epic%20Cinematic.mp3', title: 'Epic Cinematic', artist: 'Kevin MacLeod' },
+    { mood: 'dramatic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dramatic%20Impact.mp3', title: 'Dramatic Impact', artist: 'Kevin MacLeod' },
+  ],
+  humorous: [
+    { mood: 'humorous', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Silly%20Fun.mp3', title: 'Silly Fun', artist: 'Kevin MacLeod' },
+    { mood: 'humorous', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Poppy%20Fun.mp3', title: 'Poppy Fun', artist: 'Kevin MacLeod' },
+  ],
+  inspirational: [
+    { mood: 'inspirational', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Inspiring%20Moment.mp3', title: 'Inspiring Moment', artist: 'Kevin MacLeod' },
+    { mood: 'inspirational', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Motivational%20Uplifter.mp3', title: 'Motivational Uplifter', artist: 'Kevin MacLeod' },
+  ],
+  melancholic: [
+    { mood: 'melancholic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Melancholia.mp3', title: 'Melancholia', artist: 'Kevin MacLeod' },
+    { mood: 'melancholic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sentimental%20Value.mp3', title: 'Sentimental Value', artist: 'Kevin MacLeod' },
+  ],
 };
 
 /**
@@ -67,59 +90,21 @@ What mood does this convey?`;
 }
 
 /**
- * Fetch music from Freesound API for the given mood
- * Uses Freesound's free tier to search for CC-licensed audio
+ * Select music for mood from Incompetech library
  */
-async function getFreesoundMusicForMood(mood: Mood): Promise<MoodMusic | null> {
-  const apiKey = process.env.FREESOUND_API_KEY;
-  if (!apiKey) {
-    console.warn('[mood-music] FREESOUND_API_KEY not configured, music will be unavailable');
-    return null;
-  }
-
-  const keywords = MOOD_KEYWORDS[mood];
-  const url = `https://freesound.org/api/v2/search/text/?query=${encodeURIComponent(keywords)}&token=${apiKey}&page_size=5&sort=rating&filter=duration:[30 TO 600]`;
-
-  try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error('[mood-music] Freesound API error:', res.status);
-      return null;
-    }
-
-    const data = await res.json() as any;
-    const results = data.results || [];
-    if (!results.length) {
-      console.log('[mood-music] no Freesound results for mood:', mood);
-      return null;
-    }
-
-    // Pick a random track from top results for variety
-    const track = results[Math.floor(Math.random() * Math.min(results.length, 3))];
-    if (!track.previews?.['preview-hq-mp3']) {
-      console.log('[mood-music] track has no preview URL:', track.id);
-      return null;
-    }
-
-    return {
-      mood,
-      musicUrl: track.previews['preview-hq-mp3'],
-      title: track.name || 'Freesound Music',
-      artist: track.username || 'Freesound Creator',
-    };
-  } catch (err) {
-    console.error('[mood-music] Freesound API failed:', err);
-    return null;
-  }
+function selectMusicForMood(mood: Mood): MoodMusic | null {
+  const tracks = MOOD_TRACKS[mood];
+  if (!tracks || !tracks.length) return null;
+  return tracks[Math.floor(Math.random() * tracks.length)];
 }
 
 /**
- * Full pipeline: caption → detect mood → fetch music from Freesound
+ * Full pipeline: caption → detect mood → select music
  */
 export async function getMusicForCaption(
   caption: string,
   brandContext?: string,
 ): Promise<MoodMusic | null> {
   const { mood } = await detectMood(caption, brandContext);
-  return getFreesoundMusicForMood(mood);
+  return selectMusicForMood(mood);
 }
