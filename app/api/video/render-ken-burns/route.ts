@@ -171,17 +171,7 @@ export async function POST(req: NextRequest) {
           .eq('id', postId);
 
         await sendVideoMessage(phone, videoUrl);
-
-        // Alert if music was requested but failed to load
-        if (!musicIncluded && musicPreference !== 'none') {
-          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
-          await sendText(phone, '⚠️ Music unavailable: video is silent. (Audio service had an issue)').catch(() => {});
-        } else if (musicIncluded) {
-          console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
-        }
-
         await sendPostPreview(phone, videoUrl, caption, postId, true, 'reels');
-        await sendReelSurfaceToggle(phone, postId, 'reels');
         console.log('[render-ken-burns] finalized and sent');
       }
     } catch (err: any) {
