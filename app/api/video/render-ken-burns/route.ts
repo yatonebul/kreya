@@ -204,15 +204,12 @@ export async function POST(req: NextRequest) {
           .eq('id', postId)
           .maybeSingle();
 
-        await sendPreviewOptions(phone, postId, videoUrl, post?.caption);
+        const appUrl  = process.env.NEXT_PUBLIC_APP_URL ?? '';
+        const editUrl = appUrl
+          ? `${appUrl}/edit/${postId}?t=${makeEditToken(postId, phone)}&phone=${encodeURIComponent(phone)}`
+          : undefined;
 
-        // Send web editor link so user can tweak color grade, motion, clips
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-        if (appUrl) {
-          const editToken = makeEditToken(postId, phone);
-          const editUrl   = `${appUrl}/edit/${postId}?t=${editToken}&phone=${encodeURIComponent(phone)}`;
-          await sendText(phone, `✏️ Tweak it on web (color, motion, clips):\n${editUrl}`).catch(() => {});
-        }
+        await sendPreviewOptions(phone, postId, videoUrl, post?.caption, editUrl);
 
         console.log('[render-ken-burns] preview sent');
       } else {
