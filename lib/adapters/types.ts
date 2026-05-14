@@ -1,4 +1,4 @@
-export type Platform = 'instagram' | 'tiktok';
+export type Platform = 'instagram' | 'tiktok' | 'facebook';
 
 export interface MediaAsset {
   url: string;
@@ -10,7 +10,7 @@ export interface PublicationPayload {
   platform: Platform;
   assets: MediaAsset[];
   caption: string;
-  surface: 'feed' | 'reels' | 'story' | 'carousel';
+  surface: 'feed' | 'reels' | 'story' | 'carousel' | 'facebook-reels';
   whatsappPhone: string;
   metadata?: Record<string, unknown>;
 }

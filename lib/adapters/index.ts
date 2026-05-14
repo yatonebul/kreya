@@ -1,12 +1,14 @@
 import { InstagramAdapter } from './instagram-adapter';
 import { TikTokAdapter } from './tiktok-adapter';
+import { FacebookAdapter } from './facebook-adapter';
 import type { Platform, SocialAdapter } from './types';
 
 export type { Platform, SocialAdapter, MediaAsset, PublicationPayload, PublicationReceipt } from './types';
 
 const registry = new Map<Platform, SocialAdapter>([
   ['instagram', new InstagramAdapter()],
-  ['tiktok', new TikTokAdapter()],
+  ['tiktok',    new TikTokAdapter()],
+  ['facebook',  new FacebookAdapter()],
 ]);
 
 export function getAdapter(platform: Platform): SocialAdapter {
