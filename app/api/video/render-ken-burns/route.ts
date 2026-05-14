@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
         if (appUrl) {
           const editToken = makeEditToken(postId, phone);
-          const editUrl   = `${appUrl}/edit/${postId}?t=${editToken}`;
+          const editUrl   = `${appUrl}/edit/${postId}?t=${editToken}&phone=${encodeURIComponent(phone)}`;
           await sendText(phone, `✏️ Tweak it on web (color, motion, clips):\n${editUrl}`).catch(() => {});
         }
 

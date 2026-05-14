@@ -2151,11 +2151,18 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
   // Queue the preview render
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection')
+    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection, media_items')
     .eq('id', postId)
     .maybeSingle();
 
   if (!post) return;
+
+  // When the user sent multiple photos/videos, use the timeline engine for multi-clip reel.
+  // media_items is a CarouselItem[] stored as JSONB: [{ url, is_video }]
+  const rawItems = Array.isArray(post.media_items) ? post.media_items : [];
+  const multiClipItems = rawItems.length > 1
+    ? rawItems.map((it: any) => ({ url: it.url as string, type: (it.is_video ? 'video' : 'image') as 'image' | 'video' }))
+    : null;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
   try {
@@ -2176,6 +2183,7 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
         animationStyle: post.animation_style,
         musicPreference: post.music_selection,
         isPreview: true,
+        ...(multiClipItems ? { mediaItems: multiClipItems } : {}),
       }),
     });
   } catch (err: any) {
@@ -2188,10 +2196,12 @@ async function handlePreviewApproval(from: string, postId: string) {
 
   await sendText(from, '✅ Publishing your reel...');
 
-  // Finalize render with full quality (not preview)
+  // Finalize render with full quality (not preview).
+  // If a KreyaTimeline was stored (multi-clip or web-editor path), re-render it at HD.
+  // Otherwise fall back to the existing single-image Modal GPU path.
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection')
+    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection, timeline_json')
     .eq('id', postId)
     .maybeSingle();
 
@@ -2199,25 +2209,50 @@ async function handlePreviewApproval(from: string, postId: string) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
   try {
-    const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
-    await fetch(`${appUrl}${renderEndpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({
-        phone: from,
-        postId,
-        imageUrl: post.user_image_url,
-        caption: post.caption,
-        duration: post.animation_duration,
-        zoomLevel: post.animation_zoom,
-        animationStyle: post.animation_style,
-        musicPreference: post.music_selection,
-        isPreview: false,
-      }),
-    });
+    if (post.timeline_json) {
+      // HD re-render via timeline engine
+      const hdTimeline = { ...post.timeline_json, resolution: 'hd' };
+      await supabase.from('pending_posts').update({ render_resolution: 'hd' }).eq('id', postId);
+      await fetch(`${appUrl}/api/posts/update-timeline`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({ postId, token: '', phone: from, timeline: hdTimeline }),
+      });
+      // update-timeline saves the new HD URL to image_url; then proceed to publish
+      const { data: updated } = await supabase
+        .from('pending_posts')
+        .select('image_url, caption')
+        .eq('id', postId)
+        .maybeSingle();
+      if (updated) {
+        await supabase.from('pending_posts').update({ state: 'pending_approval' }).eq('id', postId);
+        await sendVideoMessage(from, updated.image_url);
+        await sendPostPreview(from, updated.image_url, updated.caption, postId, true, 'reels');
+      }
+    } else {
+      const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
+      await fetch(`${appUrl}${renderEndpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          phone: from,
+          postId,
+          imageUrl: post.user_image_url,
+          caption: post.caption,
+          duration: post.animation_duration,
+          zoomLevel: post.animation_zoom,
+          animationStyle: post.animation_style,
+          musicPreference: post.music_selection,
+          isPreview: false,
+        }),
+      });
+    }
   } catch (err: any) {
     console.error('[finalize-reel] dispatch failed:', err.message);
   }

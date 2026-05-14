@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     timeline: KreyaTimeline;
   };
 
-  if (!postId || !token || !phone || !timeline) {
+  if (!postId || !phone || !timeline) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
   }
 
