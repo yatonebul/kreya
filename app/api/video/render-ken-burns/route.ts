@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendText, sendVideoMessage, sendPostPreview, sendReelSurfaceToggle, sendPreviewOptions, sendAnimationFailureWithFallbacks, logAnimationError } from '@/lib/whatsapp-send';
 import { getMusicForCaption } from '@/lib/mood-music';
+import { buildAtomicTimeline } from '@/lib/media-buffer';
+import { renderTimeline } from '@/lib/timeline-renderer';
+import type { MediaItem } from '@/lib/video-worker';
+import { createHash } from 'crypto';
 
 // Ken Burns rendering via Modal (GPU)
 export const maxDuration = 300;
@@ -91,19 +95,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const { phone, postId, imageUrl, caption, duration, zoomLevel, aspectRatio, musicPreference, animationStyle, isPreview } =
-    await req.json();
+  const {
+    phone, postId, imageUrl, caption,
+    duration, zoomLevel, aspectRatio, musicPreference, animationStyle, isPreview,
+    mediaItems,   // MediaItem[] — multi-photo/video timeline path
+    colorGrade,   // KreyaTimeline colorGrade (optional)
+  } = await req.json();
 
-  if (!phone || !postId || !imageUrl || !caption) {
-    console.error('[render-ken-burns] missing required fields:', { phone, postId, imageUrl, caption });
+  if (!phone || !postId || !caption || (!imageUrl && !mediaItems?.length)) {
+    console.error('[render-ken-burns] missing required fields:', { phone, postId, imageUrl, mediaItems, caption });
     return NextResponse.json({ error: 'missing fields' }, { status: 400 });
   }
 
   const supabase = getSupabase();
 
+  // Generate a secure edit token for the web editor link
+  function makeEditToken(pId: string, ph: string): string {
+    return createHash('sha256')
+      .update(`${pId}:${ph}:${process.env.SUPABASE_SERVICE_ROLE_KEY}`)
+      .digest('hex')
+      .slice(0, 32);
+  }
+
   after(async () => {
     try {
-      console.log('[render-ken-burns] start:', { postId, style: animationStyle, music: musicPreference, isPreview });
+      const isMultiClip = Array.isArray(mediaItems) && mediaItems.length > 0;
+      console.log('[render-ken-burns] start:', { postId, style: animationStyle, music: musicPreference, isPreview, isMultiClip });
 
       let musicUrl: string | undefined;
       let musicLabel = '';
@@ -125,17 +142,43 @@ export async function POST(req: NextRequest) {
         console.log('[render-ken-burns] silent mode');
       }
 
-      const { videoUrl, musicIncluded } = await renderKenBurnsViaModal(
-        imageUrl,
-        caption,
-        duration ?? 5,
-        zoomLevel ?? 1.5,
-        aspectRatio ?? '9:16',
-        musicUrl,
-        animationStyle ?? 'auto',
-      );
+      let videoUrl: string;
+      let musicIncluded = false;
 
-      console.log('[render-ken-burns] video rendered:', { videoUrl, musicIncluded });
+      if (isMultiClip) {
+        // ── Multi-clip path: assemble KreyaTimeline → FFmpeg render ────────
+        const timeline = buildAtomicTimeline(mediaItems as MediaItem[], {
+          aspectRatio:     aspectRatio ?? '9:16',
+          resolution:      'preview',
+          musicUrl,
+          colorGrade,
+        });
+
+        // Store timeline so the web editor and WhatsApp edits can modify it
+        await supabase
+          .from('pending_posts')
+          .update({ timeline_json: timeline, render_resolution: 'preview' })
+          .eq('id', postId);
+
+        const result = await renderTimeline(timeline);
+        videoUrl = result.publicUrl;
+        musicIncluded = Boolean(musicUrl);
+        console.log('[render-ken-burns] multi-clip rendered via timeline:', videoUrl);
+      } else {
+        // ── Single-image path: existing Modal GPU Ken Burns ─────────────────
+        const result = await renderKenBurnsViaModal(
+          imageUrl,
+          caption,
+          duration ?? 5,
+          zoomLevel ?? 1.5,
+          aspectRatio ?? '9:16',
+          musicUrl,
+          animationStyle ?? 'auto',
+        );
+        videoUrl = result.videoUrl;
+        musicIncluded = result.musicIncluded;
+        console.log('[render-ken-burns] single-image rendered via Modal:', { videoUrl, musicIncluded });
+      }
 
       if (isPreview) {
         // Show preview with approval options
@@ -162,6 +205,15 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
 
         await sendPreviewOptions(phone, postId, videoUrl, post?.caption);
+
+        // Send web editor link so user can tweak color grade, motion, clips
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+        if (appUrl) {
+          const editToken = makeEditToken(postId, phone);
+          const editUrl   = `${appUrl}/edit/${postId}?t=${editToken}`;
+          await sendText(phone, `✏️ Tweak it on web (color, motion, clips):\n${editUrl}`).catch(() => {});
+        }
+
         console.log('[render-ken-burns] preview sent');
       } else {
         // Direct approval after preview was accepted
