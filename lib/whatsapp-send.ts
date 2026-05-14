@@ -124,8 +124,9 @@ export function sendAnimationStyleChoice(to: string, postId: string, includeQuic
   });
 }
 
-export function sendPreviewOptions(to: string, postId: string, previewUrl: string, caption?: string): Promise<WaResult> {
+export function sendPreviewOptions(to: string, postId: string, previewUrl: string, caption?: string, editUrl?: string): Promise<WaResult> {
   const captionLine = caption ? `\n\n*Caption:*\n${caption}` : '';
+  const editLine    = editUrl  ? `\n\n✏️ Edit on web: ${editUrl}` : '';
   return wa({
     messaging_product: 'whatsapp',
     to,
@@ -133,7 +134,7 @@ export function sendPreviewOptions(to: string, postId: string, previewUrl: strin
     interactive: {
       type: 'list',
       body: {
-        text: `✅ *Here's your preview!*${captionLine}\n\nHappy with it? Or tweak before posting.`,
+        text: `✅ *Here's your preview!*${captionLine}${editLine}\n\nHappy with it? Or tweak before posting.`,
       },
       action: {
         button: '⚙️ Options',
