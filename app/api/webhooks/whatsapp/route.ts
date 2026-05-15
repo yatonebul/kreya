@@ -375,6 +375,24 @@ async function processWebhook(body: any) {
         return;
       }
 
+      // User replied to "When should I post it?" prompt
+      const awaitingSchedule = await getPostByState(from, 'awaiting_schedule_time');
+      if (awaitingSchedule && messageType === 'text') {
+        const scheduleTime = await parseScheduleTime(message.text.body);
+        if (scheduleTime && scheduleTime > new Date()) {
+          const existingTargets = (awaitingSchedule.target_platforms as string[] | null)?.length
+            ? (awaitingSchedule.target_platforms as string[])
+            : await getConnectedPlatforms(from);
+          await getSupabase().from('pending_posts')
+            .update({ state: 'scheduled', scheduled_for: scheduleTime.toISOString(), target_platforms: existingTargets })
+            .eq('id', awaitingSchedule.id);
+          await sendScheduledActions(from, formatScheduleConfirmation(scheduleTime), existingTargets);
+        } else {
+          await sendText(from, `Hmm, I couldn't parse that time. Try something like "tomorrow at 9am", "Friday 3pm", or "in 2 hours".`);
+        }
+        return;
+      }
+
       // If a draft is waiting — check for schedule intent first, then offer choice
       const pendingApproval = await getPostByState(from, 'pending_approval');
       if (pendingApproval && messageType === 'text') {
@@ -878,13 +896,10 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     return;
   }
   if (action === 'schedule' && postId) {
-    // The post stays in pending_approval. The user replies with a time
-    // ("tomorrow at 9am", "Friday 3pm") and the existing text-message
-    // schedule-intent parser at the top of the webhook flips state to
-    // 'scheduled' and confirms.
+    await getSupabase().from('pending_posts').update({ state: 'awaiting_schedule_time' }).eq('id', postId);
     await sendText(
       from,
-      `📅 *When should I post it?*\n\nReply with a time, e.g.:\n• "tomorrow at 9am"\n• "Friday 3pm"\n• "in 2 hours"\n\nOr tap a draft option again to approve / edit / discard.`,
+      `📅 *When should I post it?*\n\nReply with a time, e.g.:\n• "tomorrow at 9am"\n• "Friday 3pm"\n• "in 2 hours"\n• "today 9:25 pm"`,
     );
     return;
   }
