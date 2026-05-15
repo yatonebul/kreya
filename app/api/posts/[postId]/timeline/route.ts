@@ -14,8 +14,8 @@ function verifyEditToken(postId: string, phone: string, token: string): boolean 
   return expected === token;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { postId: string } }) {
-  const { postId } = params;
+export async function GET(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
+  const { postId } = await params;
   const token  = req.nextUrl.searchParams.get('t') ?? '';
   const phone  = req.nextUrl.searchParams.get('phone') ?? '';
 
