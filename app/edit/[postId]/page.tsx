@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, use } from 'react';
 import type { KreyaTimeline, VideoTrack, ColorGrade, KenBurnsStyle } from '@/lib/timeline-schema';
 
 // ── CSS filter map for instant (no-server) color grade preview ────────────────
@@ -36,16 +36,15 @@ const MOTION_STYLES: { key: KenBurnsStyle; label: string; icon: string }[] = [
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PageProps {
-  params: { postId: string };
-  searchParams: { t?: string; phone?: string };
+  params: Promise<{ postId: string }>;
+  searchParams: Promise<{ t?: string; phone?: string }>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ReelEditor({ params, searchParams }: PageProps) {
-  const { postId } = params;
-  const token      = searchParams.t ?? '';
-  const phone      = searchParams.phone ?? '';
+  const { postId }         = use(params);
+  const { t: token = '', phone = '' } = use(searchParams);
 
   const [timeline,      setTimeline]      = useState<KreyaTimeline | null>(null);
   const [previewUrl,    setPreviewUrl]    = useState<string>('');
