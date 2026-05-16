@@ -55,6 +55,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   const [loading,       setLoading]       = useState(true);
   const [rendering,     setRendering]     = useState(false);
   const [error,         setError]         = useState('');
+  const [bgStyle,       setBgStyle]       = useState<'blur' | 'black'>('blur');
   const [dragIdx,       setDragIdx]       = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -69,6 +70,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         setTimeline(data.timeline);
         setPreviewUrl(data.previewUrl);
         setSelectedGrade((data.timeline?.colorGrade as ColorGrade) ?? 'natural');
+        setBgStyle(data.timeline?.bgStyle ?? 'blur');
         const firstEffect = data.timeline?.tracks?.video?.[0]?.effect;
         if (firstEffect?.type === 'ken-burns') setMotionStyle(firstEffect.style);
         const caption = data.timeline?.tracks?.captions?.[0];
@@ -107,6 +109,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
     return {
       ...timeline,
       colorGrade: selectedGrade,
+      bgStyle,
       tracks: {
         ...timeline.tracks,
         video:    updatedVideo,
@@ -349,6 +352,33 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
               style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)', fontFamily: 'DM Sans, sans-serif' }}
             />
           )}
+        </section>
+
+        {/* ── Background style ── */}
+        <section>
+          <h2 className="text-sm font-semibold mb-3" style={{ color: 'rgba(255,255,255,.5)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Space Mono, monospace' }}>
+            Background
+          </h2>
+          <div className="flex gap-3">
+            {([
+              { key: 'blur',  label: '🌫️ Blur fill',  desc: 'Fills frame with blurred clip' },
+              { key: 'black', label: '⬛ Black bars', desc: 'Classic letterbox' },
+            ] as const).map(({ key, label, desc }) => (
+              <button
+                key={key}
+                onClick={() => setBgStyle(key)}
+                className="flex-1 flex flex-col items-start gap-1 px-3 py-3 rounded-xl text-sm transition-all"
+                style={{
+                  background: bgStyle === key ? '#5E35FF22' : '#171430',
+                  border:     `1px solid ${bgStyle === key ? '#5E35FF' : 'rgba(255,255,255,.1)'}`,
+                  color:      bgStyle === key ? '#fff' : 'rgba(255,255,255,.6)',
+                }}
+              >
+                <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{label}</span>
+                <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,.4)', fontFamily: 'Space Mono, monospace' }}>{desc}</span>
+              </button>
+            ))}
+          </div>
         </section>
 
       </div>
