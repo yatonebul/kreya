@@ -51,6 +51,28 @@ function getSupabase() {
   );
 }
 
+// Delete rendered videos from Supabase Storage when a post is discarded.
+// Silently no-ops if the URL doesn't match our storage bucket.
+async function deleteStorageForPost(postId: string) {
+  const supabase = getSupabase();
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('image_url, user_image_url')
+    .eq('id', postId)
+    .maybeSingle();
+  if (!post) return;
+  const extractPath = (url: string | null) => {
+    if (!url) return null;
+    const m = url.match(/\/user-media\/(.+?)(?:\?|$)/);
+    return m ? m[1] : null;
+  };
+  const paths = [extractPath(post.image_url), extractPath(post.user_image_url)]
+    .filter(Boolean) as string[];
+  if (paths.length) {
+    await supabase.storage.from('user-media').remove(paths).catch(() => {});
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('hub.mode');
@@ -963,6 +985,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   if (action === 'discard_reel' && postId) {
     const supabase = getSupabase();
     await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
+    after(() => deleteStorageForPost(postId));
     await sendText(from, '🗑️ Reel discarded. Send a new photo whenever you\'re ready!');
     return;
   }
@@ -1402,6 +1425,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     if (post.sibling_id) {
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }
+    after(() => deleteStorageForPost(post.id));
     // Also discard any orphaned collecting_carousel session — prevents stale
     // sessions from accumulating items from future bursts after a discard.
     await getSupabase().from('pending_posts')

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import { after } from 'next/server';
 import { renderTimeline } from '@/lib/timeline-renderer';
 import type { KreyaTimeline } from '@/lib/timeline-schema';
+import { sendText, sendVideoMessage, sendPreviewOptions } from '@/lib/whatsapp-send';
 
 export const maxDuration = 120;
 
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
   // Validate the post exists and belongs to this phone
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('id, whatsapp_phone, state')
+    .select('id, whatsapp_phone, state, caption')
     .eq('id', postId)
     .maybeSingle();
 
@@ -72,6 +74,23 @@ export async function POST(req: NextRequest) {
     .from('pending_posts')
     .update({ image_url: publicUrl })
     .eq('id', postId);
+
+  // Send updated preview to WhatsApp so user can approve/publish
+  const waPhone = post.whatsapp_phone;
+  if (waPhone) {
+    const appUrl  = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const editToken = createHash('sha256')
+      .update(`${postId}:${phone}:${process.env.SUPABASE_SERVICE_ROLE_KEY}`)
+      .digest('hex').slice(0, 32);
+    const editUrl = appUrl
+      ? `${appUrl}/edit/${postId}?t=${editToken}&phone=${encodeURIComponent(phone)}`
+      : undefined;
+    after(async () => {
+      await sendText(waPhone, '✏️ *Preview updated!* Here\'s your edited reel:');
+      await sendVideoMessage(waPhone, publicUrl);
+      await sendPreviewOptions(waPhone, postId, publicUrl, post.caption ?? undefined, editUrl);
+    });
+  }
 
   return NextResponse.json({ previewUrl: publicUrl });
 }
