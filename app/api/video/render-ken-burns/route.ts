@@ -1,8 +1,8 @@
 import { after } from 'next/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sendText, sendVideoMessage, sendPostPreview, sendReelSurfaceToggle, sendPreviewOptions, sendAnimationFailureWithFallbacks, logAnimationError } from '@/lib/whatsapp-send';
-import { getMusicForCaption } from '@/lib/mood-music';
+import { sendText, sendVideoMessage, sendAudioMessage, sendMusicCandidatesPicker, sendPostPreview, sendReelSurfaceToggle, sendPreviewOptions, sendAnimationFailureWithFallbacks, logAnimationError } from '@/lib/whatsapp-send';
+import { getMusicForCaption, getMusicCandidates } from '@/lib/mood-music';
 import { buildAtomicTimeline } from '@/lib/media-buffer';
 import { renderTimeline } from '@/lib/timeline-renderer';
 import type { MediaItem } from '@/lib/video-worker';
@@ -212,6 +212,26 @@ export async function POST(req: NextRequest) {
           : undefined;
 
         await sendPreviewOptions(phone, postId, videoUrl, post?.caption, editUrl);
+
+        // For multi-clip posts: send up to 4 more music options as audio previews
+        if (isMultiClip && musicIncluded && musicUrl) {
+          getMusicCandidates(caption, 5).then(async (candidates) => {
+            const alternatives = candidates.filter(c => c.musicUrl !== musicUrl).slice(0, 4);
+            if (!alternatives.length) return;
+            // Update timeline with all candidates for later selection
+            const { data: tl } = await supabase.from('pending_posts').select('timeline_json').eq('id', postId).maybeSingle();
+            if (tl?.timeline_json) {
+              await supabase.from('pending_posts').update({
+                timeline_json: { ...tl.timeline_json, musicCandidates: [{ title: musicLabel, artist: '', musicUrl }, ...alternatives.map(a => ({ title: a.title, artist: a.artist, musicUrl: a.musicUrl }))] },
+              }).eq('id', postId);
+            }
+            await sendText(phone, '🎵 *Want a different vibe?* Here are 4 more tracks to consider:');
+            for (const track of alternatives) {
+              await sendAudioMessage(phone, track.musicUrl).catch(() => {});
+            }
+            await sendMusicCandidatesPicker(phone, postId, alternatives.map(a => ({ title: a.title, artist: a.artist })));
+          }).catch(() => {});
+        }
 
         console.log('[render-ken-burns] preview sent');
       } else {

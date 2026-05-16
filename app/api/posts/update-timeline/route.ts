@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
 import { after } from 'next/server';
 import { renderTimeline } from '@/lib/timeline-renderer';
+import { getMusicForCaption } from '@/lib/mood-music';
 import type { KreyaTimeline } from '@/lib/timeline-schema';
 import { sendText, sendVideoMessage, sendPreviewOptions } from '@/lib/whatsapp-send';
 
@@ -21,11 +22,12 @@ function verifyEditToken(postId: string, phone: string, token: string): boolean 
 }
 
 export async function POST(req: NextRequest) {
-  const { postId, token, phone, timeline } = await req.json() as {
-    postId:   string;
-    token:    string;
-    phone:    string;
-    timeline: KreyaTimeline;
+  const { postId, token, phone, timeline, musicPreference } = await req.json() as {
+    postId:          string;
+    token:           string;
+    phone:           string;
+    timeline:        KreyaTimeline;
+    musicPreference?: string;
   };
 
   if (!postId || !phone || !timeline) {
@@ -58,7 +60,25 @@ export async function POST(req: NextRequest) {
   }
 
   // Always render at preview resolution during the editing loop
-  const previewTimeline: KreyaTimeline = { ...timeline, resolution: 'preview' };
+  let previewTimeline: KreyaTimeline = { ...timeline, resolution: 'preview' };
+
+  // Swap music if a new preference was sent from the web editor
+  if (musicPreference) {
+    if (musicPreference === 'none') {
+      const { audio: _drop, ...tracks } = previewTimeline.tracks as any;
+      previewTimeline = { ...previewTimeline, tracks };
+    } else {
+      const music = await getMusicForCaption(
+        (post.caption ?? '') + (musicPreference === 'calm' ? ' calm peaceful' : ''),
+      ).catch(() => null);
+      if (music?.musicUrl) {
+        previewTimeline = {
+          ...previewTimeline,
+          tracks: { ...previewTimeline.tracks, audio: { src: music.musicUrl, volume: 0.4, fadeOutAt: Math.max(0, previewTimeline.totalDuration - 2) } },
+        };
+      }
+    }
+  }
 
   // Persist updated timeline
   await supabase

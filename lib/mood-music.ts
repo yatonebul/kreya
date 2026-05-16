@@ -135,3 +135,40 @@ export async function getMusicForCaption(
   const { mood } = await detectMood(caption, brandContext);
   return selectMusicForMood(mood);
 }
+
+export async function getMusicCandidates(caption: string, count = 5): Promise<MoodMusic[]> {
+  const { mood } = await detectMood(caption);
+  const candidates: MoodMusic[] = [];
+  const token = process.env.FREESOUND_API_KEY;
+
+  if (token) {
+    try {
+      const query = encodeURIComponent(MOOD_QUERIES[mood]);
+      const url = `https://freesound.org/apiv2/search/text/?query=${query}&token=${token}&page_size=20&fields=id,name,username,previews&filter=duration:[5+TO+120]`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const data = await res.json();
+        const results: any[] = (data.results ?? []).filter((r: any) => r.previews?.['preview-hq-mp3']);
+        const shuffled = results.sort(() => Math.random() - 0.5).slice(0, count);
+        for (const pick of shuffled) {
+          candidates.push({ mood, musicUrl: pick.previews['preview-hq-mp3'], title: pick.name, artist: pick.username });
+        }
+      }
+    } catch (e) {
+      console.warn('[mood-music] getMusicCandidates Freesound failed:', e);
+    }
+  }
+
+  // Fill remaining with fallbacks from adjacent moods for variety
+  const moodOrder: Mood[] = ['energetic', 'inspirational', 'calm', 'romantic', 'dramatic', 'humorous', 'melancholic'];
+  const fillMoods = [mood, ...moodOrder.filter(m => m !== mood)];
+  for (const m of fillMoods) {
+    if (candidates.length >= count) break;
+    const fb = FALLBACK_TRACKS[m];
+    if (fb && !candidates.some(c => c.musicUrl === fb.musicUrl)) {
+      candidates.push(fb);
+    }
+  }
+
+  return candidates.slice(0, count);
+}

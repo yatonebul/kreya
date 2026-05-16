@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ post
 
   const { data: post } = await getSupabase()
     .from('pending_posts')
-    .select('id, whatsapp_phone, image_url, timeline_json, caption')
+    .select('id, whatsapp_phone, image_url, user_image_url, timeline_json, caption, animation_style, music_selection, surface, is_video')
     .eq('id', postId)
     .maybeSingle();
 
@@ -41,8 +41,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ post
   }
 
   return NextResponse.json({
-    timeline:   post.timeline_json ?? null,
-    previewUrl: post.image_url ?? '',
-    caption:    post.caption ?? '',
+    timeline:       post.timeline_json ?? null,
+    previewUrl:     post.image_url ?? '',
+    userImageUrl:   post.user_image_url ?? '',
+    caption:        post.caption ?? '',
+    animationStyle: post.animation_style ?? 'elegant',
+    musicSelection: post.music_selection ?? 'auto',
+    surface:        post.surface ?? 'reels',
+    isVideo:        post.is_video ?? false,
   });
 }

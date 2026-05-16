@@ -59,6 +59,39 @@ export function sendVideoMessage(to: string, url: string): Promise<WaResult> {
   });
 }
 
+export function sendAudioMessage(to: string, url: string): Promise<WaResult> {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'audio',
+    audio: { link: url },
+  });
+}
+
+export async function sendMusicCandidatesPicker(
+  to: string,
+  postId: string,
+  candidates: Array<{ title: string; artist: string }>,
+): Promise<WaResult> {
+  const list = candidates.map((c, i) => `*${i + 1}.* ${c.title} — ${c.artist}`).join('\n');
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: `🎵 *Music options (heard above):*\n\n${list}\n\nReply with a number to swap, or:` },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `music_keep:${postId}`,  title: '✓ Keep current' } },
+          { type: 'reply', reply: { id: `music_more:${postId}`,  title: '🔄 New options' } },
+          { type: 'reply', reply: { id: `music_none:${postId}`,  title: '🔇 No music' } },
+        ],
+      },
+    },
+  });
+}
+
 export function sendAnimateToReelOffer(to: string, sessionId: string): Promise<WaResult> {
   return wa({
     messaging_product: 'whatsapp',

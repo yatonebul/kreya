@@ -53,13 +53,20 @@ export interface CaptionTrack {
   fontSize?: number
 }
 
+export interface MusicCandidate {
+  title: string
+  artist: string
+  musicUrl: string
+}
+
 export interface KreyaTimeline {
   version: '1.0'
   aspectRatio: AspectRatio
   resolution: RenderResolution
   totalDuration: number
   colorGrade?: ColorGrade
-  bgStyle?: 'blur' | 'black'   // blur = blurred fill (default); black = letterbox bars
+  bgStyle?: 'blur' | 'black'
+  musicCandidates?: MusicCandidate[]
   tracks: {
     video: VideoTrack[]
     audio?: AudioTrack

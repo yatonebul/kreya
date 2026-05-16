@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendSlideReplacePrompt, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendBgStyleChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAudioMessage, sendMusicCandidatesPicker, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendSlideReplacePrompt, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendBgStyleChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
 import { getAdaptersForPlatforms } from '@/lib/adapters';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -395,6 +395,22 @@ async function processWebhook(body: any) {
       if (messageType === 'image') {
         await handleAutoCarouselImage(from, message, (message.image?.caption ?? '').trim());
         return;
+      }
+
+      // Numbered music track selection — "1" "2" "3" etc. while post has music candidates
+      if (messageType === 'text') {
+        const numMatch = message.text.body.trim().match(/^([1-5])$/);
+        if (numMatch) {
+          const pendingPost = await getPostByState(from, 'pending_approval') ?? await getPostByState(from, 'rendering_preview');
+          if (pendingPost) {
+            const candidates = (pendingPost as any).timeline_json?.musicCandidates;
+            if (Array.isArray(candidates) && candidates.length) {
+              const idx = parseInt(numMatch[1], 10) - 1;
+              await handleMusicCandidateSelect(from, pendingPost.id, idx);
+              return;
+            }
+          }
+        }
       }
 
       // User replied to "When should I post it?" prompt
@@ -980,6 +996,26 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
   if (action === 'retry_music' && postId) {
     await handleRetryMusic(from, postId);
+    return;
+  }
+  if (action === 'music_keep' && postId) {
+    await sendText(from, '✓ Keeping the current music!');
+    return;
+  }
+  if (action === 'music_none' && postId) {
+    await handleMusicCandidateSelect(from, postId, null);
+    return;
+  }
+  if (action === 'music_more' && postId) {
+    await handleMusicMore(from, postId);
+    return;
+  }
+  // "use_music_track:postId:index" — user picks a numbered track from the candidate list
+  if (action?.startsWith('use_music_track:')) {
+    const parts = action.split(':');
+    const trackPostId = parts[1];
+    const trackIdx    = parseInt(parts[2] ?? '0', 10);
+    if (trackPostId) await handleMusicCandidateSelect(from, trackPostId, trackIdx);
     return;
   }
   if (action === 'bg_style' && postId) {
@@ -2227,8 +2263,6 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
     state: 'rendering_preview',
   }).eq('id', postId);
 
-  await sendText(from, '🎬 Creating preview... ~15 seconds');
-
   // Queue the preview render
   const { data: post } = await supabase
     .from('pending_posts')
@@ -2244,6 +2278,18 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
   const multiClipItems = rawItems.length > 1
     ? rawItems.map((it: any) => ({ url: it.url as string, type: (it.is_video ? 'video' : 'image') as 'image' | 'video' }))
     : null;
+
+  // Dynamic time estimate based on actual assets
+  const estimateRenderTime = (): string => {
+    const count = multiClipItems?.length ?? 1;
+    const hasVideo = multiClipItems?.some(it => it.type === 'video') ?? false;
+    if (!multiClipItems) return '~30 seconds';
+    if (count <= 2 && !hasVideo) return '~45 seconds';
+    if (count <= 3 || !hasVideo) return '~1 minute';
+    return '~2 minutes';
+  };
+
+  await sendText(from, `🎬 Creating preview... ${estimateRenderTime()}`);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
   try {
@@ -2349,6 +2395,58 @@ async function handleRetryMusic(from: string, postId: string) {
   const supabase = getSupabase();
   await supabase.from('pending_posts').update({ state: 'waiting_music_choice' }).eq('id', postId);
   await sendMusicChoice(from, postId);
+}
+
+async function handleMusicCandidateSelect(from: string, postId: string, candidateIdx: number | null) {
+  const supabase = getSupabase();
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('timeline_json, caption, whatsapp_phone')
+    .eq('id', postId)
+    .maybeSingle();
+  if (!post?.timeline_json) {
+    await sendText(from, '⚠️ Could not find post timeline.');
+    return;
+  }
+  let newAudio: { src: string; volume: number; fadeOutAt: number } | undefined;
+  if (candidateIdx === null) {
+    // Remove music
+    const { tracks: { audio: _removed, ...otherTracks }, ...rest } = post.timeline_json as any;
+    const updatedTimeline = { ...rest, tracks: otherTracks };
+    await supabase.from('pending_posts').update({ timeline_json: updatedTimeline }).eq('id', postId);
+    await sendText(from, '🔇 Music removed. Re-rendering silently…');
+    await handleBgStyleChange(from, postId, post.timeline_json.bgStyle ?? 'blur'); // reuse re-render path
+    return;
+  }
+  const candidates: any[] = post.timeline_json.musicCandidates ?? [];
+  const picked = candidates[candidateIdx];
+  if (!picked) {
+    await sendText(from, `⚠️ Track ${candidateIdx + 1} not found — try a different number.`);
+    return;
+  }
+  newAudio = { src: picked.musicUrl, volume: 0.4, fadeOutAt: Math.max(0, post.timeline_json.totalDuration - 2) };
+  const updatedTimeline = { ...post.timeline_json, tracks: { ...post.timeline_json.tracks, audio: newAudio } };
+  await sendText(from, `🎵 Switching to *${picked.title}*… Re-rendering.`);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:3000`;
+  await fetch(`${appUrl}/api/posts/update-timeline`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
+    body: JSON.stringify({ postId, phone: from, timeline: updatedTimeline }),
+  }).catch(err => console.error('[handleMusicCandidateSelect] re-render failed:', err.message));
+}
+
+async function handleMusicMore(from: string, postId: string) {
+  const supabase = getSupabase();
+  const { data: post } = await supabase.from('pending_posts').select('caption').eq('id', postId).maybeSingle();
+  if (!post) return;
+  await sendText(from, '🔄 Fetching 4 new music options…');
+  const { getMusicCandidates: getCandidates } = await import('@/lib/mood-music');
+  const candidates = await getCandidates(post.caption ?? '', 4).catch(() => []);
+  if (!candidates.length) { await sendText(from, '⚠️ Couldn\'t fetch new tracks — try again.'); return; }
+  for (const track of candidates) {
+    await sendAudioMessage(from, track.musicUrl).catch(() => {});
+  }
+  await sendMusicCandidatesPicker(from, postId, candidates.map(c => ({ title: c.title, artist: c.artist })));
 }
 
 async function handleBgStyleChange(from: string, postId: string, bgStyle: 'blur' | 'black') {
