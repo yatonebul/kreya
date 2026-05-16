@@ -123,6 +123,13 @@ export async function POST(req: NextRequest) {
       const isMultiClip = Array.isArray(mediaItems) && mediaItems.length > 0;
       console.log('[render-ken-burns] start:', { postId, style: animationStyle, music: musicPreference, isPreview, isMultiClip });
 
+      // Send caption immediately — user gets feedback while render is in progress
+      if (isPreview && caption) {
+        await sendText(phone,
+          `✍️ *Your caption is ready!*\n\n${caption}\n\n🎬 Rendering your reel — this takes ~15 seconds...`
+        ).catch(() => {});
+      }
+
       let musicUrl: string | undefined;
       let musicLabel = '';
 
