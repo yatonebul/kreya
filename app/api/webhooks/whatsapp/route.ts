@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendBgStyleChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
 import { getAdaptersForPlatforms } from '@/lib/adapters';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -980,6 +980,14 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   }
   if (action === 'retry_music' && postId) {
     await handleRetryMusic(from, postId);
+    return;
+  }
+  if (action === 'bg_style' && postId) {
+    await sendBgStyleChoice(from, postId);
+    return;
+  }
+  if ((action === 'bg_blur' || action === 'bg_black') && postId) {
+    await handleBgStyleChange(from, postId, action === 'bg_blur' ? 'blur' : 'black');
     return;
   }
   if (action === 'discard_reel' && postId) {
@@ -2307,6 +2315,34 @@ async function handleRetryMusic(from: string, postId: string) {
   const supabase = getSupabase();
   await supabase.from('pending_posts').update({ state: 'waiting_music_choice' }).eq('id', postId);
   await sendMusicChoice(from, postId);
+}
+
+async function handleBgStyleChange(from: string, postId: string, bgStyle: 'blur' | 'black') {
+  const supabase = getSupabase();
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('timeline_json, whatsapp_phone')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post?.timeline_json) {
+    await sendText(from, '🖼️ Background style applies to multi-clip reels. Your current post uses a single image.');
+    return;
+  }
+
+  const updated = { ...post.timeline_json, bgStyle };
+  const label = bgStyle === 'blur' ? '🌫️ Applying blur fill background…' : '⬛ Applying black bars…';
+  await sendText(from, label);
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:3000`;
+  await fetch(`${appUrl}/api/posts/update-timeline`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+    body: JSON.stringify({ postId, phone: from, timeline: updated }),
+  }).catch(err => console.error('[handleBgStyleChange] render failed:', err.message));
 }
 
 async function handleAnimationFallbackStatic(from: string, postId: string) {

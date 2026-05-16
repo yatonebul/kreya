@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
     duration, zoomLevel, aspectRatio, musicPreference, animationStyle, isPreview,
     mediaItems,   // MediaItem[] — multi-photo/video timeline path
     colorGrade,   // KreyaTimeline colorGrade (optional)
+    bgStyle,      // 'blur' | 'black' — background fill style (optional, default 'blur')
   } = await req.json();
 
   if (!phone || !postId || !caption || (!imageUrl && !mediaItems?.length)) {
@@ -152,6 +153,7 @@ export async function POST(req: NextRequest) {
           resolution:      'preview',
           musicUrl,
           colorGrade,
+          bgStyle:         bgStyle ?? 'blur',
         });
 
         // Store timeline so the web editor and WhatsApp edits can modify it

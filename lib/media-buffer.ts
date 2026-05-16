@@ -19,6 +19,7 @@ export interface BufferOpts {
   captionPlatform?: CaptionPlatform
   musicUrl?: string
   colorGrade?: KreyaTimeline['colorGrade']
+  bgStyle?: KreyaTimeline['bgStyle']
 }
 
 export function buildAtomicTimeline(
@@ -34,6 +35,7 @@ export function buildAtomicTimeline(
     captionPlatform = 'ig-reels',
     musicUrl,
     colorGrade,
+    bgStyle        = 'blur',   // default: blurred fill (OpenCut-style)
   } = opts;
 
   const clipDuration = Math.max(1.5, 5 / mediaItems.length);
@@ -84,6 +86,7 @@ export function buildAtomicTimeline(
     resolution,
     totalDuration,
     colorGrade,
+    bgStyle,
     tracks: {
       video: videoTracks,
       ...(audio    ? { audio }    : {}),

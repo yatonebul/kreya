@@ -91,6 +91,19 @@ function scaleFilter(inputLabel: string, outLabel: string, w: number, h: number)
   );
 }
 
+// Blurred-fill composite: blurred scale-to-fill bg + sharp letterboxed fg
+// Eliminates black bars — same effect as OpenCut's canvas background blur.
+function blurBgFilter(inputLabel: string, outLabel: string, w: number, h: number, idx: number): string {
+  return (
+    `${inputLabel}split=2[_bb${idx}][_bf${idx}];` +
+    `[_bb${idx}]scale=${w}:${h}:force_original_aspect_ratio=increase,` +
+      `crop=${w}:${h},boxblur=20:5[_bg${idx}];` +
+    `[_bf${idx}]scale=${w}:${h}:force_original_aspect_ratio=decrease,` +
+      `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1[_fg${idx}];` +
+    `[_bg${idx}][_fg${idx}]overlay=(W-w)/2:(H-h)/2${outLabel}`
+  );
+}
+
 async function downloadTmp(url: string, ext: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Download failed ${url} → ${res.status}`);
@@ -134,7 +147,7 @@ function wrapLines(text: string, maxChars = 38): string {
 export type RenderResult = { publicUrl: string };
 
 export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderResult> {
-  const { aspectRatio, resolution, colorGrade, tracks } = timeline;
+  const { aspectRatio, resolution, colorGrade, bgStyle = 'blur', tracks } = timeline;
   const { video: videoTracks, audio, captions } = tracks;
 
   if (!videoTracks.length) throw new Error('renderTimeline: no video tracks');
@@ -187,7 +200,12 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
         );
         filterParts.push(`[kb${i}]setsar=1${outLabel}`);
       } else {
-        filterParts.push(scaleFilter(inLabel, outLabel, w, h));
+        // For static/video clips: blur-fill or black-bar depending on bgStyle
+        if (bgStyle === 'black') {
+          filterParts.push(scaleFilter(inLabel, outLabel, w, h));
+        } else {
+          filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));
+        }
       }
 
       clipLabels.push(outLabel);

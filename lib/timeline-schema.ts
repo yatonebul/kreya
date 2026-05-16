@@ -59,6 +59,7 @@ export interface KreyaTimeline {
   resolution: RenderResolution
   totalDuration: number
   colorGrade?: ColorGrade
+  bgStyle?: 'blur' | 'black'   // blur = blurred fill (default); black = letterbox bars
   tracks: {
     video: VideoTrack[]
     audio?: AudioTrack

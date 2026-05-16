@@ -145,9 +145,30 @@ export function sendPreviewOptions(to: string, postId: string, previewUrl: strin
               { id: `retry_music:${postId}`,   title: '🎵 Different music',  description: 'Pick a new track' },
               { id: `retry_anim:${postId}`,    title: '🎨 Different style',  description: 'Change animation style' },
               { id: `edit_caption:${postId}`,  title: '✏️ Edit caption',     description: 'Change the caption text' },
+              { id: `bg_style:${postId}`,      title: '🖼️ Background',       description: 'Blur fill or black bars' },
               { id: `discard_reel:${postId}`,  title: '🗑️ Discard',          description: 'Throw this away and start fresh' },
             ],
           },
+        ],
+      },
+    },
+  });
+}
+
+export function sendBgStyleChoice(to: string, postId: string): Promise<WaResult> {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: {
+        text: '🖼️ *Background style*\n\n🌫️ *Blur fill* — blurred version of your clip fills the frame (looks great on Reels)\n⬛ *Black bars* — classic letterbox',
+      },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `bg_blur:${postId}`,  title: '🌫️ Blur fill'   } },
+          { type: 'reply', reply: { id: `bg_black:${postId}`, title: '⬛ Black bars'   } },
         ],
       },
     },
