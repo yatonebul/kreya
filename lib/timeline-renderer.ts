@@ -17,6 +17,17 @@ if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 // drawtext requires a fontfile= on Lambda — fontconfig is not available.
 const GEIST_FONT = path.join(process.cwd(), 'node_modules/next/dist/compiled/@vercel/og/Geist-Regular.ttf');
 
+// Geist Regular has no emoji glyphs. Emoji in drawtext causes fontconfig to search
+// for a fallback font — which crashes on Lambda (no system fonts). Strip them before
+// passing text to drawtext. Latin, Cyrillic, and common punctuation are kept.
+function stripEmojiForDrawtext(text: string): string {
+  return text
+    .replace(/\p{Emoji_Presentation}/gu, '')
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -282,8 +293,9 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       captions.forEach((cap, idx) => {
         const platform = cap.platform ?? 'ig-reels';
         const yOffset  = CAPTION_Y_OFFSET[platform];
-        const fontSize = cap.fontSize ?? (isPreview ? 20 : 40);
-        const wrapped  = escapeDrawtext(wrapLines(cap.text, isPreview ? 24 : 38));
+        const fontSize  = cap.fontSize ?? (isPreview ? 20 : 40);
+        const safeText  = stripEmojiForDrawtext(cap.text);
+        const wrapped   = escapeDrawtext(wrapLines(safeText, isPreview ? 24 : 38));
         const inLbl    = captionLabel;
         captionLabel   = idx === captions!.length - 1 ? '[vout]' : `[vcap${idx}]`;
 

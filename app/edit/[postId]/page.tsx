@@ -54,6 +54,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   const [postCaption,     setPostCaption]     = useState('');
   const [bgStyle,         setBgStyle]         = useState<'blur' | 'black'>('blur');
   const [musicPref,       setMusicPref]       = useState('auto');
+  const [sourceImageUrl,  setSourceImageUrl]  = useState('');  // original image for CSS-filter previews
   const [loading,         setLoading]         = useState(true);
   const [loadError,       setLoadError]       = useState('');  // full-screen error
   const [renderStatus,    setRenderStatus]    = useState<RenderStatus>('idle');
@@ -73,6 +74,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         if (!res.ok) { setLoadError(res.status === 404 ? 'Post not found.' : 'Could not load post.'); return; }
         const data = await res.json();
         setPreviewUrl(data.previewUrl ?? '');
+        setSourceImageUrl(data.userImageUrl ?? '');
         setPostCaption(data.caption ?? '');
         if (!data.timeline) {
           setNoTimeline(true);
@@ -335,8 +337,8 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
               <button key={grade} onClick={() => setSelectedGrade(grade)} className="flex-shrink-0 flex flex-col items-center gap-1.5">
                 <div className="w-16 h-16 rounded-xl overflow-hidden border-2 transition-all"
                   style={{ borderColor: selectedGrade === grade ? '#5E35FF' : 'transparent', boxShadow: selectedGrade === grade ? '0 0 0 1px #5E35FF' : 'none' }}>
-                  {previewUrl
-                    ? <video src={previewUrl} muted playsInline className="w-full h-full object-cover"
+                  {sourceImageUrl
+                    ? <img src={sourceImageUrl} alt={GRADE_LABELS[grade]} className="w-full h-full object-cover"
                         style={{ filter: COLOR_GRADES[grade] === 'none' ? undefined : COLOR_GRADES[grade] }} />
                     : <div className="w-full h-full" style={{ background: '#201D3C' }} />}
                 </div>
