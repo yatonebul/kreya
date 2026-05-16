@@ -293,16 +293,21 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       }
     }
 
-    // Audio — use -stream_loop -1 on the input (demuxer-level loop, no aloop buffer)
     const audioInputIdx = videoTracks.length;
     if (musicPath && audio) {
-      const vol    = audio.volume ?? 0.4;
-      const fadeAt = audio.fadeOutAt ?? Math.max(0, timeline.totalDuration - 2);
-      filterParts.push(
-        `[${audioInputIdx}:a]` +
-        `afade=t=out:st=${fadeAt}:d=2,` +
-        `volume=${vol}[aout]`,
-      );
+      const vol = audio.volume ?? 0.4;
+      if (isPreview) {
+        // Preview: skip afade — it can stall filter-graph teardown when audio >> video duration.
+        // Music is already trimmed by -t on the input; just set volume.
+        filterParts.push(`[${audioInputIdx}:a]volume=${vol}[aout]`);
+      } else {
+        const fadeAt = audio.fadeOutAt ?? Math.max(0, timeline.totalDuration - 2);
+        filterParts.push(
+          `[${audioInputIdx}:a]` +
+          `afade=t=out:st=${fadeAt}:d=2,` +
+          `volume=${vol}[aout]`,
+        );
+      }
     }
 
     // ── Build FFmpeg command ────────────────────────────────────────────────
@@ -317,10 +322,14 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           cmd.input(localPaths[i]).inputOptions(['-t', String(track.duration)]);
         }
       });
-      if (musicPath) cmd.input(musicPath);
+      // Cap music at video duration so filter teardown is instantaneous
+      if (musicPath) cmd.input(musicPath).inputOptions(['-t', String(timeline.totalDuration + 0.5)]);
 
       const mapArgs = ['-map', '[vout]'];
       if (musicPath) mapArgs.push('-map', '[aout]');
+
+      const stderrLines: string[] = [];
+      const t0 = Date.now();
 
       cmd
         .complexFilter(filterParts.join(';'))
@@ -330,15 +339,20 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           '-preset', isPreview ? 'ultrafast' : 'fast',
           '-crf',    isPreview ? '28' : '22',
           '-pix_fmt', 'yuv420p',
-          '-movflags', '+faststart',
+          // Skip +faststart for preview — avoids moov-atom rewrite at end which can fail on Lambda
+          ...(isPreview ? [] : ['-movflags', '+faststart']),
           ...(musicPath
             ? ['-c:a', 'aac', '-b:a', '128k', '-shortest']
             : ['-an']),
         ])
         .output(outPath)
-        .on('stderr', (line: string) => { if (line.includes('Error') || line.includes('error') || line.includes('Invalid')) console.error('[ffmpeg]', line); })
-        .on('end', () => resolve())
-        .on('error', (err: Error) => reject(new Error(`FFmpeg timeline: ${err.message}`)))
+        .on('stderr', (line: string) => { stderrLines.push(line); })
+        .on('end', () => { console.log(`[renderTimeline] FFmpeg ok (${Date.now() - t0}ms)`); resolve(); })
+        .on('error', (err: Error) => {
+          console.error(`[renderTimeline] FFmpeg failed after ${Date.now() - t0}ms`);
+          console.error('[ffmpeg stderr]', stderrLines.slice(-30).join('\n'));
+          reject(new Error(`FFmpeg timeline: ${err.message}`));
+        })
         .run();
     });
 
