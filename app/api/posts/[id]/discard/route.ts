@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { after } from 'next/server';
 import { verifySession, SESSION_COOKIE } from '@/lib/session';
 
 function db() {
@@ -34,6 +35,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (post.sibling_id) {
     await db().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
   }
+
+  after(async () => {
+    const supabase = db();
+    const ids = [id, post.sibling_id].filter(Boolean) as string[];
+    for (const pid of ids) {
+      const { data: p } = await supabase.from('pending_posts').select('image_url, user_image_url').eq('id', pid).maybeSingle();
+      if (!p) continue;
+      const extractPath = (url: string | null) => {
+        if (!url) return null;
+        const m = url.match(/\/user-media\/(.+?)(?:\?|$)/);
+        return m ? m[1] : null;
+      };
+      const paths = [extractPath(p.image_url), extractPath(p.user_image_url)].filter(Boolean) as string[];
+      if (paths.length) await supabase.storage.from('user-media').remove(paths).catch(() => {});
+    }
+  });
 
   return NextResponse.json({ ok: true });
 }
