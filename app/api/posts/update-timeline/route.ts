@@ -22,12 +22,13 @@ function verifyEditToken(postId: string, phone: string, token: string): boolean 
 }
 
 export async function POST(req: NextRequest) {
-  const { postId, token, phone, timeline, musicPreference } = await req.json() as {
-    postId:          string;
-    token:           string;
-    phone:           string;
-    timeline:        KreyaTimeline;
+  const { postId, token, phone, timeline, musicPreference, postCaption } = await req.json() as {
+    postId:           string;
+    token:            string;
+    phone:            string;
+    timeline:         KreyaTimeline;
     musicPreference?: string;
+    postCaption?:     string;
   };
 
   if (!postId || !phone || !timeline) {
@@ -83,12 +84,12 @@ export async function POST(req: NextRequest) {
   // Persist updated timeline JSON synchronously (fast — no render)
   await supabase
     .from('pending_posts')
-    .update({ timeline_json: previewTimeline, render_resolution: 'preview' })
+    .update({ timeline_json: previewTimeline, render_resolution: 'preview', ...(postCaption !== undefined ? { caption: postCaption } : {}) })
     .eq('id', postId);
 
   // Render + notify in after() so we don't hit the Hobby 60s limit
   const waPhone      = post.whatsapp_phone;
-  const captionForWa = post.caption ?? '';
+  const captionForWa = postCaption ?? post.caption ?? '';
 
   after(async () => {
     try {
@@ -103,6 +104,9 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[update-timeline] background render failed:', err);
+      if (waPhone) {
+        await sendText(waPhone, '⚠️ Render ran into trouble — tap Edit in the web editor to try again.').catch(() => {});
+      }
     }
   });
 

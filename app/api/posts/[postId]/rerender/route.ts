@@ -27,12 +27,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
   const {
     token, phone,
     animationStyle, musicPreference, colorGrade, bgStyle,
-    captionText, captionPosition,
+    captionText, captionPosition, postCaption,
   } = await req.json() as {
     token?: string; phone?: string;
     animationStyle?: KenBurnsStyle; musicPreference?: string;
     colorGrade?: ColorGrade; bgStyle?: 'blur' | 'black';
     captionText?: string; captionPosition?: CaptionTrack['position'];
+    postCaption?: string;
   };
 
   const authHeader = req.headers.get('authorization') ?? '';
@@ -54,8 +55,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
     if (!variants.includes(post.whatsapp_phone)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const waPhone        = post.whatsapp_phone as string | null;
-  const effectiveCaption = captionText ?? post.caption ?? '';
+  const waPhone          = post.whatsapp_phone as string | null;
+  const effectiveCaption = postCaption ?? post.caption ?? '';
 
   // All heavy work in after() — respond immediately to avoid Hobby 60s limit
   after(async () => {
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
       const { publicUrl } = await renderTimeline(timeline);
 
       await supabase.from('pending_posts')
-        .update({ image_url: publicUrl, timeline_json: timeline, ...(captionText ? { caption: captionText } : {}) })
+        .update({ image_url: publicUrl, timeline_json: timeline, ...(postCaption !== undefined ? { caption: postCaption } : {}) })
         .eq('id', postId);
 
       if (waPhone) {
@@ -101,6 +102,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
       }
     } catch (err) {
       console.error('[rerender] background render failed:', err);
+      if (waPhone) {
+        await sendText(waPhone, '⚠️ Render ran into trouble — tap Edit in the web editor to try again.').catch(() => {});
+      }
     }
   });
 

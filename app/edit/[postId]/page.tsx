@@ -44,21 +44,25 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
 
   const [timeline,        setTimeline]        = useState<KreyaTimeline | null>(null);
   const [previewUrl,      setPreviewUrl]      = useState('');
-  const [userImageUrl,    setUserImageUrl]    = useState('');
   const [selectedGrade,   setSelectedGrade]   = useState<ColorGrade>('natural');
   const [motionStyle,     setMotionStyle]     = useState<KenBurnsStyle>('elegant');
   const [captionOn,       setCaptionOn]       = useState(false);
   const [captionText,     setCaptionText]     = useState('');
   const [captionPosition, setCaptionPosition] = useState<'bottom' | 'center' | 'top'>('bottom');
+  const [postCaption,     setPostCaption]     = useState('');
   const [bgStyle,         setBgStyle]         = useState<'blur' | 'black'>('blur');
   const [musicPref,       setMusicPref]       = useState('auto');
   const [loading,         setLoading]         = useState(true);
   const [rendering,       setRendering]       = useState(false);
   const [renderingBg,     setRenderingBg]     = useState(false);
+  const [renderDone,      setRenderDone]      = useState(false);
   const [error,           setError]           = useState('');
   const [dragIdx,         setDragIdx]         = useState<number | null>(null);
   const [noTimeline,      setNoTimeline]      = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const videoRef              = useRef<HTMLVideoElement>(null);
+  const renderStartUrlRef     = useRef<string>('');
+  const pollIntervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -67,9 +71,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         if (!res.ok) { setError(res.status === 404 ? 'Post not found' : 'Could not load post.'); return; }
         const data = await res.json();
         setPreviewUrl(data.previewUrl ?? '');
-        setUserImageUrl(data.userImageUrl ?? '');
-        setCaptionText(data.caption ?? '');
-        setMusicPref(data.musicSelection ?? 'auto');
+        setPostCaption(data.caption ?? '');
         if (!data.timeline) {
           setNoTimeline(true);
           setMotionStyle((data.animationStyle as KenBurnsStyle) ?? 'elegant');
@@ -80,14 +82,37 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         setBgStyle(data.timeline?.bgStyle ?? 'blur');
         const firstEffect = data.timeline?.tracks?.video?.[0]?.effect;
         if (firstEffect?.type === 'ken-burns') setMotionStyle(firstEffect.style);
-        const caption = data.timeline?.tracks?.captions?.[0];
-        if (caption) { setCaptionOn(true); setCaptionText(caption.text); setCaptionPosition(caption.position ?? 'bottom'); }
+        const cap = data.timeline?.tracks?.captions?.[0];
+        if (cap) { setCaptionOn(true); setCaptionText(cap.text); setCaptionPosition(cap.position ?? 'bottom'); }
         if (!data.timeline?.tracks?.audio) setMusicPref('none');
       } catch { setError('Failed to load editor.'); }
       finally { setLoading(false); }
     }
     load();
   }, [postId, token, phone]);
+
+  // Poll for render completion after a background render starts
+  useEffect(() => {
+    if (!renderingBg) {
+      if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+      return;
+    }
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/posts/${postId}/timeline?t=${token}&phone=${encodeURIComponent(phone)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.previewUrl && data.previewUrl !== renderStartUrlRef.current) {
+          setPreviewUrl(data.previewUrl);
+          setRenderingBg(false);
+          setRenderDone(true);
+          if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
+          if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+        }
+      } catch {}
+    }, 5000);
+    return () => { if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; } };
+  }, [renderingBg, postId, token, phone]);
 
   const buildUpdatedTimeline = useCallback((): KreyaTimeline | null => {
     if (!timeline) return null;
@@ -106,7 +131,9 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   async function applyChanges() {
     setRendering(true);
     setRenderingBg(false);
+    setRenderDone(false);
     setError('');
+    renderStartUrlRef.current = previewUrl;
     try {
       if (noTimeline || !timeline) {
         const res = await fetch(`/api/posts/${postId}/rerender`, {
@@ -120,6 +147,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
             bgStyle,
             captionText:     captionOn ? captionText.trim() : undefined,
             captionPosition: captionOn ? captionPosition : undefined,
+            postCaption,
           }),
         });
         const data = await res.json();
@@ -135,7 +163,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
       const res = await fetch('/api/posts/update-timeline', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ postId, token, phone, timeline: updated, musicPreference: musicPref }),
+        body:    JSON.stringify({ postId, token, phone, timeline: updated, musicPreference: musicPref, postCaption }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Render failed');
@@ -173,7 +201,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
     );
   }
 
-  if (error) {
+  if (error && !timeline && !noTimeline) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#0B0918', color: '#fff' }}>
         <div className="text-center">
@@ -210,9 +238,10 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
             <span style={{ color: 'rgba(255,255,255,.3)' }}>No preview</span>
           </div>
         )}
-        {rendering && (
-          <div className="absolute inset-0 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(11,9,24,.75)' }}>
+        {(rendering || renderingBg) && (
+          <div className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center gap-3" style={{ background: 'rgba(11,9,24,.75)' }}>
             <div className="w-10 h-10 rounded-full border-4 border-violet-400 border-t-transparent animate-spin" />
+            {renderingBg && <p className="text-xs text-center px-4" style={{ color: 'rgba(255,255,255,.6)', fontFamily: 'DM Sans, sans-serif' }}>Rendering in background…</p>}
           </div>
         )}
         {captionOn && captionText && (
@@ -225,6 +254,19 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
       </div>
 
       <div className="px-4 mt-6 space-y-6">
+
+        {/* Render status banners */}
+        {renderingBg && (
+          <div className="rounded-xl px-4 py-3 text-sm text-center" style={{ background: '#171430', border: '1px solid #5E35FF', color: 'rgba(255,255,255,.8)', fontFamily: 'DM Sans, sans-serif' }}>
+            ⏳ Rendering in the background — preview will update here and arrive on WhatsApp in ~30s
+          </div>
+        )}
+        {renderDone && !renderingBg && (
+          <div className="rounded-xl px-4 py-3 text-sm text-center" style={{ background: '#0a2a1a', border: '1px solid #00E5A0', color: '#00E5A0', fontFamily: 'DM Sans, sans-serif' }}>
+            ✅ Preview updated! Check WhatsApp to approve or keep editing.
+          </div>
+        )}
+        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
         {/* Vibe (Color Grade) */}
         <section>
@@ -296,7 +338,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
           </div>
         </section>
 
-        {/* Caption */}
+        {/* Caption on video */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,.5)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Space Mono, monospace' }}>Caption on video</h2>
@@ -310,7 +352,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
           {captionOn && (
             <>
               <textarea value={captionText} onChange={e => setCaptionText(e.target.value)}
-                placeholder="Caption text burned onto the video…" rows={3}
+                placeholder="Text burned onto the video…" rows={3}
                 className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
                 style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)', fontFamily: 'DM Sans, sans-serif' }} />
               <div className="flex gap-2 mt-2">
@@ -324,6 +366,16 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
               </div>
             </>
           )}
+        </section>
+
+        {/* Post caption (Instagram / TikTok text) */}
+        <section>
+          <h2 className="text-sm font-semibold mb-1" style={{ color: 'rgba(255,255,255,.5)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Space Mono, monospace' }}>Post caption</h2>
+          <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,.3)', fontFamily: 'DM Sans, sans-serif' }}>Text shown on Instagram / TikTok (not burned into the video)</p>
+          <textarea value={postCaption} onChange={e => setPostCaption(e.target.value)}
+            placeholder="Write your Instagram caption, hashtags…" rows={4}
+            className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
+            style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)', fontFamily: 'DM Sans, sans-serif' }} />
         </section>
 
         {/* Clip order (multi-clip only) */}
@@ -349,16 +401,6 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
               ))}
             </div>
           </section>
-        )}
-
-        {renderingBg && (
-          <div className="rounded-xl px-4 py-3 text-sm text-center" style={{ background: '#171430', border: '1px solid #5E35FF', color: 'rgba(255,255,255,.8)', fontFamily: 'DM Sans, sans-serif' }}>
-            ✅ Rendering in the background — your updated preview will arrive on WhatsApp in ~30 seconds.
-          </div>
-        )}
-
-        {error && (
-          <p className="text-red-400 text-sm text-center">{error}</p>
         )}
 
       </div>
