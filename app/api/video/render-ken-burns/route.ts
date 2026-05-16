@@ -198,12 +198,15 @@ export async function POST(req: NextRequest) {
 
         await sendVideoMessage(phone, videoUrl);
 
-        // Only warn the user if they explicitly picked a music genre (not auto)
-        if (!musicIncluded && musicPreference !== 'none' && musicPreference !== 'auto' && musicPreference !== 'trending') {
-          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
+        // Only warn if we explicitly selected music but Modal said it wasn't included.
+        // Don't warn for auto/trending — Modal's music_included flag is unreliable for those.
+        const explicitMusicFailed = !musicIncluded && musicUrl &&
+          musicPreference !== 'none' && musicPreference !== 'auto' && musicPreference !== 'trending';
+        if (explicitMusicFailed) {
+          console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel);
           await sendText(phone, '⚠️ Music unavailable — video is silent. Try a different music option.').catch(() => {});
-        } else if (musicIncluded) {
-          console.log('[render-ken-burns] ✓ Music included successfully: ' + musicLabel);
+        } else {
+          console.log('[render-ken-burns] music status: included=' + musicIncluded + ', url=' + (musicUrl ? '✓' : '✗') + ', pref=' + musicPreference);
         }
 
         // Fetch caption from database to show in preview

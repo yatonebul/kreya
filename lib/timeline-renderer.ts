@@ -319,6 +319,22 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
     }
 
     // ── Build FFmpeg command ────────────────────────────────────────────────
+    // Set up a minimal fontconfig environment so drawtext can find Geist-Regular.ttf.
+    // Without this, fontconfig scans system font dirs (which don't exist on Lambda),
+    // times out for ~18s, and then crashes. FONTCONFIG_FILE must be set before spawn.
+    const fcDir  = path.join(os.tmpdir(), `fc-${Date.now()}`);
+    await fs.mkdir(fcDir, { recursive: true });
+    const fcConf = path.join(fcDir, 'fonts.conf');
+    await fs.writeFile(fcConf,
+      `<?xml version="1.0"?>\n` +
+      `<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n` +
+      `<fontconfig>\n` +
+      `  <dir>${path.dirname(GEIST_FONT)}</dir>\n` +
+      `  <cachedir>${fcDir}</cachedir>\n` +
+      `</fontconfig>`,
+    );
+    process.env.FONTCONFIG_FILE = fcConf;
+
     console.log('[renderTimeline] filter_complex:', filterParts.join(';').slice(0, 800));
     await new Promise<void>((resolve, reject) => {
       const cmd = ffmpeg();
