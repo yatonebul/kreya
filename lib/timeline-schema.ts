@@ -53,12 +53,6 @@ export interface CaptionTrack {
   fontSize?: number
 }
 
-export interface MusicCandidate {
-  title: string
-  artist: string
-  musicUrl: string
-}
-
 export interface KreyaTimeline {
   version: '1.0'
   aspectRatio: AspectRatio
@@ -66,7 +60,6 @@ export interface KreyaTimeline {
   totalDuration: number
   colorGrade?: ColorGrade
   bgStyle?: 'blur' | 'black'
-  musicCandidates?: MusicCandidate[]
   tracks: {
     video: VideoTrack[]
     audio?: AudioTrack

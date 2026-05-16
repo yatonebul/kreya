@@ -56,30 +56,24 @@ const COLOR_GRADE_FILTER: Record<ColorGrade, string | null> = {
 
 // ── FFmpeg filter helpers (same patterns as video-worker.ts) ──────────────────
 
-// canvasW/H is the working canvas (caller decides: 2× for HD, 1.3× for preview)
-// outW/H is the final output size after zoompan
 function kenBurnsFilter(
   inputLabel: string,
   outLabel: string,
-  canvasW: number,
-  canvasH: number,
+  w: number,
+  h: number,
   frames: number,
   zoomStart = 1.0,
   zoomEnd = 1.3,
-  outW?: number,
-  outH?: number,
 ): string {
   const range = zoomEnd - zoomStart;
   const zStep = (range / frames).toFixed(6);
   const zMax  = zoomEnd.toFixed(4);
-  const sW = outW ?? canvasW;
-  const sH = outH ?? canvasH;
   return (
-    `${inputLabel}scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,` +
-    `crop=${canvasW}:${canvasH},` +
+    `${inputLabel}scale=${w * 2}:${h * 2}:force_original_aspect_ratio=increase,` +
+    `crop=${w * 2}:${h * 2},` +
     `zoompan=z='min(${zoomStart}+${zStep}*on,${zMax})':` +
     `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
-    `d=${frames}:s=${sW}x${sH}:fps=25,` +
+    `d=${frames}:s=${w}x${h}:fps=25,` +
     `setsar=1${outLabel}`
   );
 }
@@ -91,7 +85,7 @@ function scaleFilter(inputLabel: string, outLabel: string, w: number, h: number)
   );
 }
 
-// Blurred-fill composite: blurred scale-to-fill bg + sharp letterboxed fg
+// Blurred-fill composite: blurred scale-to-fill bg + sharp letterboxed fg.
 // Eliminates black bars — same effect as OpenCut's canvas background blur.
 function blurBgFilter(inputLabel: string, outLabel: string, w: number, h: number, idx: number): string {
   return (
@@ -162,12 +156,12 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
 
   try {
     // ── Download all media ──────────────────────────────────────────────────
-    const localPaths: string[] = await Promise.all(
-      videoTracks.map((track: VideoTrack) =>
-        downloadTmp(track.src, extFromUrl(track.src, track.type))
-      )
-    );
-    localPaths.forEach(p => tmpFiles.push(p));
+    const localPaths: string[] = [];
+    for (const track of videoTracks) {
+      const p = await downloadTmp(track.src, extFromUrl(track.src, track.type));
+      localPaths.push(p);
+      tmpFiles.push(p);
+    }
 
     let musicPath: string | null = null;
     if (audio?.src) {
@@ -191,20 +185,20 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       if (effect.type === 'ken-burns') {
         const zStart = effect.zoomStart ?? 1.0;
         const zEnd   = effect.zoomEnd   ?? 1.3;
-        // Preview: zoompan on 1.3× canvas (faster CPU); HD: full 2× canvas
-        const zbDims = isPreview
-          ? { w: Math.round(w * 1.3), h: Math.round(h * 1.3) }
-          : { w: fullDims.w * 2, h: fullDims.h * 2 };
+        // For preview, use full-res canvas for zoompan then scale down at end
         filterParts.push(
-          kenBurnsFilter(inLabel, `[kb${i}]`, zbDims.w, zbDims.h, frames, zStart, zEnd, w, h),
+          kenBurnsFilter(inLabel, `[kb${i}]`, fullDims.w, fullDims.h, frames, zStart, zEnd),
         );
-        filterParts.push(`[kb${i}]setsar=1${outLabel}`);
-      } else {
-        // For static/video clips: blur-fill or black-bar depending on bgStyle
-        if (bgStyle === 'black') {
-          filterParts.push(scaleFilter(inLabel, outLabel, w, h));
+        if (isPreview) {
+          filterParts.push(`[kb${i}]scale=${w}:${h},setsar=1${outLabel}`);
         } else {
+          filterParts.push(`[kb${i}]setsar=1${outLabel}`);
+        }
+      } else {
+        if (bgStyle === 'blur') {
           filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));
+        } else {
+          filterParts.push(scaleFilter(inLabel, outLabel, w, h));
         }
       }
 
@@ -263,6 +257,12 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
         const inLbl    = captionLabel;
         captionLabel   = idx === captions!.length - 1 ? '[vout]' : `[vcap${idx}]`;
 
+        const yExpr = cap.position === 'top'
+          ? `${yOffset}`
+          : cap.position === 'center'
+          ? '(h-text_h)/2'
+          : `h-text_h-${yOffset}`;
+
         const drawtextFilter =
           `${inLbl}drawtext=` +
           `text='${wrapped}':` +
@@ -274,7 +274,7 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           `boxcolor=black@0.55:` +
           `boxborderw=12:` +
           `x=(w-text_w)/2:` +
-          `y=h-text_h-${yOffset}:` +
+          `y=${yExpr}:` +
           `enable='between(t,${cap.startTime},${cap.startTime + cap.duration})'` +
           captionLabel;
 

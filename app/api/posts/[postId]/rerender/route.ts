@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import { after } from 'next/server';
 import { getMusicForCaption } from '@/lib/mood-music';
 import { buildAtomicTimeline } from '@/lib/media-buffer';
 import { renderTimeline } from '@/lib/timeline-renderer';
-import type { KenBurnsStyle, ColorGrade } from '@/lib/timeline-schema';
+import { sendText, sendVideoMessage, sendPostPreview } from '@/lib/whatsapp-send';
+import type { KenBurnsStyle, ColorGrade, CaptionTrack } from '@/lib/timeline-schema';
 
 export const maxDuration = 120;
 
@@ -25,12 +27,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
   const {
     token, phone,
     animationStyle, musicPreference, colorGrade, bgStyle,
-    captionText,
+    captionText, captionPosition, postCaption,
   } = await req.json() as {
     token?: string; phone?: string;
     animationStyle?: KenBurnsStyle; musicPreference?: string;
     colorGrade?: ColorGrade; bgStyle?: 'blur' | 'black';
-    captionText?: string;
+    captionText?: string; captionPosition?: CaptionTrack['position'];
+    postCaption?: string;
   };
 
   const authHeader = req.headers.get('authorization') ?? '';
@@ -52,40 +55,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
     if (!variants.includes(post.whatsapp_phone)) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  // Fetch music if requested
-  let musicUrl: string | undefined;
-  if (musicPreference && musicPreference !== 'none') {
-    const music = await getMusicForCaption(
-      (post.caption ?? '') + (musicPreference === 'calm' ? ' calm peaceful' : '')
-    ).catch(() => null);
-    musicUrl = music?.musicUrl;
-  }
+  const waPhone          = post.whatsapp_phone as string | null;
+  const effectiveCaption = postCaption ?? post.caption ?? '';
 
-  const effectiveCaption = captionText ?? post.caption ?? '';
+  // All heavy work in after() — respond immediately to avoid Hobby 60s limit
+  after(async () => {
+    try {
+      let musicUrl: string | undefined;
+      if (musicPreference && musicPreference !== 'none') {
+        const music = await getMusicForCaption(
+          (post.caption ?? '') + (musicPreference === 'calm' ? ' calm peaceful' : '')
+        ).catch(() => null);
+        musicUrl = music?.musicUrl;
+      }
 
-  // Build single-clip timeline
-  const timeline = buildAtomicTimeline(
-    [{ url: post.user_image_url, type: 'image' }],
-    {
-      resolution:     'preview',
-      aspectRatio:    '9:16',
-      colorGrade:     colorGrade,
-      bgStyle:        bgStyle ?? 'blur',
-      musicUrl,
-      captionText:    captionText || undefined,
-    },
-  );
+      const timeline = buildAtomicTimeline(
+        [{ url: post.user_image_url, type: 'image' }],
+        {
+          resolution:  'preview',
+          aspectRatio: '9:16',
+          colorGrade,
+          bgStyle:     bgStyle ?? 'blur',
+          musicUrl,
+          captionText: captionText || undefined,
+        },
+      );
 
-  // Apply chosen motion style
-  if (animationStyle && timeline.tracks.video[0]) {
-    timeline.tracks.video[0].effect = { type: 'ken-burns', style: animationStyle, zoomStart: 1.0, zoomEnd: 1.3 };
-  }
+      if (animationStyle && timeline.tracks.video[0]) {
+        timeline.tracks.video[0].effect = { type: 'ken-burns', style: animationStyle, zoomStart: 1.0, zoomEnd: 1.3 };
+      }
 
-  const { publicUrl } = await renderTimeline(timeline);
+      if (captionPosition && timeline.tracks.captions?.length) {
+        timeline.tracks.captions = timeline.tracks.captions.map(c => ({ ...c, position: captionPosition }));
+      }
 
-  await supabase.from('pending_posts')
-    .update({ image_url: publicUrl, timeline_json: timeline, ...(captionText ? { caption: captionText } : {}) })
-    .eq('id', postId);
+      const { publicUrl } = await renderTimeline(timeline);
 
-  return NextResponse.json({ previewUrl: publicUrl });
+      await supabase.from('pending_posts')
+        .update({ image_url: publicUrl, timeline_json: timeline, ...(postCaption !== undefined ? { caption: postCaption } : {}) })
+        .eq('id', postId);
+
+      if (waPhone) {
+        await sendText(waPhone, '✏️ *Preview updated!* Here\'s your updated reel:');
+        await sendVideoMessage(waPhone, publicUrl);
+        await sendPostPreview(waPhone, publicUrl, effectiveCaption, postId, true, 'reels');
+      }
+    } catch (err) {
+      console.error('[rerender] background render failed:', err);
+      if (waPhone) {
+        await sendText(waPhone, '⚠️ Render ran into trouble — tap Edit in the web editor to try again.').catch(() => {});
+      }
+    }
+  });
+
+  return NextResponse.json({ status: 'rendering' }, { status: 202 });
 }

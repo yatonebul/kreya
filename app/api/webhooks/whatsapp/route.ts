@@ -4,10 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 // FFmpeg rendering can take 20-40 s on Vercel's shared CPU
 export const maxDuration = 60;
 import { createClient } from '@supabase/supabase-js';
+import { buildAtomicTimeline } from '@/lib/media-buffer';
+import { renderTimeline } from '@/lib/timeline-renderer';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendVideoMessage, sendAudioMessage, sendMusicCandidatesPicker, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendSlideReplacePrompt, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendBgStyleChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
 import { getAdaptersForPlatforms } from '@/lib/adapters';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -49,28 +51,6 @@ function getSupabase() {
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-// Delete rendered videos from Supabase Storage when a post is discarded.
-// Silently no-ops if the URL doesn't match our storage bucket.
-async function deleteStorageForPost(postId: string) {
-  const supabase = getSupabase();
-  const { data: post } = await supabase
-    .from('pending_posts')
-    .select('image_url, user_image_url')
-    .eq('id', postId)
-    .maybeSingle();
-  if (!post) return;
-  const extractPath = (url: string | null) => {
-    if (!url) return null;
-    const m = url.match(/\/user-media\/(.+?)(?:\?|$)/);
-    return m ? m[1] : null;
-  };
-  const paths = [extractPath(post.image_url), extractPath(post.user_image_url)]
-    .filter(Boolean) as string[];
-  if (paths.length) {
-    await supabase.storage.from('user-media').remove(paths).catch(() => {});
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -232,7 +212,7 @@ async function processWebhook(body: any) {
           return;
         } else {
           const idx = awaitingSlideReplace.editing_slide_idx ?? 0;
-          await sendSlideReplacePrompt(from, awaitingSlideReplace.id, idx);
+          await sendText(from, `🖼️ Send the replacement photo or video for slide ${idx + 1}, or type *cancel* to go back.`);
           return;
         }
       }
@@ -394,40 +374,6 @@ async function processWebhook(body: any) {
       //   2+ images → carousel  |  1 image → regular post
       if (messageType === 'image') {
         await handleAutoCarouselImage(from, message, (message.image?.caption ?? '').trim());
-        return;
-      }
-
-      // Numbered music track selection — "1" "2" "3" etc. while post has music candidates
-      if (messageType === 'text') {
-        const numMatch = message.text.body.trim().match(/^([1-5])$/);
-        if (numMatch) {
-          const pendingPost = await getPostByState(from, 'pending_approval') ?? await getPostByState(from, 'rendering_preview');
-          if (pendingPost) {
-            const candidates = (pendingPost as any).timeline_json?.musicCandidates;
-            if (Array.isArray(candidates) && candidates.length) {
-              const idx = parseInt(numMatch[1], 10) - 1;
-              await handleMusicCandidateSelect(from, pendingPost.id, idx);
-              return;
-            }
-          }
-        }
-      }
-
-      // User replied to "When should I post it?" prompt
-      const awaitingSchedule = await getPostByState(from, 'awaiting_schedule_time');
-      if (awaitingSchedule && messageType === 'text') {
-        const scheduleTime = await parseScheduleTime(message.text.body);
-        if (scheduleTime && scheduleTime > new Date()) {
-          const existingTargets = (awaitingSchedule.target_platforms as string[] | null)?.length
-            ? (awaitingSchedule.target_platforms as string[])
-            : await getConnectedPlatforms(from);
-          await getSupabase().from('pending_posts')
-            .update({ state: 'scheduled', scheduled_for: scheduleTime.toISOString(), target_platforms: existingTargets })
-            .eq('id', awaitingSchedule.id);
-          await sendScheduledActions(from, formatScheduleConfirmation(scheduleTime), existingTargets);
-        } else {
-          await sendText(from, `Hmm, I couldn't parse that time. Try something like "tomorrow at 9am", "Friday 3pm", or "in 2 hours".`);
-        }
         return;
       }
 
@@ -934,10 +880,13 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     return;
   }
   if (action === 'schedule' && postId) {
-    await getSupabase().from('pending_posts').update({ state: 'awaiting_schedule_time' }).eq('id', postId);
+    // The post stays in pending_approval. The user replies with a time
+    // ("tomorrow at 9am", "Friday 3pm") and the existing text-message
+    // schedule-intent parser at the top of the webhook flips state to
+    // 'scheduled' and confirms.
     await sendText(
       from,
-      `📅 *When should I post it?*\n\nReply with a time, e.g.:\n• "tomorrow at 9am"\n• "Friday 3pm"\n• "in 2 hours"\n• "today 9:25 pm"`,
+      `📅 *When should I post it?*\n\nReply with a time, e.g.:\n• "tomorrow at 9am"\n• "Friday 3pm"\n• "in 2 hours"\n\nOr tap a draft option again to approve / edit / discard.`,
     );
     return;
   }
@@ -963,9 +912,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   if (action === 'spin_reel' && postId) {
     const source = await getPostById(postId);
     const sourceItems: CarouselItem[] = Array.isArray(source?.media_items) ? source.media_items as CarouselItem[] : [];
-    const videoAsset = sourceItems.find(i => i.is_video) ?? (source?.is_video && source?.user_image_url ? { url: source.user_image_url as string, is_video: true } : null);
     const assetCount = sourceItems.length > 0 ? sourceItems.length : (source?.user_image_url ? 1 : 0);
-    if (assetCount > 0 && videoAsset) {
+    if (assetCount > 0) {
+      // Offer originals (image or video — both can become a reel) vs AI-generated
       await sendRepurposeAssetChoice(from, postId, 'reel', assetCount);
     } else {
       await handleSpinReelScript(from, postId);
@@ -998,38 +947,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleRetryMusic(from, postId);
     return;
   }
-  if (action === 'music_keep' && postId) {
-    await sendText(from, '✓ Keeping the current music!');
-    return;
-  }
-  if (action === 'music_none' && postId) {
-    await handleMusicCandidateSelect(from, postId, null);
-    return;
-  }
-  if (action === 'music_more' && postId) {
-    await handleMusicMore(from, postId);
-    return;
-  }
-  // "use_music_track:postId:index" — user picks a numbered track from the candidate list
-  if (action?.startsWith('use_music_track:')) {
-    const parts = action.split(':');
-    const trackPostId = parts[1];
-    const trackIdx    = parseInt(parts[2] ?? '0', 10);
-    if (trackPostId) await handleMusicCandidateSelect(from, trackPostId, trackIdx);
-    return;
-  }
-  if (action === 'bg_style' && postId) {
-    await sendBgStyleChoice(from, postId);
-    return;
-  }
-  if ((action === 'bg_blur' || action === 'bg_black') && postId) {
-    await handleBgStyleChange(from, postId, action === 'bg_blur' ? 'blur' : 'black');
-    return;
-  }
   if (action === 'discard_reel' && postId) {
     const supabase = getSupabase();
     await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', postId);
-    after(() => deleteStorageForPost(postId));
     await sendText(from, '🗑️ Reel discarded. Send a new photo whenever you\'re ready!');
     return;
   }
@@ -1243,7 +1163,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await getSupabase().from('pending_posts')
       .update({ state: 'awaiting_slide_replace', editing_slide_idx: slideIdx })
       .eq('id', actualPostId);
-    await sendSlideReplacePrompt(from, actualPostId, slideIdx);
+    await sendText(from, `🖼️ *Replace slide ${slideIdx + 1}:*\n\nSend your replacement photo or video now, or type *cancel* to go back.`);
     return;
   }
   // Replace all slides: restart carousel collection with a clean session
@@ -1274,36 +1194,6 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     const post = await getPostById(postId);
     if (!post) { await sendText(from, 'Post not found.'); return; }
     await handleGenerateAiSlidesForPost(from, post);
-    return;
-  }
-  if (action === 'cancel_slide_replace' && postId) {
-    await getSupabase().from('pending_posts')
-      .update({ state: 'pending_approval', editing_slide_idx: null })
-      .eq('id', postId);
-    const refreshed = await getPostById(postId);
-    if (refreshed) {
-      const items = Array.isArray(refreshed.media_items) ? refreshed.media_items : [];
-      await sendText(from, '✋ Cancelled. Here\'s your draft:');
-      await sendPostPreview(from, refreshed.image_url, refreshed.caption, refreshed.id, false, 'carousel', items.length);
-    }
-    return;
-  }
-  if (action === 'gen_ai_slide_pick' && postId) {
-    // postId is "postId:slideIdx"
-    const [actualPostId, idxStr] = postId.split(':');
-    const slideIdx = parseInt(idxStr ?? '0', 10);
-    await getSupabase().from('pending_posts')
-      .update({ state: 'awaiting_image_style', editing_slide_idx: slideIdx })
-      .eq('id', actualPostId);
-    await sendText(from, `🎨 *Generate AI image for slide ${slideIdx + 1}*\n\nDescribe what you want — style, subject, mood (e.g. "warm sunset over Prague rooftops").`);
-    return;
-  }
-  if (action === 'gen_ai_carousel_slide' && postId) {
-    const post = await getPostById(postId);
-    if (!post) { await sendText(from, 'Post not found.'); return; }
-    const items = Array.isArray(post.media_items) ? post.media_items : [];
-    await sendCarouselSlideSelector(from, postId, items.length);
-    await sendText(from, '👆 Pick which slot to generate an AI image for.');
     return;
   }
   if (action === 'cancel_edit' && postId) {
@@ -1414,79 +1304,81 @@ async function handleButtonReply(from: string, action: string, postId: string | 
               ? '⏳ Publishing your Reel to Instagram...'
               : '⏳ Publishing to Instagram...',
     );
-
-    // Mark as publishing immediately so duplicate taps are ignored
-    await getSupabase().from('pending_posts').update({ state: 'publishing' }).eq('id', post.id);
-
-    // Long-running publish runs after the response so we never hit the 60s Vercel limit
-    after(async () => {
-      let result;
-      try {
-        if (isMultiStory) {
-          let lastId = '';
-          let lastUrl: string | undefined;
-          let failed = 0;
-          for (const item of storyItems) {
-            try {
-              const r = await publishStoryToInstagram(from, item.url, item.is_video ?? false);
-              lastId = r.postId;
-              lastUrl = r.postUrl;
-              await new Promise(res => setTimeout(res, 1500));
-            } catch {
-              failed++;
-            }
+    let result;
+    try {
+      if (isMultiStory) {
+        // Publish each asset as a separate story, collecting the last successful ID
+        let lastId = '';
+        let lastUrl: string | undefined;
+        let failed = 0;
+        for (const item of storyItems) {
+          try {
+            const r = await publishStoryToInstagram(from, item.url, item.is_video ?? false);
+            lastId = r.postId;
+            lastUrl = r.postUrl;
+            await new Promise(res => setTimeout(res, 1500)); // small gap between stories
+          } catch {
+            failed++;
           }
-          if (!lastId) throw new Error('All story items failed to publish');
-          result = { postId: lastId, postUrl: lastUrl, status: 'success' };
-          if (failed > 0) {
-            await sendText(from, `⚠️ ${failed} of ${storyItems.length} Stories couldn't be published — the rest went through.`);
-          }
-        } else {
-          result = isCarousel
-            ? await publishCarouselToInstagram(from, post.caption, carouselItems!)
-            : isStory
-              ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
-              : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
         }
-      } catch (err: any) {
-        await getSupabase().from('pending_posts').update({ state: 'pending_approval' }).eq('id', post.id);
-        if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
-          const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
-          await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
-          return;
+        if (!lastId) throw new Error('All story items failed to publish');
+        result = { postId: lastId, postUrl: lastUrl, status: 'success' };
+        if (failed > 0) {
+          await sendText(from, `⚠️ ${failed} of ${storyItems.length} Stories couldn't be published — the rest went through.`);
         }
-        const contentType = isCarousel ? 'carousel' : isStory ? 'Story' : 'post';
-        await sendPublishFailureActions(from, post.id, contentType);
+      } else {
+        result = isCarousel
+          ? await publishCarouselToInstagram(from, post.caption, carouselItems!)
+          : isStory
+            ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
+            : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
+      }
+    } catch (err: any) {
+      if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
+        const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+        await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
         return;
       }
+      const contentType = isCarousel ? 'carousel' : isStory ? 'Story' : 'post';
+      await sendPublishFailureActions(from, post.id, contentType);
+      return;
+    }
 
-      await getSupabase().from('pending_posts')
-        .update({
-          state: 'published',
-          ig_post_id: result.postId,
-          ig_post_url: result.postUrl ?? null,
-          published_at: new Date().toISOString(),
-        })
-        .eq('id', post.id);
+    await getSupabase().from('pending_posts')
+      .update({
+        state: 'published',
+        ig_post_id: result.postId,
+        ig_post_url: result.postUrl ?? null,
+        published_at: new Date().toISOString(),
+      })
+      .eq('id', post.id);
 
-      if (post.sibling_id) {
-        await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
+    if (post.sibling_id) {
+      await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
+    }
+
+    const postLabel = isCarousel
+      ? 'carousel'
+      : isStory
+        ? 'Story'
+        : postSurface === 'reels'
+          ? 'Reel'
+          : 'post';
+    await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
+
+    // Phase B repurpose offer. Stories are already a spin destination — skip.
+    // Prevent circular repurposing: if this post was spun from another post,
+    // look up the original's surface so we don't offer to spin it back.
+    if (!isStory) {
+      const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
+      let spunFromSurface: string | undefined;
+      if (post.parent_post_id) {
+        const { data: parent } = await getSupabase()
+          .from('pending_posts').select('surface').eq('id', post.parent_post_id).maybeSingle();
+        spunFromSurface = parent?.surface ?? undefined;
       }
-
-      const postLabel = isCarousel
-        ? 'carousel'
-        : isStory
-          ? 'Story'
-          : postSurface === 'reels'
-            ? 'Reel'
-            : 'post';
-      await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
-
-      if (!isStory) {
-        const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
-        await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
-      }
-    });
+      await sendRepurposeOffer(from, post.id, sourceSurface, spunFromSurface).catch(() => {});
+    }
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
@@ -1503,7 +1395,6 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     if (post.sibling_id) {
       await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
     }
-    after(() => deleteStorageForPost(post.id));
     // Also discard any orphaned collecting_carousel session — prevents stale
     // sessions from accumulating items from future bursts after a discard.
     await getSupabase().from('pending_posts')
@@ -2263,6 +2154,8 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
     state: 'rendering_preview',
   }).eq('id', postId);
 
+  await sendText(from, '🎬 Creating preview... ~15 seconds');
+
   // Queue the preview render
   const { data: post } = await supabase
     .from('pending_posts')
@@ -2278,18 +2171,6 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
   const multiClipItems = rawItems.length > 1
     ? rawItems.map((it: any) => ({ url: it.url as string, type: (it.is_video ? 'video' : 'image') as 'image' | 'video' }))
     : null;
-
-  // Dynamic time estimate based on actual assets
-  const estimateRenderTime = (): string => {
-    const count = multiClipItems?.length ?? 1;
-    const hasVideo = multiClipItems?.some(it => it.type === 'video') ?? false;
-    if (!multiClipItems) return '~30 seconds';
-    if (count <= 2 && !hasVideo) return '~45 seconds';
-    if (count <= 3 || !hasVideo) return '~1 minute';
-    return '~2 minutes';
-  };
-
-  await sendText(from, `🎬 Creating preview... ${estimateRenderTime()}`);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
   try {
@@ -2395,86 +2276,6 @@ async function handleRetryMusic(from: string, postId: string) {
   const supabase = getSupabase();
   await supabase.from('pending_posts').update({ state: 'waiting_music_choice' }).eq('id', postId);
   await sendMusicChoice(from, postId);
-}
-
-async function handleMusicCandidateSelect(from: string, postId: string, candidateIdx: number | null) {
-  const supabase = getSupabase();
-  const { data: post } = await supabase
-    .from('pending_posts')
-    .select('timeline_json, caption, whatsapp_phone')
-    .eq('id', postId)
-    .maybeSingle();
-  if (!post?.timeline_json) {
-    await sendText(from, '⚠️ Could not find post timeline.');
-    return;
-  }
-  let newAudio: { src: string; volume: number; fadeOutAt: number } | undefined;
-  if (candidateIdx === null) {
-    // Remove music
-    const { tracks: { audio: _removed, ...otherTracks }, ...rest } = post.timeline_json as any;
-    const updatedTimeline = { ...rest, tracks: otherTracks };
-    await supabase.from('pending_posts').update({ timeline_json: updatedTimeline }).eq('id', postId);
-    await sendText(from, '🔇 Music removed. Re-rendering silently…');
-    await handleBgStyleChange(from, postId, post.timeline_json.bgStyle ?? 'blur'); // reuse re-render path
-    return;
-  }
-  const candidates: any[] = post.timeline_json.musicCandidates ?? [];
-  const picked = candidates[candidateIdx];
-  if (!picked) {
-    await sendText(from, `⚠️ Track ${candidateIdx + 1} not found — try a different number.`);
-    return;
-  }
-  newAudio = { src: picked.musicUrl, volume: 0.4, fadeOutAt: Math.max(0, post.timeline_json.totalDuration - 2) };
-  const updatedTimeline = { ...post.timeline_json, tracks: { ...post.timeline_json.tracks, audio: newAudio } };
-  await sendText(from, `🎵 Switching to *${picked.title}*… Re-rendering.`);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:3000`;
-  await fetch(`${appUrl}/api/posts/update-timeline`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
-    body: JSON.stringify({ postId, phone: from, timeline: updatedTimeline }),
-  }).catch(err => console.error('[handleMusicCandidateSelect] re-render failed:', err.message));
-}
-
-async function handleMusicMore(from: string, postId: string) {
-  const supabase = getSupabase();
-  const { data: post } = await supabase.from('pending_posts').select('caption').eq('id', postId).maybeSingle();
-  if (!post) return;
-  await sendText(from, '🔄 Fetching 4 new music options…');
-  const { getMusicCandidates: getCandidates } = await import('@/lib/mood-music');
-  const candidates = await getCandidates(post.caption ?? '', 4).catch(() => []);
-  if (!candidates.length) { await sendText(from, '⚠️ Couldn\'t fetch new tracks — try again.'); return; }
-  for (const track of candidates) {
-    await sendAudioMessage(from, track.musicUrl).catch(() => {});
-  }
-  await sendMusicCandidatesPicker(from, postId, candidates.map(c => ({ title: c.title, artist: c.artist })));
-}
-
-async function handleBgStyleChange(from: string, postId: string, bgStyle: 'blur' | 'black') {
-  const supabase = getSupabase();
-  const { data: post } = await supabase
-    .from('pending_posts')
-    .select('timeline_json, whatsapp_phone')
-    .eq('id', postId)
-    .maybeSingle();
-
-  if (!post?.timeline_json) {
-    await sendText(from, '🖼️ Background style applies to multi-clip reels. Your current post uses a single image.');
-    return;
-  }
-
-  const updated = { ...post.timeline_json, bgStyle };
-  const label = bgStyle === 'blur' ? '🌫️ Applying blur fill background…' : '⬛ Applying black bars…';
-  await sendText(from, label);
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:3000`;
-  await fetch(`${appUrl}/api/posts/update-timeline`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-    body: JSON.stringify({ postId, phone: from, timeline: updated }),
-  }).catch(err => console.error('[handleBgStyleChange] render failed:', err.message));
 }
 
 async function handleAnimationFallbackStatic(from: string, postId: string) {
@@ -2797,16 +2598,11 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   }
 
   // Send all slides with headlines
-  const isVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u);
-  if (isVideoUrl(mediaItems[0].url)) {
-    await sendVideoMessage(from, mediaItems[0].url);
-  } else {
-    await sendImageMessage(from, mediaItems[0].url, `Slide 1/5 — Your original`);
-  }
+  await sendImageMessage(from, mediaItems[0].url, `Slide 1/5 — Your original`);
   for (let i = 1; i < mediaItems.length; i++) {
     await sendImageMessage(from, mediaItems[i].url, `Slide ${i + 1}/5 — ${newSlides[i - 1].headline}`);
   }
-  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, isVideoUrl(mediaItems[0].url), 'carousel', mediaItems.length);
+  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
   if (carouselOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
   }
@@ -2838,7 +2634,7 @@ async function handleSpinCarouselWithAssets(from: string, sourcePostId: string) 
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateCarouselSpin(source.caption, profileContext ?? undefined);
   if (!spin) {
-    await sendText(from, "⚠️ Couldn't generate the carousel caption — try again.");
+    await sendRetryButton(from, `spin_carousel_assets:${sourcePostId}`, "⚠️ Couldn't write the carousel caption — tap to try again.");
     return;
   }
 
@@ -2890,8 +2686,9 @@ async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
     (source.is_video && source.user_image_url ? { url: source.user_image_url as string, is_video: true } : null) ??
     (source.is_video && source.image_url ? { url: source.image_url as string, is_video: true } : null);
 
+  // No video? Animate the original images into a Ken Burns reel instead
   if (!videoAsset) {
-    await sendText(from, '🎬 No video found in your originals. Send a video file to create a Reel.');
+    await handleSpinReelFromImages(from, sourcePostId, source, sourceItems);
     return;
   }
 
@@ -2900,7 +2697,7 @@ async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateReelScriptSpin(source.caption, profileContext ?? undefined);
   if (!spin) {
-    await sendText(from, "⚠️ Couldn't generate the Reel caption — try again.");
+    await sendRetryButton(from, `spin_reel_assets:${sourcePostId}`, "⚠️ Couldn't write the Reel caption — tap to try again.");
     return;
   }
 
@@ -2935,6 +2732,79 @@ async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
   }
 
   await sendPostPreview(from, videoAsset.url, spin.caption, post.id, true, 'reels');
+}
+
+// Animates image assets from a non-video source (feed post, image carousel) into a Ken Burns reel.
+async function handleSpinReelFromImages(from: string, sourcePostId: string, source: any, sourceItems: CarouselItem[]) {
+  const imageAssets = sourceItems.length > 0
+    ? sourceItems.filter(i => !i.is_video).map(i => ({ url: i.url, type: 'image' as const }))
+    : source.user_image_url
+      ? [{ url: source.user_image_url as string, type: 'image' as const }]
+      : [];
+
+  if (!imageAssets.length) {
+    await sendText(from, '⚠️ No images found to animate — please send a photo first.');
+    return;
+  }
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateReelScriptSpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendRetryButton(from, `spin_reel_assets:${sourcePostId}`, "⚠️ Couldn't write the Reel caption — tap to try again.");
+    return;
+  }
+
+  const supabase = getSupabase();
+  const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
+    .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase.from('pending_posts').insert({
+    whatsapp_phone: from,
+    caption: spin.caption,
+    user_image_url: imageAssets[0].url,
+    image_url: imageAssets[0].url,
+    image_source: 'user',
+    is_video: true,
+    surface: 'reels',
+    state: 'in_edit',
+    media_items: imageAssets,
+    parent_post_id: sourcePostId,
+  }).select('id').single();
+
+  if (!post) {
+    await sendRetryButton(from, `spin_reel_assets:${sourcePostId}`, '⚠️ Had trouble creating the draft — tap to try again.');
+    return;
+  }
+
+  const clipWord = imageAssets.length > 1 ? `${imageAssets.length} photos` : 'photo';
+  await sendText(from, `🎬 Animating your ${clipWord} into a Reel — preview arriving in ~30 seconds...`);
+
+  after(async () => {
+    try {
+      const timeline = buildAtomicTimeline(imageAssets, {
+        resolution: 'preview',
+        aspectRatio: '9:16',
+        bgStyle: 'blur',
+        captionText: spin.caption || undefined,
+      });
+      const { publicUrl } = await renderTimeline(timeline);
+      await supabase.from('pending_posts').update({
+        image_url: publicUrl,
+        timeline_json: timeline,
+        state: 'pending_approval',
+      }).eq('id', post.id);
+      await sendVideoMessage(from, publicUrl);
+      await sendPostPreview(from, publicUrl, spin.caption, post.id, true, 'reels');
+    } catch (err) {
+      console.error('[spin-reel-images]', err);
+      await sendText(from, '⚠️ Animation ran into trouble — let me know if you want to retry.');
+      await supabase.from('pending_posts').update({ state: 'pending_approval', is_video: false }).eq('id', post.id);
+    }
+  });
 }
 
 // Forces AI image generation even when user assets exist.

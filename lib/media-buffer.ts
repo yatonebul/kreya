@@ -35,7 +35,7 @@ export function buildAtomicTimeline(
     captionPlatform = 'ig-reels',
     musicUrl,
     colorGrade,
-    bgStyle        = 'blur',   // default: blurred fill (OpenCut-style)
+    bgStyle        = 'blur',
   } = opts;
 
   const clipDuration = Math.max(1.5, 5 / mediaItems.length);

@@ -65,14 +65,12 @@ function StateBadge({ state }: { state: string }) {
   );
 }
 
-function makeEditToken(postId: string, phone: string): string {
+function makeEditToken(postId: string, phone: string) {
   return createHash('sha256')
     .update(`${postId}:${phone}:${process.env.SUPABASE_SERVICE_ROLE_KEY}`)
     .digest('hex')
     .slice(0, 32);
 }
-
-const EDITABLE_STATES = ['pending_approval', 'in_edit', 'scheduled'];
 
 function PostCard({ post }: { post: any }) {
   const date = new Date(post.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -80,19 +78,30 @@ function PostCard({ post }: { post: any }) {
     ? new Date(post.scheduled_for).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     : null;
   const caption = post.caption?.slice(0, 100) + (post.caption?.length > 100 ? '…' : '');
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-  const editUrl = EDITABLE_STATES.includes(post.state) && post.whatsapp_phone && appUrl
-    ? `${appUrl}/edit/${post.id}?t=${makeEditToken(post.id, post.whatsapp_phone)}&phone=${encodeURIComponent(post.whatsapp_phone)}`
-    : null;
+  const isQueued = ['pending_approval', 'in_edit', 'scheduled'].includes(post.state);
+  const editToken = isQueued && post.whatsapp_phone ? makeEditToken(post.id, post.whatsapp_phone) : null;
+  const editUrl   = editToken ? `/edit/${post.id}?t=${editToken}&phone=${encodeURIComponent(post.whatsapp_phone)}` : null;
 
   return (
     <div className="rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--surf2)' }}>
       <div className="relative w-full" style={{ paddingBottom: '100%' }}>
-        {post.image_url && !post.is_video ? (
-          <img src={post.image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        {post.image_url && post.is_video ? (
+          <video
+            src={post.image_url}
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : post.image_url ? (
+          <img
+            src={post.image_url}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+          />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--surf3)' }}>
-            <span className="text-3xl">{post.is_video ? '🎬' : '🖼️'}</span>
+            <span className="text-3xl">🖼️</span>
           </div>
         )}
         <div className="absolute top-2 right-2">
@@ -100,8 +109,8 @@ function PostCard({ post }: { post: any }) {
         </div>
         {editUrl && (
           <a href={editUrl}
-            className="absolute bottom-2 right-2 text-xs font-semibold px-2 py-1 rounded-lg hover:opacity-90 transition-opacity"
-            style={{ background: '#5E35FF', color: '#fff', fontFamily: 'var(--font-dm-sans)' }}>
+            className="absolute bottom-2 right-2 px-2 py-1 rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity"
+            style={{ background: '#5E35FF', color: '#fff', fontFamily: 'var(--font-space-mono)' }}>
             ✏️ Edit
           </a>
         )}
@@ -114,13 +123,22 @@ function PostCard({ post }: { post: any }) {
           <span className="text-xs" style={{ fontFamily: 'var(--font-space-mono)', color: 'var(--muted2)' }}>
             {scheduledFor ? `📅 ${scheduledFor}` : date}
           </span>
-          {post.ig_post_url && (
-            <a href={post.ig_post_url} target="_blank" rel="noopener noreferrer"
+          {post.ig_post_url ? (
+            <a
+              href={post.ig_post_url}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-xs font-medium hover:opacity-80 transition-opacity"
-              style={{ color: 'var(--coral)', fontFamily: 'var(--font-dm-sans)' }}>
+              style={{ color: 'var(--coral)', fontFamily: 'var(--font-dm-sans)' }}
+            >
               View ↗
             </a>
-          )}
+          ) : editUrl ? (
+            <a href={editUrl} className="text-xs font-medium hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--violet)', fontFamily: 'var(--font-dm-sans)' }}>
+              Edit reel ↗
+            </a>
+          ) : null}
         </div>
       </div>
     </div>

@@ -430,6 +430,7 @@ export async function sendRepurposeOffer(
   to: string,
   postId: string,
   sourceSurface: 'feed' | 'reels' | 'carousel',
+  spunFromSurface?: string,
 ) {
   // WA caps button messages at 3 buttons. Always offer Story (most
   // creators undersell their idea by not also putting it on Stories)
@@ -439,8 +440,9 @@ export async function sendRepurposeOffer(
   ];
   if (sourceSurface !== 'carousel') {
     buttons.push({ type: 'reply', reply: { id: `spin_carousel:${postId}`, title: '🖼️ Carousel' } });
-  } else {
-    buttons.push({ type: 'reply', reply: { id: `spin_reel:${postId}`, title: '🎬 Reel script' } });
+  } else if (spunFromSurface !== 'reels') {
+    // Block reel → carousel → reel circular repurposing
+    buttons.push({ type: 'reply', reply: { id: `spin_reel:${postId}`, title: '🎬 Animate Reel' } });
   }
   buttons.push({ type: 'reply', reply: { id: 'spin_skip', title: '👌 Not now' } });
 

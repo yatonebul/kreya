@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { renderTimeline } from '@/lib/timeline-renderer';
 import { getMusicForCaption } from '@/lib/mood-music';
 import type { KreyaTimeline } from '@/lib/timeline-schema';
-import { sendText, sendVideoMessage, sendPreviewOptions } from '@/lib/whatsapp-send';
+import { sendText, sendVideoMessage, sendPostPreview } from '@/lib/whatsapp-send';
 
 export const maxDuration = 120;
 
@@ -22,12 +22,13 @@ function verifyEditToken(postId: string, phone: string, token: string): boolean 
 }
 
 export async function POST(req: NextRequest) {
-  const { postId, token, phone, timeline, musicPreference } = await req.json() as {
-    postId:          string;
-    token:           string;
-    phone:           string;
-    timeline:        KreyaTimeline;
+  const { postId, token, phone, timeline, musicPreference, postCaption } = await req.json() as {
+    postId:           string;
+    token:            string;
+    phone:            string;
+    timeline:         KreyaTimeline;
     musicPreference?: string;
+    postCaption?:     string;
   };
 
   if (!postId || !phone || !timeline) {
@@ -80,37 +81,34 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Persist updated timeline
+  // Persist updated timeline JSON synchronously (fast — no render)
   await supabase
     .from('pending_posts')
-    .update({ timeline_json: previewTimeline, render_resolution: 'preview' })
+    .update({ timeline_json: previewTimeline, render_resolution: 'preview', ...(postCaption !== undefined ? { caption: postCaption } : {}) })
     .eq('id', postId);
 
-  // Render
-  const { publicUrl } = await renderTimeline(previewTimeline);
+  // Render + notify in after() so we don't hit the Hobby 60s limit
+  const waPhone      = post.whatsapp_phone;
+  const captionForWa = postCaption ?? post.caption ?? '';
 
-  // Store new preview URL
-  await supabase
-    .from('pending_posts')
-    .update({ image_url: publicUrl })
-    .eq('id', postId);
+  after(async () => {
+    try {
+      const { publicUrl } = await renderTimeline(previewTimeline);
 
-  // Send updated preview to WhatsApp so user can approve/publish
-  const waPhone = post.whatsapp_phone;
-  if (waPhone) {
-    const appUrl  = process.env.NEXT_PUBLIC_APP_URL ?? '';
-    const editToken = createHash('sha256')
-      .update(`${postId}:${phone}:${process.env.SUPABASE_SERVICE_ROLE_KEY}`)
-      .digest('hex').slice(0, 32);
-    const editUrl = appUrl
-      ? `${appUrl}/edit/${postId}?t=${editToken}&phone=${encodeURIComponent(phone)}`
-      : undefined;
-    after(async () => {
-      await sendText(waPhone, '✏️ *Preview updated!* Here\'s your edited reel:');
-      await sendVideoMessage(waPhone, publicUrl);
-      await sendPreviewOptions(waPhone, postId, publicUrl, post.caption ?? undefined, editUrl);
-    });
-  }
+      await supabase.from('pending_posts').update({ image_url: publicUrl }).eq('id', postId);
 
-  return NextResponse.json({ previewUrl: publicUrl });
+      if (waPhone) {
+        await sendText(waPhone, '✏️ *Preview updated!* Here\'s your updated reel:');
+        await sendVideoMessage(waPhone, publicUrl);
+        await sendPostPreview(waPhone, publicUrl, captionForWa, postId, true, 'reels');
+      }
+    } catch (err) {
+      console.error('[update-timeline] background render failed:', err);
+      if (waPhone) {
+        await sendText(waPhone, '⚠️ Render ran into trouble — tap Edit in the web editor to try again.').catch(() => {});
+      }
+    }
+  });
+
+  return NextResponse.json({ status: 'rendering' }, { status: 202 });
 }
