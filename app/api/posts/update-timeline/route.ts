@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import { after } from 'next/server';
 import { renderTimeline } from '@/lib/timeline-renderer';
+import { getMusicForCaption } from '@/lib/mood-music';
 import type { KreyaTimeline } from '@/lib/timeline-schema';
+import { sendText, sendVideoMessage, sendPostPreview } from '@/lib/whatsapp-send';
 
 export const maxDuration = 120;
 
@@ -19,11 +22,12 @@ function verifyEditToken(postId: string, phone: string, token: string): boolean 
 }
 
 export async function POST(req: NextRequest) {
-  const { postId, token, phone, timeline } = await req.json() as {
-    postId:   string;
-    token:    string;
-    phone:    string;
-    timeline: KreyaTimeline;
+  const { postId, token, phone, timeline, musicPreference } = await req.json() as {
+    postId:          string;
+    token:           string;
+    phone:           string;
+    timeline:        KreyaTimeline;
+    musicPreference?: string;
   };
 
   if (!postId || !phone || !timeline) {
@@ -44,7 +48,7 @@ export async function POST(req: NextRequest) {
   // Validate the post exists and belongs to this phone
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('id, whatsapp_phone, state')
+    .select('id, whatsapp_phone, state, caption')
     .eq('id', postId)
     .maybeSingle();
 
@@ -56,22 +60,51 @@ export async function POST(req: NextRequest) {
   }
 
   // Always render at preview resolution during the editing loop
-  const previewTimeline: KreyaTimeline = { ...timeline, resolution: 'preview' };
+  let previewTimeline: KreyaTimeline = { ...timeline, resolution: 'preview' };
 
-  // Persist updated timeline
+  // Swap music if a new preference was sent from the web editor
+  if (musicPreference) {
+    if (musicPreference === 'none') {
+      const { audio: _drop, ...tracks } = previewTimeline.tracks as any;
+      previewTimeline = { ...previewTimeline, tracks };
+    } else {
+      const music = await getMusicForCaption(
+        (post.caption ?? '') + (musicPreference === 'calm' ? ' calm peaceful' : ''),
+      ).catch(() => null);
+      if (music?.musicUrl) {
+        previewTimeline = {
+          ...previewTimeline,
+          tracks: { ...previewTimeline.tracks, audio: { src: music.musicUrl, volume: 0.4, fadeOutAt: Math.max(0, previewTimeline.totalDuration - 2) } },
+        };
+      }
+    }
+  }
+
+  // Persist updated timeline JSON synchronously (fast — no render)
   await supabase
     .from('pending_posts')
     .update({ timeline_json: previewTimeline, render_resolution: 'preview' })
     .eq('id', postId);
 
-  // Render
-  const { publicUrl } = await renderTimeline(previewTimeline);
+  // Render + notify in after() so we don't hit the Hobby 60s limit
+  const waPhone      = post.whatsapp_phone;
+  const captionForWa = post.caption ?? '';
 
-  // Store new preview URL
-  await supabase
-    .from('pending_posts')
-    .update({ image_url: publicUrl })
-    .eq('id', postId);
+  after(async () => {
+    try {
+      const { publicUrl } = await renderTimeline(previewTimeline);
 
-  return NextResponse.json({ previewUrl: publicUrl });
+      await supabase.from('pending_posts').update({ image_url: publicUrl }).eq('id', postId);
+
+      if (waPhone) {
+        await sendText(waPhone, '✏️ *Preview updated!* Here\'s your updated reel:');
+        await sendVideoMessage(waPhone, publicUrl);
+        await sendPostPreview(waPhone, publicUrl, captionForWa, postId, true, 'reels');
+      }
+    } catch (err) {
+      console.error('[update-timeline] background render failed:', err);
+    }
+  });
+
+  return NextResponse.json({ status: 'rendering' }, { status: 202 });
 }

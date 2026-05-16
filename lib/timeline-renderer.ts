@@ -85,6 +85,19 @@ function scaleFilter(inputLabel: string, outLabel: string, w: number, h: number)
   );
 }
 
+// Blurred-fill composite: blurred scale-to-fill bg + sharp letterboxed fg.
+// Eliminates black bars — same effect as OpenCut's canvas background blur.
+function blurBgFilter(inputLabel: string, outLabel: string, w: number, h: number, idx: number): string {
+  return (
+    `${inputLabel}split=2[_bb${idx}][_bf${idx}];` +
+    `[_bb${idx}]scale=${w}:${h}:force_original_aspect_ratio=increase,` +
+      `crop=${w}:${h},boxblur=20:5[_bg${idx}];` +
+    `[_bf${idx}]scale=${w}:${h}:force_original_aspect_ratio=decrease,` +
+      `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1[_fg${idx}];` +
+    `[_bg${idx}][_fg${idx}]overlay=(W-w)/2:(H-h)/2${outLabel}`
+  );
+}
+
 async function downloadTmp(url: string, ext: string): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Download failed ${url} → ${res.status}`);
@@ -128,7 +141,7 @@ function wrapLines(text: string, maxChars = 38): string {
 export type RenderResult = { publicUrl: string };
 
 export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderResult> {
-  const { aspectRatio, resolution, colorGrade, tracks } = timeline;
+  const { aspectRatio, resolution, colorGrade, bgStyle = 'blur', tracks } = timeline;
   const { video: videoTracks, audio, captions } = tracks;
 
   if (!videoTracks.length) throw new Error('renderTimeline: no video tracks');
@@ -182,7 +195,11 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           filterParts.push(`[kb${i}]setsar=1${outLabel}`);
         }
       } else {
-        filterParts.push(scaleFilter(inLabel, outLabel, w, h));
+        if (bgStyle === 'blur') {
+          filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));
+        } else {
+          filterParts.push(scaleFilter(inLabel, outLabel, w, h));
+        }
       }
 
       clipLabels.push(outLabel);
@@ -240,6 +257,12 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
         const inLbl    = captionLabel;
         captionLabel   = idx === captions!.length - 1 ? '[vout]' : `[vcap${idx}]`;
 
+        const yExpr = cap.position === 'top'
+          ? `${yOffset}`
+          : cap.position === 'center'
+          ? '(h-text_h)/2'
+          : `h-text_h-${yOffset}`;
+
         const drawtextFilter =
           `${inLbl}drawtext=` +
           `text='${wrapped}':` +
@@ -251,7 +274,7 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           `boxcolor=black@0.55:` +
           `boxborderw=12:` +
           `x=(w-text_w)/2:` +
-          `y=h-text_h-${yOffset}:` +
+          `y=${yExpr}:` +
           `enable='between(t,${cap.startTime},${cap.startTime + cap.duration})'` +
           captionLabel;
 

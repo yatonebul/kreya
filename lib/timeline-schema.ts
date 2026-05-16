@@ -59,6 +59,7 @@ export interface KreyaTimeline {
   resolution: RenderResolution
   totalDuration: number
   colorGrade?: ColorGrade
+  bgStyle?: 'blur' | 'black'
   tracks: {
     video: VideoTrack[]
     audio?: AudioTrack
