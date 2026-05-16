@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // FFmpeg rendering can take 20-40 s on Vercel's shared CPU
 export const maxDuration = 60;
 import { createClient } from '@supabase/supabase-js';
+import { buildAtomicTimeline } from '@/lib/media-buffer';
+import { renderTimeline } from '@/lib/timeline-renderer';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
@@ -910,9 +912,9 @@ async function handleButtonReply(from: string, action: string, postId: string | 
   if (action === 'spin_reel' && postId) {
     const source = await getPostById(postId);
     const sourceItems: CarouselItem[] = Array.isArray(source?.media_items) ? source.media_items as CarouselItem[] : [];
-    const videoAsset = sourceItems.find(i => i.is_video) ?? (source?.is_video && source?.user_image_url ? { url: source.user_image_url as string, is_video: true } : null);
     const assetCount = sourceItems.length > 0 ? sourceItems.length : (source?.user_image_url ? 1 : 0);
-    if (assetCount > 0 && videoAsset) {
+    if (assetCount > 0) {
+      // Offer originals (image or video — both can become a reel) vs AI-generated
       await sendRepurposeAssetChoice(from, postId, 'reel', assetCount);
     } else {
       await handleSpinReelScript(from, postId);
@@ -1364,12 +1366,18 @@ async function handleButtonReply(from: string, action: string, postId: string | 
           : 'post';
     await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
 
-    // Phase B repurpose offer — spin the same idea into another surface
-    // so the creator can multiply one voice note into a week of content.
-    // Stories already are the spin destination, so we don't double-offer.
+    // Phase B repurpose offer. Stories are already a spin destination — skip.
+    // Prevent circular repurposing: if this post was spun from another post,
+    // look up the original's surface so we don't offer to spin it back.
     if (!isStory) {
       const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
-      await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
+      let spunFromSurface: string | undefined;
+      if (post.parent_post_id) {
+        const { data: parent } = await getSupabase()
+          .from('pending_posts').select('surface').eq('id', post.parent_post_id).maybeSingle();
+        spunFromSurface = parent?.surface ?? undefined;
+      }
+      await sendRepurposeOffer(from, post.id, sourceSurface, spunFromSurface).catch(() => {});
     }
 
   } else if (action === 'edit') {
@@ -2626,7 +2634,7 @@ async function handleSpinCarouselWithAssets(from: string, sourcePostId: string) 
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateCarouselSpin(source.caption, profileContext ?? undefined);
   if (!spin) {
-    await sendText(from, "⚠️ Couldn't generate the carousel caption — try again.");
+    await sendRetryButton(from, `spin_carousel_assets:${sourcePostId}`, "⚠️ Couldn't write the carousel caption — tap to try again.");
     return;
   }
 
@@ -2678,8 +2686,9 @@ async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
     (source.is_video && source.user_image_url ? { url: source.user_image_url as string, is_video: true } : null) ??
     (source.is_video && source.image_url ? { url: source.image_url as string, is_video: true } : null);
 
+  // No video? Animate the original images into a Ken Burns reel instead
   if (!videoAsset) {
-    await sendText(from, '🎬 No video found in your originals. Send a video file to create a Reel.');
+    await handleSpinReelFromImages(from, sourcePostId, source, sourceItems);
     return;
   }
 
@@ -2688,7 +2697,7 @@ async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
   const profileContext = await getProfileContextForPhone(from);
   const spin = await generateReelScriptSpin(source.caption, profileContext ?? undefined);
   if (!spin) {
-    await sendText(from, "⚠️ Couldn't generate the Reel caption — try again.");
+    await sendRetryButton(from, `spin_reel_assets:${sourcePostId}`, "⚠️ Couldn't write the Reel caption — tap to try again.");
     return;
   }
 
@@ -2723,6 +2732,79 @@ async function handleSpinReelWithAssets(from: string, sourcePostId: string) {
   }
 
   await sendPostPreview(from, videoAsset.url, spin.caption, post.id, true, 'reels');
+}
+
+// Animates image assets from a non-video source (feed post, image carousel) into a Ken Burns reel.
+async function handleSpinReelFromImages(from: string, sourcePostId: string, source: any, sourceItems: CarouselItem[]) {
+  const imageAssets = sourceItems.length > 0
+    ? sourceItems.filter(i => !i.is_video).map(i => ({ url: i.url, type: 'image' as const }))
+    : source.user_image_url
+      ? [{ url: source.user_image_url as string, type: 'image' as const }]
+      : [];
+
+  if (!imageAssets.length) {
+    await sendText(from, '⚠️ No images found to animate — please send a photo first.');
+    return;
+  }
+
+  const profileContext = await getProfileContextForPhone(from);
+  const spin = await generateReelScriptSpin(source.caption, profileContext ?? undefined);
+  if (!spin) {
+    await sendRetryButton(from, `spin_reel_assets:${sourcePostId}`, "⚠️ Couldn't write the Reel caption — tap to try again.");
+    return;
+  }
+
+  const supabase = getSupabase();
+  const { data: stale } = await supabase.from('pending_posts').select('id, sibling_id')
+    .eq('whatsapp_phone', from).in('state', ['pending_approval', 'in_edit', 'collecting_carousel']);
+  for (const d of stale ?? []) {
+    await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.id);
+    if (d.sibling_id) await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', d.sibling_id);
+  }
+
+  const { data: post } = await supabase.from('pending_posts').insert({
+    whatsapp_phone: from,
+    caption: spin.caption,
+    user_image_url: imageAssets[0].url,
+    image_url: imageAssets[0].url,
+    image_source: 'user',
+    is_video: true,
+    surface: 'reels',
+    state: 'in_edit',
+    media_items: imageAssets,
+    parent_post_id: sourcePostId,
+  }).select('id').single();
+
+  if (!post) {
+    await sendRetryButton(from, `spin_reel_assets:${sourcePostId}`, '⚠️ Had trouble creating the draft — tap to try again.');
+    return;
+  }
+
+  const clipWord = imageAssets.length > 1 ? `${imageAssets.length} photos` : 'photo';
+  await sendText(from, `🎬 Animating your ${clipWord} into a Reel — preview arriving in ~30 seconds...`);
+
+  after(async () => {
+    try {
+      const timeline = buildAtomicTimeline(imageAssets, {
+        resolution: 'preview',
+        aspectRatio: '9:16',
+        bgStyle: 'blur',
+        captionText: spin.caption || undefined,
+      });
+      const { publicUrl } = await renderTimeline(timeline);
+      await supabase.from('pending_posts').update({
+        image_url: publicUrl,
+        timeline_json: timeline,
+        state: 'pending_approval',
+      }).eq('id', post.id);
+      await sendVideoMessage(from, publicUrl);
+      await sendPostPreview(from, publicUrl, spin.caption, post.id, true, 'reels');
+    } catch (err) {
+      console.error('[spin-reel-images]', err);
+      await sendText(from, '⚠️ Animation ran into trouble — let me know if you want to retry.');
+      await supabase.from('pending_posts').update({ state: 'pending_approval', is_video: false }).eq('id', post.id);
+    }
+  });
 }
 
 // Forces AI image generation even when user assets exist.
