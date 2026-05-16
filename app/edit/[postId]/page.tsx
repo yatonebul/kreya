@@ -56,6 +56,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   const [rendering,     setRendering]     = useState(false);
   const [error,         setError]         = useState('');
   const [bgStyle,       setBgStyle]       = useState<'blur' | 'black'>('blur');
+  const [noTimeline,    setNoTimeline]    = useState(false);
   const [dragIdx,       setDragIdx]       = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -68,7 +69,8 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         if (!res.ok) { setError('Could not load post.'); return; }
         const data = await res.json();
         setTimeline(data.timeline);
-        setPreviewUrl(data.previewUrl);
+        setPreviewUrl(data.previewUrl ?? '');
+        if (!data.timeline) { setNoTimeline(true); return; }
         setSelectedGrade((data.timeline?.colorGrade as ColorGrade) ?? 'natural');
         setBgStyle(data.timeline?.bgStyle ?? 'blur');
         const firstEffect = data.timeline?.tracks?.video?.[0]?.effect;
@@ -173,12 +175,32 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
     );
   }
 
-  if (error || !timeline) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#0B0918', color: '#fff' }}>
         <div className="text-center">
-          <p className="text-red-400 mb-4">{error || 'Post not found'}</p>
+          <p className="text-red-400 mb-4">{error}</p>
           <p style={{ color: 'rgba(255,255,255,.5)', fontSize: '0.875rem' }}>Close this tab and try again from WhatsApp.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (noTimeline || !timeline) {
+    return (
+      <div className="min-h-screen" style={{ background: '#0B0918', color: '#fff', fontFamily: 'DM Sans, sans-serif' }}>
+        <div className="sticky top-0 z-10 px-4 py-3" style={{ background: '#100E22', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+          <span className="font-semibold" style={{ fontSize: '1rem', fontFamily: 'Syne, sans-serif' }}>Reel Preview</span>
+        </div>
+        {previewUrl && (
+          <div className="relative mx-auto mt-4" style={{ maxWidth: 270, aspectRatio: '9/16' }}>
+            <video src={previewUrl} autoPlay loop muted playsInline className="w-full h-full rounded-2xl object-cover" />
+          </div>
+        )}
+        <div className="p-6 text-center mt-4">
+          <p style={{ color: 'rgba(255,255,255,.6)', fontSize: '0.9rem' }}>
+            This reel was rendered by the GPU engine. Edit motion, music, and style via WhatsApp.
+          </p>
         </div>
       </div>
     );

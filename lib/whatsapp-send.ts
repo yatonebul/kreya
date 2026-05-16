@@ -654,7 +654,8 @@ export async function sendEditActionsMenu(to: string, postId: string, isVideo: b
   if (!isVideo) {
     if (isCarousel) {
       // Carousel: offer slide-level picker instead of single image edit, no "Add Slides"
-      editOptions.push({ id: `edit_slide_picker:${postId}`, title: '🖼️ Edit Media', description: `Choose which slide to replace` });
+      editOptions.push({ id: `edit_slide_picker:${postId}`, title: '🖼️ Edit Media', description: 'Replace or generate a slide' });
+      editOptions.push({ id: `carousel_reorder:${postId}`, title: '🔀 Re-order', description: 'Change the slide sequence' });
     } else {
       editOptions.push({ id: `edit_image:${postId}`, title: '🖼️ Image', description: 'Regenerate or change style' });
       editOptions.push({ id: `add_slides:${postId}`, title: '🎞️ Add Slides', description: 'Turn into a multi-image carousel' });
@@ -689,20 +690,25 @@ export async function sendEditActionsMenu(to: string, postId: string, isVideo: b
 }
 
 // Carousel slide selector: lets the user pick which slide to replace during edit.
-// Supports up to 9 slides (WA list max is 10 rows; we reserve the last for "Replace All").
+// Supports up to 8 slides (WA list max is 10 rows; reserve 2 for Replace All + Generate AI).
 export async function sendCarouselSlideSelector(to: string, postId: string, slideCount: number) {
   const rows: { id: string; title: string; description: string }[] = Array.from(
-    { length: Math.min(slideCount, 9) },
+    { length: Math.min(slideCount, 8) },
     (_, i) => ({
       id: `edit_slide:${postId}:${i}`,
       title: `🖼️ Slide ${i + 1}`,
-      description: `Replace slide ${i + 1} with a new photo or video`,
+      description: `Upload photo/video or generate AI image`,
     }),
   );
   rows.push({
     id: `edit_all_slides:${postId}`,
     title: '🎞️ Replace All',
     description: 'Clear all slides and send new ones',
+  });
+  rows.push({
+    id: `gen_ai_carousel_slide:${postId}`,
+    title: '🤖 Generate AI slide',
+    description: 'Pick a slot and describe the image',
   });
 
   return wa({
@@ -717,6 +723,24 @@ export async function sendCarouselSlideSelector(to: string, postId: string, slid
       action: {
         button: 'Choose slide',
         sections: [{ title: 'Slides', rows }],
+      },
+    },
+  });
+}
+
+export async function sendSlideReplacePrompt(to: string, postId: string, slideIdx: number) {
+  return wa({
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: `🖼️ *Replace slide ${slideIdx + 1}*\n\nSend a photo or video to replace it, or generate a new AI image.` },
+      action: {
+        buttons: [
+          { type: 'reply', reply: { id: `gen_ai_slide_pick:${postId}:${slideIdx}`, title: '🤖 Generate AI' } },
+          { type: 'reply', reply: { id: `cancel_slide_replace:${postId}`,          title: '✖️ Cancel' } },
+        ],
       },
     },
   });

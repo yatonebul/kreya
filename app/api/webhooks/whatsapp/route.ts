@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import { generateCaption, generateCaptionVariants, generateImagePrompt, refineCaption, generateCarouselSpin, generateReelScriptSpin, generateStorySpin } from '@/lib/caption-generator';
 import { learnStyleFromInstagram } from '@/lib/style-memory';
 import { publishToInstagram, publishCarouselToInstagram, publishStoryToInstagram, postCommentReply, postInstagramDm, type CarouselItem } from '@/lib/instagram-publish';
-import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendBgStyleChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
+import { sendText, sendImageMessage, sendVideoMessage, sendAnimateToReelOffer, sendPostPreview, sendPostPublishedActions, sendBrandSuggestion, sendRepurposeOffer, sendScheduledActions, sendConversationStarters, sendEditActionsMenu, sendCarouselSlideSelector, sendCarouselProgressButtons, sendCarouselReorderMenu, sendSlideReplacePrompt, sendStorySlideManager, sendRetryButton, sendPublishFailureActions, sendRepurposeAssetChoice, sendAddSlidesChoice, sendAnimationStyleChoice, sendMusicChoice, sendBgStyleChoice, sendPreFlightMenu, sendPlatformCustomizeMenu } from '@/lib/whatsapp-send';
 import { getAdaptersForPlatforms } from '@/lib/adapters';
 import { buildImageUrl, buildBrandedImage, detectStyle } from '@/lib/image-generator';
 import { downloadAndHostMedia } from '@/lib/whatsapp-media';
@@ -232,7 +232,7 @@ async function processWebhook(body: any) {
           return;
         } else {
           const idx = awaitingSlideReplace.editing_slide_idx ?? 0;
-          await sendText(from, `🖼️ Send the replacement photo or video for slide ${idx + 1}, or type *cancel* to go back.`);
+          await sendSlideReplacePrompt(from, awaitingSlideReplace.id, idx);
           return;
         }
       }
@@ -1207,7 +1207,7 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await getSupabase().from('pending_posts')
       .update({ state: 'awaiting_slide_replace', editing_slide_idx: slideIdx })
       .eq('id', actualPostId);
-    await sendText(from, `🖼️ *Replace slide ${slideIdx + 1}:*\n\nSend your replacement photo or video now, or type *cancel* to go back.`);
+    await sendSlideReplacePrompt(from, actualPostId, slideIdx);
     return;
   }
   // Replace all slides: restart carousel collection with a clean session
@@ -1238,6 +1238,36 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     const post = await getPostById(postId);
     if (!post) { await sendText(from, 'Post not found.'); return; }
     await handleGenerateAiSlidesForPost(from, post);
+    return;
+  }
+  if (action === 'cancel_slide_replace' && postId) {
+    await getSupabase().from('pending_posts')
+      .update({ state: 'pending_approval', editing_slide_idx: null })
+      .eq('id', postId);
+    const refreshed = await getPostById(postId);
+    if (refreshed) {
+      const items = Array.isArray(refreshed.media_items) ? refreshed.media_items : [];
+      await sendText(from, '✋ Cancelled. Here\'s your draft:');
+      await sendPostPreview(from, refreshed.image_url, refreshed.caption, refreshed.id, false, 'carousel', items.length);
+    }
+    return;
+  }
+  if (action === 'gen_ai_slide_pick' && postId) {
+    // postId is "postId:slideIdx"
+    const [actualPostId, idxStr] = postId.split(':');
+    const slideIdx = parseInt(idxStr ?? '0', 10);
+    await getSupabase().from('pending_posts')
+      .update({ state: 'awaiting_image_style', editing_slide_idx: slideIdx })
+      .eq('id', actualPostId);
+    await sendText(from, `🎨 *Generate AI image for slide ${slideIdx + 1}*\n\nDescribe what you want — style, subject, mood (e.g. "warm sunset over Prague rooftops").`);
+    return;
+  }
+  if (action === 'gen_ai_carousel_slide' && postId) {
+    const post = await getPostById(postId);
+    if (!post) { await sendText(from, 'Post not found.'); return; }
+    const items = Array.isArray(post.media_items) ? post.media_items : [];
+    await sendCarouselSlideSelector(from, postId, items.length);
+    await sendText(from, '👆 Pick which slot to generate an AI image for.');
     return;
   }
   if (action === 'cancel_edit' && postId) {
@@ -1348,75 +1378,79 @@ async function handleButtonReply(from: string, action: string, postId: string | 
               ? '⏳ Publishing your Reel to Instagram...'
               : '⏳ Publishing to Instagram...',
     );
-    let result;
-    try {
-      if (isMultiStory) {
-        // Publish each asset as a separate story, collecting the last successful ID
-        let lastId = '';
-        let lastUrl: string | undefined;
-        let failed = 0;
-        for (const item of storyItems) {
-          try {
-            const r = await publishStoryToInstagram(from, item.url, item.is_video ?? false);
-            lastId = r.postId;
-            lastUrl = r.postUrl;
-            await new Promise(res => setTimeout(res, 1500)); // small gap between stories
-          } catch {
-            failed++;
+
+    // Mark as publishing immediately so duplicate taps are ignored
+    await getSupabase().from('pending_posts').update({ state: 'publishing' }).eq('id', post.id);
+
+    // Long-running publish runs after the response so we never hit the 60s Vercel limit
+    after(async () => {
+      let result;
+      try {
+        if (isMultiStory) {
+          let lastId = '';
+          let lastUrl: string | undefined;
+          let failed = 0;
+          for (const item of storyItems) {
+            try {
+              const r = await publishStoryToInstagram(from, item.url, item.is_video ?? false);
+              lastId = r.postId;
+              lastUrl = r.postUrl;
+              await new Promise(res => setTimeout(res, 1500));
+            } catch {
+              failed++;
+            }
           }
+          if (!lastId) throw new Error('All story items failed to publish');
+          result = { postId: lastId, postUrl: lastUrl, status: 'success' };
+          if (failed > 0) {
+            await sendText(from, `⚠️ ${failed} of ${storyItems.length} Stories couldn't be published — the rest went through.`);
+          }
+        } else {
+          result = isCarousel
+            ? await publishCarouselToInstagram(from, post.caption, carouselItems!)
+            : isStory
+              ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
+              : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
         }
-        if (!lastId) throw new Error('All story items failed to publish');
-        result = { postId: lastId, postUrl: lastUrl, status: 'success' };
-        if (failed > 0) {
-          await sendText(from, `⚠️ ${failed} of ${storyItems.length} Stories couldn't be published — the rest went through.`);
+      } catch (err: any) {
+        await getSupabase().from('pending_posts').update({ state: 'pending_approval' }).eq('id', post.id);
+        if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
+          const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+          await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
+          return;
         }
-      } else {
-        result = isCarousel
-          ? await publishCarouselToInstagram(from, post.caption, carouselItems!)
-          : isStory
-            ? await publishStoryToInstagram(from, post.image_url, post.is_video ?? false)
-            : await publishToInstagram(from, post.caption, post.image_url, post.is_video ?? false, postSurface);
-      }
-    } catch (err: any) {
-      if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
-        const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
-        await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
+        const contentType = isCarousel ? 'carousel' : isStory ? 'Story' : 'post';
+        await sendPublishFailureActions(from, post.id, contentType);
         return;
       }
-      const contentType = isCarousel ? 'carousel' : isStory ? 'Story' : 'post';
-      await sendPublishFailureActions(from, post.id, contentType);
-      return;
-    }
 
-    await getSupabase().from('pending_posts')
-      .update({
-        state: 'published',
-        ig_post_id: result.postId,
-        ig_post_url: result.postUrl ?? null,
-        published_at: new Date().toISOString(),
-      })
-      .eq('id', post.id);
+      await getSupabase().from('pending_posts')
+        .update({
+          state: 'published',
+          ig_post_id: result.postId,
+          ig_post_url: result.postUrl ?? null,
+          published_at: new Date().toISOString(),
+        })
+        .eq('id', post.id);
 
-    if (post.sibling_id) {
-      await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
-    }
+      if (post.sibling_id) {
+        await getSupabase().from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
+      }
 
-    const postLabel = isCarousel
-      ? 'carousel'
-      : isStory
-        ? 'Story'
-        : postSurface === 'reels'
-          ? 'Reel'
-          : 'post';
-    await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
+      const postLabel = isCarousel
+        ? 'carousel'
+        : isStory
+          ? 'Story'
+          : postSurface === 'reels'
+            ? 'Reel'
+            : 'post';
+      await sendPostPublishedActions(from, result.postUrl ?? undefined, postLabel);
 
-    // Phase B repurpose offer — spin the same idea into another surface
-    // so the creator can multiply one voice note into a week of content.
-    // Stories already are the spin destination, so we don't double-offer.
-    if (!isStory) {
-      const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
-      await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
-    }
+      if (!isStory) {
+        const sourceSurface: 'feed' | 'reels' | 'carousel' = isCarousel ? 'carousel' : postSurface;
+        await sendRepurposeOffer(from, post.id, sourceSurface).catch(() => {});
+      }
+    });
 
   } else if (action === 'edit') {
     await getSupabase().from('pending_posts')
@@ -2665,11 +2699,16 @@ async function handleSpinCarousel(from: string, sourcePostId: string) {
   }
 
   // Send all slides with headlines
-  await sendImageMessage(from, mediaItems[0].url, `Slide 1/5 — Your original`);
+  const isVideoUrl = (u: string) => /\.mp4(\?|$)/i.test(u);
+  if (isVideoUrl(mediaItems[0].url)) {
+    await sendVideoMessage(from, mediaItems[0].url);
+  } else {
+    await sendImageMessage(from, mediaItems[0].url, `Slide 1/5 — Your original`);
+  }
   for (let i = 1; i < mediaItems.length; i++) {
     await sendImageMessage(from, mediaItems[i].url, `Slide ${i + 1}/5 — ${newSlides[i - 1].headline}`);
   }
-  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, false, 'carousel', mediaItems.length);
+  await sendPostPreview(from, mediaItems[0].url, spin.caption, post.id, isVideoUrl(mediaItems[0].url), 'carousel', mediaItems.length);
   if (carouselOverflowed) {
     await sendText(from, `⚡ Daily Pro limit reached — some slides used standard generation. [Upgrade quota at ${APP_URL}/account]`);
   }

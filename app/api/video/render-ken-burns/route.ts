@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
         await sendVideoMessage(phone, videoUrl);
 
         // Only warn the user if they explicitly picked a music genre (not auto)
-        if (!musicIncluded && musicPreference !== 'none' && musicPreference !== 'auto') {
+        if (!musicIncluded && musicPreference !== 'none' && musicPreference !== 'auto' && musicPreference !== 'trending') {
           console.log('[render-ken-burns] ⚠️ MUSIC FAILED: requested=' + musicPreference + ', label=' + musicLabel + ', included=false');
           await sendText(phone, '⚠️ Music unavailable — video is silent. Try a different music option.').catch(() => {});
         } else if (musicIncluded) {
