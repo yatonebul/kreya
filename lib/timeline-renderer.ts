@@ -114,10 +114,12 @@ function extFromUrl(url: string, type: 'image' | 'video'): string {
 
 function escapeDrawtext(text: string): string {
   return text
+    .replace(/\p{Emoji}/gu, '')  // Linux Lambda fonts lack emoji glyphs; drawtext crashes
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
     .replace(/:/g, '\\:')
-    .replace(/%/g, '\\%');
+    .replace(/%/g, '\\%')
+    .trim();
 }
 
 function wrapLines(text: string, maxChars = 38): string {
@@ -183,13 +185,19 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       const effect = track.effect ?? { type: 'ken-burns', style: 'elegant' };
 
       if (effect.type === 'ken-burns') {
-        const zStart = effect.zoomStart ?? 1.0;
-        const zEnd   = effect.zoomEnd   ?? 1.3;
-        // Preview: render at output dims directly — avoids 4K internal buffer
-        // HD: render at full canvas dims for maximum quality
-        const kbW = isPreview ? w : fullDims.w;
-        const kbH = isPreview ? h : fullDims.h;
-        filterParts.push(kenBurnsFilter(inLabel, outLabel, kbW, kbH, frames, zStart, zEnd));
+        if (isPreview) {
+          // Preview: skip zoompan — it crashes on serverless containers (OOM/slowness).
+          // Just show the composition framing; animation only matters for HD exports.
+          if (bgStyle === 'blur') {
+            filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));
+          } else {
+            filterParts.push(scaleFilter(inLabel, outLabel, w, h));
+          }
+        } else {
+          const zStart = effect.zoomStart ?? 1.0;
+          const zEnd   = effect.zoomEnd   ?? 1.3;
+          filterParts.push(kenBurnsFilter(inLabel, outLabel, fullDims.w, fullDims.h, frames, zStart, zEnd));
+        }
       } else {
         if (bgStyle === 'blur') {
           filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));

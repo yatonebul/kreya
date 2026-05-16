@@ -33,6 +33,8 @@ const MUSIC_PREFS = [
   { key: 'none',     label: '🔇 Silent',  desc: 'No music' },
 ];
 
+type RenderStatus = 'idle' | 'submitting' | 'background' | 'done' | 'failed';
+
 interface PageProps {
   params:       Promise<{ postId: string }>;
   searchParams: Promise<{ t?: string; phone?: string }>;
@@ -53,23 +55,22 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   const [bgStyle,         setBgStyle]         = useState<'blur' | 'black'>('blur');
   const [musicPref,       setMusicPref]       = useState('auto');
   const [loading,         setLoading]         = useState(true);
-  const [rendering,       setRendering]       = useState(false);
-  const [renderingBg,     setRenderingBg]     = useState(false);
-  const [renderDone,      setRenderDone]      = useState(false);
-  const [error,           setError]           = useState('');
+  const [loadError,       setLoadError]       = useState('');  // full-screen error
+  const [renderStatus,    setRenderStatus]    = useState<RenderStatus>('idle');
+  const [renderMsg,       setRenderMsg]       = useState('');  // inline status message
   const [dragIdx,         setDragIdx]         = useState<number | null>(null);
   const [noTimeline,      setNoTimeline]      = useState(false);
 
-  const videoRef              = useRef<HTMLVideoElement>(null);
-  const renderStartUrlRef     = useRef<string>('');
-  const pollIntervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollTimeoutRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef           = useRef<HTMLVideoElement>(null);
+  const renderStartUrlRef  = useRef<string>('');
+  const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch(`/api/posts/${postId}/timeline?t=${token}&phone=${encodeURIComponent(phone)}`);
-        if (!res.ok) { setError(res.status === 404 ? 'Post not found' : 'Could not load post.'); return; }
+        if (!res.ok) { setLoadError(res.status === 404 ? 'Post not found.' : 'Could not load post.'); return; }
         const data = await res.json();
         setPreviewUrl(data.previewUrl ?? '');
         setPostCaption(data.caption ?? '');
@@ -86,20 +87,21 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         const cap = data.timeline?.tracks?.captions?.[0];
         if (cap) { setCaptionOn(true); setCaptionText(cap.text); setCaptionPosition(cap.position ?? 'bottom'); }
         if (!data.timeline?.tracks?.audio) setMusicPref('none');
-      } catch { setError('Failed to load editor.'); }
+      } catch { setLoadError('Failed to load editor.'); }
       finally { setLoading(false); }
     }
     load();
   }, [postId, token, phone]);
 
+  function stopPolling() {
+    if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+    if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
+  }
+
   // Poll for render completion after a background render starts
   useEffect(() => {
-    if (!renderingBg) {
-      if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-      if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
-      return;
-    }
-    // Poll every 5s for up to 90s, then surface error
+    if (renderStatus !== 'background') { stopPolling(); return; }
+
     pollIntervalRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/posts/${postId}/timeline?t=${token}&phone=${encodeURIComponent(phone)}`);
@@ -107,29 +109,26 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         const data = await res.json();
         if (data.previewUrl && data.previewUrl !== renderStartUrlRef.current) {
           setPreviewUrl(data.previewUrl);
-          setRenderingBg(false);
-          setRenderDone(true);
+          setRenderStatus('done');
+          setRenderMsg('✅ Preview ready! Check WhatsApp to approve or keep editing.');
+          stopPolling();
           if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
-          if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-          if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
         }
       } catch {}
     }, 5000);
-    // Timeout: if no update after 90s, render has failed
+
+    // Timeout after 90s — render has failed
     pollTimeoutRef.current = setTimeout(() => {
-      if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-      setRenderingBg(false);
-      setError('Render timed out — check WhatsApp for a retry button, or tap Apply Changes to try again.');
+      stopPolling();
+      setRenderStatus('failed');
+      setRenderMsg('Render timed out. Check WhatsApp for a retry button, or tap Retry below.');
     }, 90_000);
-    return () => {
-      if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
-      if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
-    };
-  }, [renderingBg, postId, token, phone]);
+
+    return stopPolling;
+  }, [renderStatus, postId, token, phone]);
 
   function toggleCaptionOn() {
     if (!captionOn && !captionText.trim() && postCaption) {
-      // Auto-fill from post caption: strip hashtags, take first line, cap at 60 chars
       const noTags = postCaption.replace(/#\S+/g, '').replace(/\s{2,}/g, ' ').trim();
       const firstLine = noTags.split('\n')[0].trim();
       const short = firstLine.length > 60 ? firstLine.slice(0, 60).replace(/\s+\S*$/, '…') : firstLine;
@@ -153,10 +152,8 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   }, [timeline, selectedGrade, bgStyle, motionStyle, captionOn, captionText, captionPosition]);
 
   async function applyChanges() {
-    setRendering(true);
-    setRenderingBg(false);
-    setRenderDone(false);
-    setError('');
+    setRenderStatus('submitting');
+    setRenderMsg('');
     renderStartUrlRef.current = previewUrl;
     try {
       if (noTimeline || !timeline) {
@@ -175,10 +172,12 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
           }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? 'Render failed');
-        if (data.status === 'rendering') { setRenderingBg(true); setNoTimeline(false); return; }
+        if (!res.ok) { setRenderStatus('failed'); setRenderMsg(data.error ?? 'Render failed.'); return; }
+        if (data.status === 'rendering') { setRenderStatus('background'); setNoTimeline(false); return; }
         setPreviewUrl(data.previewUrl);
         setNoTimeline(false);
+        setRenderStatus('done');
+        setRenderMsg('✅ Preview ready!');
         if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
         return;
       }
@@ -190,15 +189,16 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         body:    JSON.stringify({ postId, token, phone, timeline: updated, musicPreference: musicPref, postCaption }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Render failed');
-      if (data.status === 'rendering') { setRenderingBg(true); setTimeline(updated); return; }
+      if (!res.ok) { setRenderStatus('failed'); setRenderMsg(data.error ?? 'Render failed.'); return; }
+      if (data.status === 'rendering') { setRenderStatus('background'); setTimeline(updated); return; }
       setTimeline(updated);
       setPreviewUrl(data.previewUrl);
+      setRenderStatus('done');
+      setRenderMsg('✅ Preview ready!');
       if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
     } catch (e: any) {
-      setError(e.message ?? 'Something went wrong');
-    } finally {
-      setRendering(false);
+      setRenderStatus('failed');
+      setRenderMsg(e.message ?? 'Something went wrong');
     }
   }
 
@@ -213,6 +213,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   }
 
   const cssFilter = COLOR_GRADES[selectedGrade];
+  const isRendering = renderStatus === 'submitting' || renderStatus === 'background';
 
   if (loading) {
     return (
@@ -225,11 +226,11 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
     );
   }
 
-  if (error && !timeline && !noTimeline) {
+  if (loadError) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6" style={{ background: '#0B0918', color: '#fff' }}>
         <div className="text-center">
-          <p className="text-red-400 mb-4">{error}</p>
+          <p className="text-red-400 mb-4">{loadError}</p>
           <p style={{ color: 'rgba(255,255,255,.5)', fontSize: '0.875rem' }}>Close this tab and try again from WhatsApp.</p>
         </div>
       </div>
@@ -238,18 +239,62 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
 
   const hasImage = !!(timeline?.tracks.video.some(t => t.type === 'image') ?? noTimeline);
 
+  // ── Fixed render status bar (visible everywhere while scrolling) ──────────
+  function RenderStatusBar() {
+    if (renderStatus === 'idle') return null;
+
+    const configs = {
+      submitting: { bg: '#100E22', border: '#5E35FF', text: 'rgba(255,255,255,.9)', icon: null,  msg: 'Submitting…' },
+      background: { bg: '#100E22', border: '#5E35FF', text: 'rgba(255,255,255,.9)', icon: 'spin', msg: 'Rendering in background — video updates here when done' },
+      done:       { bg: '#0a2a1a', border: '#00E5A0', text: '#00E5A0',              icon: '✅',   msg: renderMsg },
+      failed:     { bg: '#2a0a0a', border: '#FF4F3B', text: '#FF6B59',              icon: '⚠️',  msg: renderMsg },
+    };
+    const c = configs[renderStatus];
+    return (
+      <div className="fixed left-0 right-0 z-40 px-4 py-2.5 flex items-center gap-3"
+        style={{ top: 52, background: c.bg, borderBottom: `1px solid ${c.border}` }}>
+        {c.icon === 'spin'
+          ? <div className="w-4 h-4 rounded-full border-2 border-violet-400 border-t-transparent animate-spin flex-shrink-0" />
+          : c.icon ? <span className="flex-shrink-0">{c.icon}</span>
+          : <div className="w-4 h-4 rounded-full border-2 border-violet-400 border-t-transparent animate-spin flex-shrink-0" />
+        }
+        <p className="flex-1 text-xs leading-snug" style={{ color: c.text, fontFamily: 'DM Sans, sans-serif' }}>{c.msg}</p>
+        {renderStatus === 'failed' && (
+          <button onClick={applyChanges}
+            className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-semibold"
+            style={{ background: '#FF4F3B', color: '#fff', fontFamily: 'Space Mono, monospace' }}>
+            Retry
+          </button>
+        )}
+        {renderStatus === 'done' && (
+          <button onClick={() => setRenderStatus('idle')}
+            className="flex-shrink-0 text-lg leading-none" style={{ color: 'rgba(255,255,255,.4)' }}>
+            ×
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pb-28" style={{ background: '#0B0918', color: '#fff', fontFamily: 'DM Sans, sans-serif' }}>
 
-      {/* Header */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3" style={{ background: '#100E22', borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+      {/* Sticky header */}
+      <div className="sticky top-0 z-50 flex items-center justify-between px-4 py-3"
+        style={{ background: '#100E22', borderBottom: '1px solid rgba(255,255,255,.08)', height: 52 }}>
         <span className="font-semibold" style={{ fontSize: '1rem', fontFamily: 'Syne, sans-serif' }}>Edit Reel</span>
-        <button onClick={applyChanges} disabled={rendering}
+        <button onClick={applyChanges} disabled={isRendering}
           className="px-4 py-2 rounded-full text-sm font-semibold transition-opacity disabled:opacity-50"
           style={{ background: '#5E35FF', color: '#fff' }}>
-          {rendering ? 'Rendering…' : 'Apply'}
+          {renderStatus === 'submitting' ? 'Sending…' : isRendering ? 'Rendering…' : 'Apply'}
         </button>
       </div>
+
+      {/* Fixed render status bar — below header, always visible while scrolling */}
+      <RenderStatusBar />
+
+      {/* Spacer for the fixed status bar when visible */}
+      {renderStatus !== 'idle' && <div style={{ height: 44 }} />}
 
       {/* Video preview */}
       <div className="relative mx-auto mt-4" style={{ maxWidth: 270, aspectRatio: '9/16' }}>
@@ -259,18 +304,21 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
             style={{ filter: cssFilter === 'none' ? undefined : cssFilter }} />
         ) : (
           <div className="w-full h-full rounded-2xl flex items-center justify-center" style={{ background: '#201D3C' }}>
-            <span style={{ color: 'rgba(255,255,255,.3)' }}>No preview</span>
+            <span style={{ color: 'rgba(255,255,255,.3)' }}>No preview yet</span>
           </div>
         )}
-        {(rendering || renderingBg) && (
-          <div className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center gap-3" style={{ background: 'rgba(11,9,24,.75)' }}>
+        {isRendering && (
+          <div className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center gap-3"
+            style={{ background: 'rgba(11,9,24,.75)' }}>
             <div className="w-10 h-10 rounded-full border-4 border-violet-400 border-t-transparent animate-spin" />
-            {renderingBg && <p className="text-xs text-center px-4" style={{ color: 'rgba(255,255,255,.6)', fontFamily: 'DM Sans, sans-serif' }}>Rendering in background…</p>}
+            {renderStatus === 'background' && (
+              <p className="text-xs text-center px-4" style={{ color: 'rgba(255,255,255,.6)' }}>Rendering…</p>
+            )}
           </div>
         )}
         {captionOn && captionText && (
           <div className={`absolute left-2 right-2 text-center pointer-events-none ${captionPosition === 'top' ? 'top-8' : captionPosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-8'}`}>
-            <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(0,0,0,.55)', color: '#fff', fontFamily: 'DM Sans, sans-serif' }}>
+            <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(0,0,0,.55)', color: '#fff' }}>
               {captionText.slice(0, 60)}{captionText.length > 60 ? '…' : ''}
             </span>
           </div>
@@ -278,19 +326,6 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
       </div>
 
       <div className="px-4 mt-6 space-y-6">
-
-        {/* Render status banners */}
-        {renderingBg && (
-          <div className="rounded-xl px-4 py-3 text-sm text-center" style={{ background: '#171430', border: '1px solid #5E35FF', color: 'rgba(255,255,255,.8)', fontFamily: 'DM Sans, sans-serif' }}>
-            ⏳ Rendering in the background — preview will update here and arrive on WhatsApp in ~30s
-          </div>
-        )}
-        {renderDone && !renderingBg && (
-          <div className="rounded-xl px-4 py-3 text-sm text-center" style={{ background: '#0a2a1a', border: '1px solid #00E5A0', color: '#00E5A0', fontFamily: 'DM Sans, sans-serif' }}>
-            ✅ Preview updated! Check WhatsApp to approve or keep editing.
-          </div>
-        )}
-        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
 
         {/* Vibe (Color Grade) */}
         <section>
@@ -300,12 +335,10 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
               <button key={grade} onClick={() => setSelectedGrade(grade)} className="flex-shrink-0 flex flex-col items-center gap-1.5">
                 <div className="w-16 h-16 rounded-xl overflow-hidden border-2 transition-all"
                   style={{ borderColor: selectedGrade === grade ? '#5E35FF' : 'transparent', boxShadow: selectedGrade === grade ? '0 0 0 1px #5E35FF' : 'none' }}>
-                  {previewUrl ? (
-                    <video src={previewUrl} muted playsInline className="w-full h-full object-cover"
-                      style={{ filter: COLOR_GRADES[grade] === 'none' ? undefined : COLOR_GRADES[grade] }} />
-                  ) : (
-                    <div className="w-full h-full" style={{ background: '#201D3C' }} />
-                  )}
+                  {previewUrl
+                    ? <video src={previewUrl} muted playsInline className="w-full h-full object-cover"
+                        style={{ filter: COLOR_GRADES[grade] === 'none' ? undefined : COLOR_GRADES[grade] }} />
+                    : <div className="w-full h-full" style={{ background: '#201D3C' }} />}
                 </div>
                 <span className="text-xs" style={{ color: selectedGrade === grade ? '#5E35FF' : 'rgba(255,255,255,.5)', fontFamily: 'Space Mono, monospace' }}>
                   {GRADE_LABELS[grade]}
@@ -378,7 +411,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
               <textarea value={captionText} onChange={e => setCaptionText(e.target.value)}
                 placeholder="Text burned onto the video…" rows={3}
                 className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
-                style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)', fontFamily: 'DM Sans, sans-serif' }} />
+                style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)' }} />
               <div className="flex gap-2 mt-2">
                 {([{ key: 'top', label: '↑ Top' }, { key: 'center', label: '⬛ Center' }, { key: 'bottom', label: '↓ Bottom' }] as const).map(({ key, label }) => (
                   <button key={key} onClick={() => setCaptionPosition(key)}
@@ -392,14 +425,14 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
           )}
         </section>
 
-        {/* Post caption (Instagram / TikTok text) */}
+        {/* Post caption */}
         <section>
           <h2 className="text-sm font-semibold mb-1" style={{ color: 'rgba(255,255,255,.5)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Space Mono, monospace' }}>Post caption</h2>
-          <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,.3)', fontFamily: 'DM Sans, sans-serif' }}>Text shown on Instagram / TikTok (not burned into the video)</p>
+          <p className="text-xs mb-2" style={{ color: 'rgba(255,255,255,.3)' }}>Text shown on Instagram / TikTok (not burned into video)</p>
           <textarea value={postCaption} onChange={e => setPostCaption(e.target.value)}
             placeholder="Write your Instagram caption, hashtags…" rows={4}
             className="w-full rounded-xl px-3 py-2 text-sm resize-none outline-none"
-            style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)', fontFamily: 'DM Sans, sans-serif' }} />
+            style={{ background: '#171430', color: '#fff', border: '1px solid rgba(255,255,255,.1)' }} />
         </section>
 
         {/* Clip order (multi-clip only) */}
@@ -431,10 +464,10 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
 
       {/* Sticky Apply bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4" style={{ background: 'linear-gradient(to top, #0B0918 70%, transparent)' }}>
-        <button onClick={applyChanges} disabled={rendering}
+        <button onClick={applyChanges} disabled={isRendering}
           className="w-full py-3 rounded-2xl font-semibold text-base transition-opacity disabled:opacity-50"
           style={{ background: 'linear-gradient(135deg,#5E35FF,#FF4F3B)', color: '#fff', fontFamily: 'Syne, sans-serif' }}>
-          {rendering ? 'Rendering your reel…' : 'Apply Changes'}
+          {renderStatus === 'submitting' ? 'Sending…' : isRendering ? 'Rendering your reel…' : 'Apply Changes'}
         </button>
       </div>
 
