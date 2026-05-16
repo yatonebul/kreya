@@ -276,7 +276,6 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           `text='${wrapped}':` +
           `fontsize=${fontSize}:` +
           `fontcolor=white:` +
-          `line_spacing=6:` +
           `box=1:` +
           `boxcolor=black@0.55:` +
           `boxborderw=12:` +
@@ -307,6 +306,7 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
     }
 
     // ── Build FFmpeg command ────────────────────────────────────────────────
+    console.log('[renderTimeline] filter_complex:', filterParts.join(';').slice(0, 800));
     await new Promise<void>((resolve, reject) => {
       const cmd = ffmpeg();
 
