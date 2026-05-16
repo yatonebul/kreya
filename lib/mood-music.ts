@@ -20,15 +20,15 @@ const MOOD_QUERIES: Record<Mood, string> = {
   melancholic: 'melancholic sad background music',
 };
 
-// Incompetech fallback (Kevin MacLeod CC-licensed) — used if Freesound fails
+// archive.org fallback (Kevin MacLeod CC-licensed) — used if Freesound fails
 const FALLBACK_TRACKS: Record<Mood, MoodMusic> = {
-  energetic: { mood: 'energetic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3', title: 'Carefree', artist: 'Kevin MacLeod' },
-  calm: { mood: 'calm', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Relaxing%20Piano%20Music.mp3', title: 'Relaxing Piano Music', artist: 'Kevin MacLeod' },
-  romantic: { mood: 'romantic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Scheherazade.mp3', title: 'Scheherazade', artist: 'Kevin MacLeod' },
-  dramatic: { mood: 'dramatic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher.mp3', title: 'Cipher', artist: 'Kevin MacLeod' },
-  humorous: { mood: 'humorous', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Snitch.mp3', title: 'Sneaky Snitch', artist: 'Kevin MacLeod' },
-  inspirational: { mood: 'inspirational', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Inspired.mp3', title: 'Inspired', artist: 'Kevin MacLeod' },
-  melancholic: { mood: 'melancholic', musicUrl: 'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Wallpaper.mp3', title: 'Wallpaper', artist: 'Kevin MacLeod' },
+  energetic:     { mood: 'energetic',     musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Carefree.mp3',               title: 'Carefree',              artist: 'Kevin MacLeod' },
+  calm:          { mood: 'calm',          musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Relaxing%20Piano%20Music.mp3', title: 'Relaxing Piano Music',  artist: 'Kevin MacLeod' },
+  romantic:      { mood: 'romantic',      musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Scheherazade.mp3',            title: 'Scheherazade',          artist: 'Kevin MacLeod' },
+  dramatic:      { mood: 'dramatic',      musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Cipher.mp3',                  title: 'Cipher',                artist: 'Kevin MacLeod' },
+  humorous:      { mood: 'humorous',      musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Sneaky%20Snitch.mp3',         title: 'Sneaky Snitch',         artist: 'Kevin MacLeod' },
+  inspirational: { mood: 'inspirational', musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Inspired.mp3',                title: 'Inspired',              artist: 'Kevin MacLeod' },
+  melancholic:   { mood: 'melancholic',   musicUrl: 'https://archive.org/download/Kevin_MacLeod_Discography/Kevin%20MacLeod%20-%20Wallpaper.mp3',               title: 'Wallpaper',             artist: 'Kevin MacLeod' },
 };
 
 /**
@@ -101,13 +101,31 @@ async function selectMusicForMood(mood: Mood): Promise<MoodMusic | null> {
         console.warn('[mood-music] Freesound returned no usable results for mood:', mood);
       }
     } catch (e) {
-      console.warn('[mood-music] Freesound fetch failed, falling back to Incompetech:', e);
+      console.warn('[mood-music] Freesound fetch failed, falling back to archive.org:', e);
     }
   } else {
-    console.warn('[mood-music] FREESOUND_API_KEY not set, using Incompetech fallback');
+    console.warn('[mood-music] FREESOUND_API_KEY not set, using archive.org fallback');
   }
 
-  return FALLBACK_TRACKS[mood] ?? null;
+  const fallback = FALLBACK_TRACKS[mood];
+  if (!fallback) return null;
+
+  // Verify the fallback URL is reachable before returning it
+  try {
+    const check = await fetch(fallback.musicUrl, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!check.ok) {
+      console.warn('[mood-music] fallback URL unreachable (HTTP', check.status, ') for mood:', mood);
+      return null;
+    }
+  } catch (e) {
+    console.warn('[mood-music] fallback HEAD check failed for mood:', mood, e);
+    return null;
+  }
+
+  return fallback;
 }
 
 export async function getMusicForCaption(
