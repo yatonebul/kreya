@@ -127,6 +127,17 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
     };
   }, [renderingBg, postId, token, phone]);
 
+  function toggleCaptionOn() {
+    if (!captionOn && !captionText.trim() && postCaption) {
+      // Auto-fill from post caption: strip hashtags, take first line, cap at 60 chars
+      const noTags = postCaption.replace(/#\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+      const firstLine = noTags.split('\n')[0].trim();
+      const short = firstLine.length > 60 ? firstLine.slice(0, 60).replace(/\s+\S*$/, '…') : firstLine;
+      if (short) setCaptionText(short);
+    }
+    setCaptionOn(v => !v);
+  }
+
   const buildUpdatedTimeline = useCallback((): KreyaTimeline | null => {
     if (!timeline) return null;
     const updatedVideo: VideoTrack[] = timeline.tracks.video.map(track => ({
@@ -355,7 +366,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,.5)', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'Space Mono, monospace' }}>Caption on video</h2>
-            <button onClick={() => setCaptionOn(v => !v)}
+            <button onClick={toggleCaptionOn}
               className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
               style={{ background: captionOn ? '#5E35FF' : '#201D3C' }}>
               <span className="inline-block h-4 w-4 rounded-full bg-white shadow transition-transform"
