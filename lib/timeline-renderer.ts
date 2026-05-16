@@ -119,6 +119,7 @@ function escapeDrawtext(text: string): string {
     .replace(/'/g, "\\'")
     .replace(/:/g, '\\:')
     .replace(/%/g, '\\%')
+    .replace(/\n/g, '\\n')  // actual newlines break filter_complex parser; use literal \n
     .trim();
 }
 
@@ -275,7 +276,6 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           `text='${wrapped}':` +
           `fontsize=${fontSize}:` +
           `fontcolor=white:` +
-          `font=sans-serif:` +
           `line_spacing=6:` +
           `box=1:` +
           `boxcolor=black@0.55:` +
@@ -317,8 +317,7 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           cmd.input(localPaths[i]).inputOptions(['-t', String(track.duration)]);
         }
       });
-      // -stream_loop -1: demuxer-level infinite loop — zero memory overhead vs aloop
-      if (musicPath) cmd.input(musicPath).inputOptions(['-stream_loop', '-1']);
+      if (musicPath) cmd.input(musicPath);
 
       const mapArgs = ['-map', '[vout]'];
       if (musicPath) mapArgs.push('-map', '[aout]');
@@ -337,6 +336,7 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
             : ['-an']),
         ])
         .output(outPath)
+        .on('stderr', (line: string) => { if (line.includes('Error') || line.includes('error') || line.includes('Invalid')) console.error('[ffmpeg]', line); })
         .on('end', () => resolve())
         .on('error', (err: Error) => reject(new Error(`FFmpeg timeline: ${err.message}`)))
         .run();
