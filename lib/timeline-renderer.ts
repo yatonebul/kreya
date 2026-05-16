@@ -254,14 +254,17 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       postVideoLabel = '[vgraded]';
     }
 
-    // Captions — applied sequentially on top of video
+    // Captions — applied sequentially on top of video.
+    // SKIP for preview: drawtext requires fontconfig which is missing on Vercel Lambda
+    // (causes FFmpeg failure ~18s in). Browser editor shows the caption as a CSS overlay,
+    // so users still see it on preview. HD renders need a bundled font (TODO).
     let captionLabel = postVideoLabel;
-    if (captions?.length) {
+    if (captions?.length && !isPreview) {
       captions.forEach((cap, idx) => {
         const platform = cap.platform ?? 'ig-reels';
         const yOffset  = CAPTION_Y_OFFSET[platform];
-        const fontSize = cap.fontSize ?? (isPreview ? 20 : 40);
-        const wrapped  = escapeDrawtext(wrapLines(cap.text, isPreview ? 24 : 38));
+        const fontSize = cap.fontSize ?? 40;
+        const wrapped  = escapeDrawtext(wrapLines(cap.text, 38));
         const inLbl    = captionLabel;
         captionLabel   = idx === captions!.length - 1 ? '[vout]' : `[vcap${idx}]`;
 
