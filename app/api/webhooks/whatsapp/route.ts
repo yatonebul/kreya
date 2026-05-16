@@ -961,6 +961,10 @@ async function handleButtonReply(from: string, action: string, postId: string | 
     await handleAnimationFallbackRetry(from, postId);
     return;
   }
+  if (action === 'rerender' && postId) {
+    await handleWebEditorRerender(from, postId);
+    return;
+  }
   if (action === 'spin_reel_assets' && postId) {
     await handleSpinReelWithAssets(from, postId);
     return;
@@ -2300,6 +2304,47 @@ async function handleAnimationFallbackStatic(from: string, postId: string) {
 
   await sendText(from, '📸 Posting as a static image instead. Here\'s what it will look like:');
   await sendPostPreview(from, post.user_image_url, post.caption, postId, false, post.surface ?? 'feed');
+}
+
+async function handleWebEditorRerender(from: string, postId: string) {
+  const supabase = getSupabase();
+  const { data: post } = await supabase
+    .from('pending_posts')
+    .select('id, user_image_url, caption, timeline_json, whatsapp_phone')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (!post) { await sendText(from, '⚠️ Post not found.'); return; }
+
+  await sendText(from, '⏳ Re-rendering your preview…');
+
+  after(async () => {
+    try {
+      // Use stored timeline_json if available, otherwise build from image
+      let timeline = post.timeline_json as import('@/lib/timeline-schema').KreyaTimeline | null;
+      if (!timeline) {
+        timeline = buildAtomicTimeline(
+          [{ url: post.user_image_url, type: 'image' }],
+          { resolution: 'preview', aspectRatio: '9:16', bgStyle: 'blur' },
+        );
+      } else {
+        timeline = { ...timeline, resolution: 'preview' };
+      }
+
+      const { publicUrl } = await renderTimeline(timeline);
+
+      await supabase.from('pending_posts')
+        .update({ image_url: publicUrl, timeline_json: timeline })
+        .eq('id', postId);
+
+      await sendText(from, '✏️ *Preview updated!* Here\'s your updated reel:');
+      await sendVideoMessage(from, publicUrl);
+      await sendPostPreview(from, publicUrl, post.caption ?? '', postId, true, 'reels');
+    } catch (err) {
+      console.error('[rerender-wa] failed:', err);
+      await sendRetryButton(from, `rerender:${postId}`, '⚠️ Render failed again — try one more time or tweak settings in the web editor.').catch(() => {});
+    }
+  });
 }
 
 async function handleAnimationFallbackRetry(from: string, postId: string) {

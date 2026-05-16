@@ -63,6 +63,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   const videoRef              = useRef<HTMLVideoElement>(null);
   const renderStartUrlRef     = useRef<string>('');
   const pollIntervalRef       = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef        = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -95,8 +96,10 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   useEffect(() => {
     if (!renderingBg) {
       if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+      if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
       return;
     }
+    // Poll every 5s for up to 90s, then surface error
     pollIntervalRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/posts/${postId}/timeline?t=${token}&phone=${encodeURIComponent(phone)}`);
@@ -108,10 +111,20 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
           setRenderDone(true);
           if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
           if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+          if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
         }
       } catch {}
     }, 5000);
-    return () => { if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; } };
+    // Timeout: if no update after 90s, render has failed
+    pollTimeoutRef.current = setTimeout(() => {
+      if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+      setRenderingBg(false);
+      setError('Render timed out — check WhatsApp for a retry button, or tap Apply Changes to try again.');
+    }, 90_000);
+    return () => {
+      if (pollIntervalRef.current) { clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
+      if (pollTimeoutRef.current)  { clearTimeout(pollTimeoutRef.current);   pollTimeoutRef.current  = null; }
+    };
   }, [renderingBg, postId, token, phone]);
 
   const buildUpdatedTimeline = useCallback((): KreyaTimeline | null => {

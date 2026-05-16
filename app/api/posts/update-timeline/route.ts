@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { renderTimeline } from '@/lib/timeline-renderer';
 import { getMusicForCaption } from '@/lib/mood-music';
 import type { KreyaTimeline } from '@/lib/timeline-schema';
-import { sendText, sendVideoMessage, sendPostPreview } from '@/lib/whatsapp-send';
+import { sendText, sendVideoMessage, sendPostPreview, sendRetryButton } from '@/lib/whatsapp-send';
 
 export const maxDuration = 120;
 
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('[update-timeline] background render failed:', err);
       if (waPhone) {
-        await sendText(waPhone, '⚠️ Render ran into trouble — tap Edit in the web editor to try again.').catch(() => {});
+        await sendRetryButton(waPhone, `rerender:${postId}`, '⚠️ Preview render failed — tap to try again.').catch(() => {});
       }
     }
   });

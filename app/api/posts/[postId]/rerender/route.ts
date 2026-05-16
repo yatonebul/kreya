@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { getMusicForCaption } from '@/lib/mood-music';
 import { buildAtomicTimeline } from '@/lib/media-buffer';
 import { renderTimeline } from '@/lib/timeline-renderer';
-import { sendText, sendVideoMessage, sendPostPreview } from '@/lib/whatsapp-send';
+import { sendText, sendVideoMessage, sendPostPreview, sendRetryButton } from '@/lib/whatsapp-send';
 import type { KenBurnsStyle, ColorGrade, CaptionTrack } from '@/lib/timeline-schema';
 
 export const maxDuration = 120;
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
     } catch (err) {
       console.error('[rerender] background render failed:', err);
       if (waPhone) {
-        await sendText(waPhone, '⚠️ Render ran into trouble — tap Edit in the web editor to try again.').catch(() => {});
+        await sendRetryButton(waPhone, `rerender:${postId}`, '⚠️ Preview render failed — tap to try again.').catch(() => {});
       }
     }
   });

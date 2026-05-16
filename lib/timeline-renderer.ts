@@ -185,15 +185,11 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       if (effect.type === 'ken-burns') {
         const zStart = effect.zoomStart ?? 1.0;
         const zEnd   = effect.zoomEnd   ?? 1.3;
-        // For preview, use full-res canvas for zoompan then scale down at end
-        filterParts.push(
-          kenBurnsFilter(inLabel, `[kb${i}]`, fullDims.w, fullDims.h, frames, zStart, zEnd),
-        );
-        if (isPreview) {
-          filterParts.push(`[kb${i}]scale=${w}:${h},setsar=1${outLabel}`);
-        } else {
-          filterParts.push(`[kb${i}]setsar=1${outLabel}`);
-        }
+        // Preview: render at output dims directly — avoids 4K internal buffer
+        // HD: render at full canvas dims for maximum quality
+        const kbW = isPreview ? w : fullDims.w;
+        const kbH = isPreview ? h : fullDims.h;
+        filterParts.push(kenBurnsFilter(inLabel, outLabel, kbW, kbH, frames, zStart, zEnd));
       } else {
         if (bgStyle === 'blur') {
           filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));
@@ -209,7 +205,10 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
     let videoOut = '[vconcat]';
     const hasAnyFade = videoTracks.some(t => t.transition === 'fade');
 
-    if (hasAnyFade && videoTracks.length > 1) {
+    if (videoTracks.length === 1) {
+      // Single clip — null passthrough (concat=n=1 is non-standard and can crash)
+      filterParts.push(`${clipLabels[0]}null${videoOut}`);
+    } else if (hasAnyFade && videoTracks.length > 1) {
       // Build xfade chain for clips that request fade transition
       let prevLabel = clipLabels[0];
       let accDuration = videoTracks[0].duration;
