@@ -260,10 +260,25 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       postVideoLabel = '[vgraded]';
     }
 
+    // ── Caption rendering ─────────────────────────────────────────────────────
+    // Check font availability before attempting drawtext. outputFileTracingIncludes
+    // bundles the TTF but if it's missing for any reason we skip captions gracefully.
+    const geistAvailable = await fs.access(GEIST_FONT).then(() => true).catch(() => false);
+    console.log('[renderTimeline] Geist TTF:', geistAvailable ? 'found' : 'MISSING', GEIST_FONT);
+
+    if (geistAvailable) {
+      // Minimal fontconfig: empty <fontconfig/> so fontconfig initialises instantly
+      // (no dirs to scan = no 18s timeout). drawtext loads the font directly via
+      // fontfile= / FreeType — fontconfig discovery is not needed when fontfile= is set.
+      const fcConf = path.join(os.tmpdir(), `kreya-fc-${Date.now()}.conf`);
+      await fs.writeFile(fcConf, '<?xml version="1.0"?><fontconfig/>');
+      process.env.FONTCONFIG_FILE = fcConf;
+      process.env.FC_CONFIG_FILE  = fcConf;  // older fontconfig env var name
+    }
+
     // Captions — applied sequentially on top of video.
-    // fontfile= required: Lambda has no fontconfig; drawtext crashes without explicit font path.
     let captionLabel = postVideoLabel;
-    if (captions?.length) {
+    if (captions?.length && geistAvailable) {
       captions.forEach((cap, idx) => {
         const platform = cap.platform ?? 'ig-reels';
         const yOffset  = CAPTION_Y_OFFSET[platform];
@@ -295,45 +310,30 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
         filterParts.push(drawtextFilter);
       });
     } else {
+      if (!geistAvailable && captions?.length) {
+        console.warn('[renderTimeline] skipping caption burn — Geist font not in bundle');
+      }
       // Rename final video label to [vout]
       if (captionLabel !== '[vout]') {
         filterParts.push(`${captionLabel}null[vout]`);
       }
     }
 
+    // Audio volume filter — must define [aout] label before FFmpeg command is built
     const audioInputIdx = videoTracks.length;
     if (musicPath && audio) {
-      const vol = audio.volume ?? 0.4;
-      if (isPreview) {
-        // Preview: skip afade — it can stall filter-graph teardown when audio >> video duration.
-        // Music is already trimmed by -t on the input; just set volume.
+      const vol    = audio.volume ?? 0.4;
+      // Skip afade for preview/hd-fast: can stall filter teardown when music >> video duration.
+      // Music is already trimmed by -t on input; just set volume.
+      if (isPreview || isHdFast) {
         filterParts.push(`[${audioInputIdx}:a]volume=${vol}[aout]`);
       } else {
         const fadeAt = audio.fadeOutAt ?? Math.max(0, timeline.totalDuration - 2);
         filterParts.push(
-          `[${audioInputIdx}:a]` +
-          `afade=t=out:st=${fadeAt}:d=2,` +
-          `volume=${vol}[aout]`,
+          `[${audioInputIdx}:a]afade=t=out:st=${fadeAt}:d=2,volume=${vol}[aout]`,
         );
       }
     }
-
-    // ── Build FFmpeg command ────────────────────────────────────────────────
-    // Set up a minimal fontconfig environment so drawtext can find Geist-Regular.ttf.
-    // Without this, fontconfig scans system font dirs (which don't exist on Lambda),
-    // times out for ~18s, and then crashes. FONTCONFIG_FILE must be set before spawn.
-    const fcDir  = path.join(os.tmpdir(), `fc-${Date.now()}`);
-    await fs.mkdir(fcDir, { recursive: true });
-    const fcConf = path.join(fcDir, 'fonts.conf');
-    await fs.writeFile(fcConf,
-      `<?xml version="1.0"?>\n` +
-      `<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">\n` +
-      `<fontconfig>\n` +
-      `  <dir>${path.dirname(GEIST_FONT)}</dir>\n` +
-      `  <cachedir>${fcDir}</cachedir>\n` +
-      `</fontconfig>`,
-    );
-    process.env.FONTCONFIG_FILE = fcConf;
 
     console.log('[renderTimeline] filter_complex:', filterParts.join(';').slice(0, 800));
     await new Promise<void>((resolve, reject) => {
