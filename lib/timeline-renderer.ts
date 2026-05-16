@@ -294,14 +294,13 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       }
     }
 
-    // Audio
+    // Audio — use -stream_loop -1 on the input (demuxer-level loop, no aloop buffer)
     const audioInputIdx = videoTracks.length;
     if (musicPath && audio) {
       const vol    = audio.volume ?? 0.4;
       const fadeAt = audio.fadeOutAt ?? Math.max(0, timeline.totalDuration - 2);
       filterParts.push(
         `[${audioInputIdx}:a]` +
-        `aloop=loop=-1:size=2147483647,` +
         `afade=t=out:st=${fadeAt}:d=2,` +
         `volume=${vol}[aout]`,
       );
@@ -318,7 +317,8 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
           cmd.input(localPaths[i]).inputOptions(['-t', String(track.duration)]);
         }
       });
-      if (musicPath) cmd.input(musicPath);
+      // -stream_loop -1: demuxer-level infinite loop — zero memory overhead vs aloop
+      if (musicPath) cmd.input(musicPath).inputOptions(['-stream_loop', '-1']);
 
       const mapArgs = ['-map', '[vout]'];
       if (musicPath) mapArgs.push('-map', '[aout]');
