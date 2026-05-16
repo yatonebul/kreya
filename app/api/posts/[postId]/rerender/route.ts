@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
       const timeline = buildAtomicTimeline(
         [{ url: post.user_image_url, type: 'image' }],
         {
-          resolution:  'preview',
+          resolution:  'hd-fast',   // 1080p ultrafast — publishable quality, no slow zoompan
           aspectRatio: '9:16',
           colorGrade,
           bgStyle:     bgStyle ?? 'blur',
@@ -81,8 +81,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
         },
       );
 
-      if (animationStyle && timeline.tracks.video[0]) {
-        timeline.tracks.video[0].effect = { type: 'ken-burns', style: animationStyle, zoomStart: 1.0, zoomEnd: 1.3 };
+      // Default to static to avoid slow zoompan at 1080p; ken-burns only when user picks a style
+      if (timeline.tracks.video[0]) {
+        timeline.tracks.video[0].effect = animationStyle
+          ? { type: 'ken-burns', style: animationStyle, zoomStart: 1.0, zoomEnd: 1.3 }
+          : { type: 'static' };
       }
 
       if (captionPosition && timeline.tracks.captions?.length) {

@@ -13,6 +13,10 @@ import type {
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
+// Geist-Regular.ttf is bundled with next/dist (included via outputFileTracingIncludes).
+// drawtext requires a fontfile= on Lambda — fontconfig is not available.
+const GEIST_FONT = path.join(process.cwd(), 'node_modules/next/dist/compiled/@vercel/og/Geist-Regular.ttf');
+
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL!,
@@ -91,7 +95,7 @@ function blurBgFilter(inputLabel: string, outLabel: string, w: number, h: number
   return (
     `${inputLabel}split=2[_bb${idx}][_bf${idx}];` +
     `[_bb${idx}]scale=${w}:${h}:force_original_aspect_ratio=increase,` +
-      `crop=${w}:${h},boxblur=20:5[_bg${idx}];` +
+      `crop=${w}:${h},boxblur=20:1[_bg${idx}];` +
     `[_bf${idx}]scale=${w}:${h}:force_original_aspect_ratio=decrease,` +
       `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1[_fg${idx}];` +
     `[_bg${idx}][_fg${idx}]overlay=(W-w)/2:(H-h)/2${outLabel}`
@@ -150,6 +154,8 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
   if (!videoTracks.length) throw new Error('renderTimeline: no video tracks');
 
   const isPreview = resolution === 'preview';
+  // hd-fast: 1080p but ultrafast preset and no zoompan — web editor path, publishable quality
+  const isHdFast  = resolution === 'hd-fast';
   const fullDims  = DIMS[aspectRatio];
   const outDims   = isPreview ? PREVIEW_SCALE[aspectRatio] : fullDims;
   const { w, h }  = outDims;
@@ -186,9 +192,9 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       const effect = track.effect ?? { type: 'ken-burns', style: 'elegant' };
 
       if (effect.type === 'ken-burns') {
-        if (isPreview) {
-          // Preview: skip zoompan — it crashes on serverless containers (OOM/slowness).
-          // Just show the composition framing; animation only matters for HD exports.
+        if (isPreview || isHdFast) {
+          // Skip zoompan for preview (OOM risk) and hd-fast (too slow on Lambda CPU at 1080p).
+          // hd-fast outputs publishable 1080p with blur bg without the zoompan CPU cost.
           if (bgStyle === 'blur') {
             filterParts.push(blurBgFilter(inLabel, outLabel, w, h, i));
           } else {
@@ -255,16 +261,14 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
     }
 
     // Captions — applied sequentially on top of video.
-    // SKIP for preview: drawtext requires fontconfig which is missing on Vercel Lambda
-    // (causes FFmpeg failure ~18s in). Browser editor shows the caption as a CSS overlay,
-    // so users still see it on preview. HD renders need a bundled font (TODO).
+    // fontfile= required: Lambda has no fontconfig; drawtext crashes without explicit font path.
     let captionLabel = postVideoLabel;
-    if (captions?.length && !isPreview) {
+    if (captions?.length) {
       captions.forEach((cap, idx) => {
         const platform = cap.platform ?? 'ig-reels';
         const yOffset  = CAPTION_Y_OFFSET[platform];
-        const fontSize = cap.fontSize ?? 40;
-        const wrapped  = escapeDrawtext(wrapLines(cap.text, 38));
+        const fontSize = cap.fontSize ?? (isPreview ? 20 : 40);
+        const wrapped  = escapeDrawtext(wrapLines(cap.text, isPreview ? 24 : 38));
         const inLbl    = captionLabel;
         captionLabel   = idx === captions!.length - 1 ? '[vout]' : `[vcap${idx}]`;
 
@@ -276,6 +280,7 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
 
         const drawtextFilter =
           `${inLbl}drawtext=` +
+          `fontfile=${GEIST_FONT}:` +
           `text='${wrapped}':` +
           `fontsize=${fontSize}:` +
           `fontcolor=white:` +
@@ -339,11 +344,11 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
         .outputOptions([
           ...mapArgs,
           '-c:v', 'libx264',
-          '-preset', isPreview ? 'ultrafast' : 'fast',
-          '-crf',    isPreview ? '28' : '22',
+          '-preset', (isPreview || isHdFast) ? 'ultrafast' : 'fast',
+          '-crf',    isPreview ? '28' : isHdFast ? '24' : '22',
           '-pix_fmt', 'yuv420p',
-          // Skip +faststart for preview — avoids moov-atom rewrite at end which can fail on Lambda
-          ...(isPreview ? [] : ['-movflags', '+faststart']),
+          // Skip +faststart for non-hd renders — avoids moov-atom rewrite at end which can fail on Lambda
+          ...(!isPreview && !isHdFast ? ['-movflags', '+faststart'] : []),
           ...(musicPath
             ? ['-c:a', 'aac', '-b:a', '128k', '-shortest']
             : ['-an']),

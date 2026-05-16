@@ -1,5 +1,8 @@
 export type AspectRatio = '9:16' | '1:1' | '16:9'
-export type RenderResolution = 'preview' | 'hd'
+// preview: 480p ultrafast — fast WA preview
+// hd-fast: 1080p ultrafast no-zoompan — web editor output (publishable quality, fast enough)
+// hd: 1080p fast with zoompan — final animated HD (slow, future use)
+export type RenderResolution = 'preview' | 'hd-fast' | 'hd'
 
 export type KenBurnsStyle = 'quick-zoom' | 'elegant' | 'cinematic' | 'float' | 'focus-zoom'
 
