@@ -8,25 +8,9 @@ import type {
   KreyaTimeline,
   VideoTrack,
   ColorGrade,
-  CaptionPlatform,
 } from './timeline-schema';
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
-
-// Geist-Regular.ttf is bundled with next/dist (included via outputFileTracingIncludes).
-// drawtext requires a fontfile= on Lambda — fontconfig is not available.
-const GEIST_FONT = path.join(process.cwd(), 'node_modules/next/dist/compiled/@vercel/og/Geist-Regular.ttf');
-
-// Geist Regular has no emoji glyphs. Emoji in drawtext causes fontconfig to search
-// for a fallback font — which crashes on Lambda (no system fonts). Strip them before
-// passing text to drawtext. Latin, Cyrillic, and common punctuation are kept.
-function stripEmojiForDrawtext(text: string): string {
-  return text
-    .replace(/\p{Emoji_Presentation}/gu, '')
-    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
 
 function getSupabase() {
   return createClient(
@@ -48,14 +32,6 @@ const PREVIEW_SCALE = {
   '1:1':  { w: 480, h: 480 },
   '16:9': { w: 854, h: 480 },
 } as const;
-
-// ── Caption safe-zone Y offsets by platform ───────────────────────────────────
-
-const CAPTION_Y_OFFSET: Record<CaptionPlatform, number> = {
-  'tiktok':          60,
-  'ig-reels':        100,
-  'facebook-reels':  80,
-};
 
 // ── Color grade FFmpeg filter strings ─────────────────────────────────────────
 
@@ -125,33 +101,6 @@ async function downloadTmp(url: string, ext: string): Promise<string> {
 function extFromUrl(url: string, type: 'image' | 'video'): string {
   const m = url.match(/\.(\w{2,4})(?:\?|$)/);
   return m ? m[1] : type === 'image' ? 'jpg' : 'mp4';
-}
-
-function escapeDrawtext(text: string): string {
-  return text
-    .replace(/\p{Emoji}/gu, '')  // Linux Lambda fonts lack emoji glyphs; drawtext crashes
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/:/g, '\\:')
-    .replace(/%/g, '\\%')
-    .replace(/\n/g, '\\n')  // actual newlines break filter_complex parser; use literal \n
-    .trim();
-}
-
-function wrapLines(text: string, maxChars = 38): string {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    if ((current + ' ' + word).trim().length > maxChars && current.length) {
-      lines.push(current.trim());
-      current = word;
-    } else {
-      current = (current + ' ' + word).trim();
-    }
-  }
-  if (current) lines.push(current.trim());
-  return lines.join('\n');
 }
 
 // ── Main renderer ─────────────────────────────────────────────────────────────
@@ -272,63 +221,17 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
     }
 
     // ── Caption rendering ─────────────────────────────────────────────────────
-    // Check font availability before attempting drawtext. outputFileTracingIncludes
-    // bundles the TTF but if it's missing for any reason we skip captions gracefully.
-    const geistAvailable = await fs.access(GEIST_FONT).then(() => true).catch(() => false);
-    console.log('[renderTimeline] Geist TTF:', geistAvailable ? 'found' : 'MISSING', GEIST_FONT);
-
-    if (geistAvailable) {
-      // Minimal fontconfig: empty <fontconfig/> so fontconfig initialises instantly
-      // (no dirs to scan = no 18s timeout). drawtext loads the font directly via
-      // fontfile= / FreeType — fontconfig discovery is not needed when fontfile= is set.
-      const fcConf = path.join(os.tmpdir(), `kreya-fc-${Date.now()}.conf`);
-      await fs.writeFile(fcConf, '<?xml version="1.0"?><fontconfig/>');
-      process.env.FONTCONFIG_FILE = fcConf;
-      process.env.FC_CONFIG_FILE  = fcConf;  // older fontconfig env var name
+    // drawtext calls FcInit() even when fontfile= is specified, causing an
+    // 18-20s hang on Lambda (no /etc/fonts to scan but fontconfig still tries).
+    // FONTCONFIG_FILE override is ignored when fontconfig is initialized via
+    // the shared library at process start. Burned-in captions are disabled
+    // until we implement a PNG-overlay approach (no fontconfig required).
+    const captionLabel = postVideoLabel;
+    if (captions?.length) {
+      console.log('[renderTimeline] captions present but burn skipped — drawtext disabled on Lambda');
     }
-
-    // Captions — applied sequentially on top of video.
-    let captionLabel = postVideoLabel;
-    if (captions?.length && geistAvailable) {
-      captions.forEach((cap, idx) => {
-        const platform = cap.platform ?? 'ig-reels';
-        const yOffset  = CAPTION_Y_OFFSET[platform];
-        const fontSize  = cap.fontSize ?? (isPreview ? 20 : 40);
-        const safeText  = stripEmojiForDrawtext(cap.text);
-        const wrapped   = escapeDrawtext(wrapLines(safeText, isPreview ? 24 : 38));
-        const inLbl    = captionLabel;
-        captionLabel   = idx === captions!.length - 1 ? '[vout]' : `[vcap${idx}]`;
-
-        const yExpr = cap.position === 'top'
-          ? `${yOffset}`
-          : cap.position === 'center'
-          ? '(h-text_h)/2'
-          : `h-text_h-${yOffset}`;
-
-        const drawtextFilter =
-          `${inLbl}drawtext=` +
-          `fontfile=${GEIST_FONT}:` +
-          `text='${wrapped}':` +
-          `fontsize=${fontSize}:` +
-          `fontcolor=white:` +
-          `box=1:` +
-          `boxcolor=black@0.55:` +
-          `boxborderw=12:` +
-          `x=(w-text_w)/2:` +
-          `y=${yExpr}:` +
-          `enable='between(t,${cap.startTime},${cap.startTime + cap.duration})'` +
-          captionLabel;
-
-        filterParts.push(drawtextFilter);
-      });
-    } else {
-      if (!geistAvailable && captions?.length) {
-        console.warn('[renderTimeline] skipping caption burn — Geist font not in bundle');
-      }
-      // Rename final video label to [vout]
-      if (captionLabel !== '[vout]') {
-        filterParts.push(`${captionLabel}null[vout]`);
-      }
+    if (captionLabel !== '[vout]') {
+      filterParts.push(`${captionLabel}null[vout]`);
     }
 
     // Audio volume filter — must define [aout] label before FFmpeg command is built
