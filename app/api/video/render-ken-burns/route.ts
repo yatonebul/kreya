@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
           ? `${appUrl}/edit/${postId}?t=${makeEditToken(postId, phone)}&phone=${encodeURIComponent(phone)}`
           : undefined;
 
-        await sendPreviewOptions(phone, postId, videoUrl, post?.caption, editUrl);
+        await sendPreviewOptions(phone, postId, videoUrl, undefined, editUrl);
 
         // For multi-clip posts: send up to 4 more music options as audio previews
         if (isMultiClip && musicIncluded && musicUrl) {

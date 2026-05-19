@@ -318,7 +318,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
             )}
           </div>
         )}
-        {captionOn && captionText && (
+        {captionOn && captionText && !previewUrl && (
           <div className={`absolute left-2 right-2 text-center pointer-events-none ${captionPosition === 'top' ? 'top-8' : captionPosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-8'}`}>
             <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(0,0,0,.55)', color: '#fff' }}>
               {captionText.slice(0, 60)}{captionText.length > 60 ? '…' : ''}
