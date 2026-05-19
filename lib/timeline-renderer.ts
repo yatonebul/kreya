@@ -4,8 +4,6 @@ import ffmpegPath from 'ffmpeg-static';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
-import { createElement } from 'react';
-import { ImageResponse } from 'next/og';
 import type {
   KreyaTimeline,
   VideoTrack,
@@ -21,11 +19,17 @@ const GEIST_FONT = path.join(
 
 // Generate a transparent PNG with the caption text using ImageResponse (Satori + Resvg).
 // This is completely fontconfig-free — no FFmpeg drawtext, no libfontconfig.
+// Dynamic imports keep next/og WASM out of the module-level bundle so it doesn't
+// break Lambda cold starts for routes that don't use captions.
 async function generateCaptionPng(
   cap: CaptionTrack,
   w: number,
   h: number,
 ): Promise<string> {
+  // Lazy-load next/og + react so their WASM/native binaries are only resolved when needed
+  const { ImageResponse } = await import('next/og');
+  const { createElement }  = await import('react');
+
   const fontBuffer = await fs.readFile(GEIST_FONT);
   // Use a standalone ArrayBuffer slice to avoid Node.js Buffer offset issues
   const fontData = fontBuffer.buffer.slice(
