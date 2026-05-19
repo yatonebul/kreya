@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { getMusicForCaption } from '@/lib/mood-music';
 import { buildAtomicTimeline } from '@/lib/media-buffer';
 import { renderTimeline } from '@/lib/timeline-renderer';
-import { sendText, sendVideoMessage, sendPostPreview, sendRetryButton } from '@/lib/whatsapp-send';
+import { sendText, sendVideoMessage, sendPostPreview, sendPreviewOptions, sendRetryButton } from '@/lib/whatsapp-send';
 import type { KenBurnsStyle, ColorGrade, CaptionTrack } from '@/lib/timeline-schema';
 
 export const maxDuration = 120;
@@ -99,9 +99,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pos
         .eq('id', postId);
 
       if (waPhone) {
-        await sendText(waPhone, '✏️ *Preview updated!* Here\'s your updated reel:');
         await sendVideoMessage(waPhone, publicUrl);
-        await sendPostPreview(waPhone, publicUrl, effectiveCaption, postId, true, 'reels');
+        // Send approval options without repeating caption (user already saw it when reel was created)
+        // Only show full caption + options if caption text was changed in this edit
+        const captionChanged = postCaption !== undefined && postCaption !== post.caption;
+        if (captionChanged) {
+          await sendPostPreview(waPhone, publicUrl, effectiveCaption, postId, true, 'reels');
+        } else {
+          await sendPreviewOptions(waPhone, postId, publicUrl);
+        }
       }
     } catch (err) {
       console.error('[rerender] background render failed:', err);

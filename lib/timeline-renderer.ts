@@ -4,11 +4,88 @@ import ffmpegPath from 'ffmpeg-static';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { createElement } from 'react';
+import { ImageResponse } from 'next/og';
 import type {
   KreyaTimeline,
   VideoTrack,
   ColorGrade,
+  CaptionTrack,
 } from './timeline-schema';
+
+// Geist-Regular.ttf bundled via outputFileTracingIncludes — used for caption PNG overlay
+const GEIST_FONT = path.join(
+  process.cwd(),
+  'node_modules/next/dist/compiled/@vercel/og/Geist-Regular.ttf',
+);
+
+// Generate a transparent PNG with the caption text using ImageResponse (Satori + Resvg).
+// This is completely fontconfig-free — no FFmpeg drawtext, no libfontconfig.
+async function generateCaptionPng(
+  cap: CaptionTrack,
+  w: number,
+  h: number,
+): Promise<string> {
+  const fontBuffer = await fs.readFile(GEIST_FONT);
+  // Use a standalone ArrayBuffer slice to avoid Node.js Buffer offset issues
+  const fontData = fontBuffer.buffer.slice(
+    fontBuffer.byteOffset,
+    fontBuffer.byteOffset + fontBuffer.byteLength,
+  ) as ArrayBuffer;
+
+  const fontSize = Math.round(h * 0.022);   // ~42 px at 1920 h
+  const padSide  = Math.round(w * 0.045);   // horizontal padding from edges
+  const padEdge  = cap.position === 'top'
+    ? Math.round(h * 0.04)    // ~77 px from top
+    : Math.round(h * 0.055);  // ~106 px from bottom
+
+  const justifyContent = cap.position === 'top'    ? 'flex-start'
+                       : cap.position === 'center' ? 'center'
+                       :                             'flex-end';
+
+  const response = new ImageResponse(
+    createElement(
+      'div',
+      {
+        style: {
+          width: '100%', height: '100%',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent,
+          paddingTop:    cap.position === 'top'    ? padEdge : 0,
+          paddingBottom: cap.position === 'bottom' ? padEdge : 0,
+          paddingLeft:   padSide,
+          paddingRight:  padSide,
+          background:    'transparent',
+        },
+      },
+      createElement(
+        'div',
+        {
+          style: {
+            background:   'rgba(0,0,0,0.55)',
+            color:        'white',
+            padding:      '14px 24px',
+            borderRadius: 10,
+            fontSize,
+            fontFamily:   'Geist',
+            textAlign:    'center',
+            lineHeight:   1.4,
+            maxWidth:     '88%',
+            wordBreak:    'break-word',
+          },
+        },
+        cap.text,
+      ),
+    ),
+    { width: w, height: h, fonts: [{ name: 'Geist', data: fontData }] },
+  );
+
+  const buf     = Buffer.from(await response.arrayBuffer());
+  const pngPath = path.join(os.tmpdir(), `kreya-cap-${Date.now()}.png`);
+  await fs.writeFile(pngPath, buf);
+  return pngPath;
+}
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -220,18 +297,23 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       postVideoLabel = '[vgraded]';
     }
 
-    // ── Caption rendering ─────────────────────────────────────────────────────
-    // drawtext calls FcInit() even when fontfile= is specified, causing an
-    // 18-20s hang on Lambda (no /etc/fonts to scan but fontconfig still tries).
-    // FONTCONFIG_FILE override is ignored when fontconfig is initialized via
-    // the shared library at process start. Burned-in captions are disabled
-    // until we implement a PNG-overlay approach (no fontconfig required).
-    const captionLabel = postVideoLabel;
+    // ── Caption overlay (PNG via ImageResponse — no fontconfig) ──────────────
+    let captionPngPath: string | null = null;
     if (captions?.length) {
-      console.log('[renderTimeline] captions present but burn skipped — drawtext disabled on Lambda');
+      try {
+        captionPngPath = await generateCaptionPng(captions[0], outDims.w, outDims.h);
+        tmpFiles.push(captionPngPath);
+        console.log('[renderTimeline] caption PNG generated');
+      } catch (err) {
+        console.warn('[renderTimeline] caption overlay failed, skipping:', err);
+      }
     }
-    if (captionLabel !== '[vout]') {
-      filterParts.push(`${captionLabel}null[vout]`);
+
+    const captionInputIdx = videoTracks.length + (musicPath ? 1 : 0);
+    if (captionPngPath) {
+      filterParts.push(`${postVideoLabel}[${captionInputIdx}:v]overlay=0:0[vout]`);
+    } else if (postVideoLabel !== '[vout]') {
+      filterParts.push(`${postVideoLabel}null[vout]`);
     }
 
     // Audio volume filter — must define [aout] label before FFmpeg command is built
@@ -263,6 +345,8 @@ export async function renderTimeline(timeline: KreyaTimeline): Promise<RenderRes
       });
       // Cap music at video duration so filter teardown is instantaneous
       if (musicPath) cmd.input(musicPath).inputOptions(['-t', String(timeline.totalDuration + 0.5)]);
+      // Caption PNG looped for video duration (transparent, composited via overlay filter)
+      if (captionPngPath) cmd.input(captionPngPath).inputOptions(['-loop', '1', '-t', String(timeline.totalDuration + 0.5)]);
 
       const mapArgs = ['-map', '[vout]'];
       if (musicPath) mapArgs.push('-map', '[aout]');

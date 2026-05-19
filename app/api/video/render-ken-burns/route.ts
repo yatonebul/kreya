@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       // Send caption immediately — user gets feedback while render is in progress
       if (isPreview && caption) {
         await sendText(phone,
-          `✍️ *Your caption is ready!*\n\n${caption}\n\n🎬 Rendering your reel — this takes ~15 seconds...`
+          `✍️ *Your caption is ready!*\n\n${caption}\n\n🎬 Rendering your reel — ready in seconds...`
         ).catch(() => {});
       }
 
