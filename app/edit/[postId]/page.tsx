@@ -59,13 +59,15 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   const [loadError,       setLoadError]       = useState('');  // full-screen error
   const [renderStatus,    setRenderStatus]    = useState<RenderStatus>('idle');
   const [renderMsg,       setRenderMsg]       = useState('');  // inline status message
-  const [dragIdx,         setDragIdx]         = useState<number | null>(null);
-  const [noTimeline,      setNoTimeline]      = useState(false);
+  const [dragIdx,          setDragIdx]          = useState<number | null>(null);
+  const [noTimeline,       setNoTimeline]       = useState(false);
+  const [previewHasCaption, setPreviewHasCaption] = useState(false);
 
-  const videoRef           = useRef<HTMLVideoElement>(null);
-  const renderStartUrlRef  = useRef<string>('');
-  const pollIntervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollTimeoutRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef            = useRef<HTMLVideoElement>(null);
+  const renderStartUrlRef   = useRef<string>('');
+  const renderCaptionOnRef  = useRef<boolean>(false);
+  const pollIntervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollTimeoutRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -87,7 +89,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         const firstEffect = data.timeline?.tracks?.video?.[0]?.effect;
         if (firstEffect?.type === 'ken-burns') setMotionStyle(firstEffect.style);
         const cap = data.timeline?.tracks?.captions?.[0];
-        if (cap) { setCaptionOn(true); setCaptionText(cap.text); setCaptionPosition(cap.position ?? 'bottom'); }
+        if (cap) { setCaptionOn(true); setCaptionText(cap.text); setCaptionPosition(cap.position ?? 'bottom'); setPreviewHasCaption(true); }
         if (!data.timeline?.tracks?.audio) setMusicPref('none');
       } catch { setLoadError('Failed to load editor.'); }
       finally { setLoading(false); }
@@ -111,8 +113,9 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         const data = await res.json();
         if (data.previewUrl && data.previewUrl !== renderStartUrlRef.current) {
           setPreviewUrl(data.previewUrl);
+          setPreviewHasCaption(renderCaptionOnRef.current);
           setRenderStatus('done');
-          setRenderMsg('✅ Preview ready! Check WhatsApp to approve or keep editing.');
+          setRenderMsg('Preview ready! Check WhatsApp to approve or keep editing.');
           stopPolling();
           if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
         }
@@ -156,7 +159,8 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
   async function applyChanges() {
     setRenderStatus('submitting');
     setRenderMsg('');
-    renderStartUrlRef.current = previewUrl;
+    renderStartUrlRef.current  = previewUrl;
+    renderCaptionOnRef.current = captionOn;
     try {
       if (noTimeline || !timeline) {
         const res = await fetch(`/api/posts/${postId}/rerender`, {
@@ -177,9 +181,10 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
         if (!res.ok) { setRenderStatus('failed'); setRenderMsg(data.error ?? 'Render failed.'); return; }
         if (data.status === 'rendering') { setRenderStatus('background'); setNoTimeline(false); return; }
         setPreviewUrl(data.previewUrl);
+        setPreviewHasCaption(renderCaptionOnRef.current);
         setNoTimeline(false);
         setRenderStatus('done');
-        setRenderMsg('✅ Preview ready!');
+        setRenderMsg('Preview ready!');
         if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
         return;
       }
@@ -195,8 +200,9 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
       if (data.status === 'rendering') { setRenderStatus('background'); setTimeline(updated); return; }
       setTimeline(updated);
       setPreviewUrl(data.previewUrl);
+      setPreviewHasCaption(renderCaptionOnRef.current);
       setRenderStatus('done');
-      setRenderMsg('✅ Preview ready!');
+      setRenderMsg('Preview ready!');
       if (videoRef.current) { videoRef.current.load(); videoRef.current.play().catch(() => {}); }
     } catch (e: any) {
       setRenderStatus('failed');
@@ -318,7 +324,7 @@ export default function ReelEditor({ params, searchParams }: PageProps) {
             )}
           </div>
         )}
-        {captionOn && captionText && !previewUrl && (
+        {captionOn && captionText && !previewHasCaption && (
           <div className={`absolute left-2 right-2 text-center pointer-events-none ${captionPosition === 'top' ? 'top-8' : captionPosition === 'center' ? 'top-1/2 -translate-y-1/2' : 'bottom-8'}`}>
             <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(0,0,0,.55)', color: '#fff' }}>
               {captionText.slice(0, 60)}{captionText.length > 60 ? '…' : ''}
