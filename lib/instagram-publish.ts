@@ -135,20 +135,20 @@ export async function publishStoryToInstagram(
     );
     const permalinkData = await permalinkRes.json();
 
-    await getSupabase().from('social_audit_log').insert({
+    getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram_story',
       status: 'success',
       details: { post_id: publishData.id, source: 'whatsapp', is_video: isVideo, whatsapp_phone: whatsappPhone },
-    });
+    }).catch(() => {});
 
     return { postId: publishData.id, status: 'success', postUrl: permalinkData.permalink, surface: 'story' };
   } catch (error: any) {
     console.error('Instagram story publishing failed:', error.message);
-    await getSupabase().from('social_audit_log').insert({
+    getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram_story',
       status: 'failed',
       details: { error: error.message, source: 'whatsapp', whatsapp_phone: whatsappPhone },
-    });
+    }).catch(() => {});
     throw error;
   }
 }
@@ -250,20 +250,20 @@ export async function publishToInstagram(
     const permalinkData = await permalinkRes.json();
     const postUrl: string | undefined = permalinkData.permalink;
 
-    await getSupabase().from('social_audit_log').insert({
+    getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'success',
       details: { post_id: publishData.id, caption, source: 'whatsapp', is_video: isVideo, surface, whatsapp_phone: whatsappPhone },
-    });
+    }).catch(() => {});
 
     return { postId: publishData.id, status: 'success', postUrl, surface };
   } catch (error: any) {
     console.error('Instagram publishing failed:', error.message);
-    await getSupabase().from('social_audit_log').insert({
+    getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram',
       status: 'failed',
       details: { error: error.message, source: 'whatsapp', surface, whatsapp_phone: whatsappPhone },
-    });
+    }).catch(() => {});
     throw error;
   }
 }
@@ -395,7 +395,7 @@ export async function publishCarouselToInstagram(
     );
     const permalinkData = await permalinkRes.json();
 
-    await getSupabase().from('social_audit_log').insert({
+    getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram_carousel',
       status: 'success',
       details: {
@@ -405,16 +405,16 @@ export async function publishCarouselToInstagram(
         slide_count: items.length,
         whatsapp_phone: whatsappPhone,
       },
-    });
+    }).catch(() => {});
 
     return { postId: publishData.id, status: 'success', postUrl: permalinkData.permalink };
   } catch (error: any) {
     console.error('Instagram carousel publishing failed:', error.message);
-    await getSupabase().from('social_audit_log').insert({
+    getSupabase().from('social_audit_log').insert({
       action: 'publish_instagram_carousel',
       status: 'failed',
       details: { error: error.message, source: 'whatsapp', whatsapp_phone: whatsappPhone, slide_count: items.length },
-    });
+    }).catch(() => {});
     throw error;
   }
 }

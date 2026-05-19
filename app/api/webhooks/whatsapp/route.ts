@@ -2206,55 +2206,50 @@ async function handleMusicChoice(from: string, postId: string, musicPref: string
 async function handlePreviewApproval(from: string, postId: string) {
   const supabase = getSupabase();
 
-  await sendText(from, '✅ Publishing your reel...');
-
-  // Finalize render with full quality (not preview).
-  // If a KreyaTimeline was stored (multi-clip or web-editor path), re-render it at HD.
-  // Otherwise fall back to the existing single-image Modal GPU path.
   const { data: post } = await supabase
     .from('pending_posts')
-    .select('user_image_url, caption, animation_duration, animation_zoom, animation_style, music_selection, timeline_json')
+    .select('user_image_url, image_url, caption, animation_duration, animation_zoom, animation_style, music_selection, timeline_json, sibling_id')
     .eq('id', postId)
     .maybeSingle();
 
   if (!post) return;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
-  try {
-    if (post.timeline_json) {
-      // HD re-render via timeline engine
-      const hdTimeline = { ...post.timeline_json, resolution: 'hd' };
-      await supabase.from('pending_posts').update({ render_resolution: 'hd' }).eq('id', postId);
-      await fetch(`${appUrl}/api/posts/update-timeline`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-        body: JSON.stringify({ postId, token: '', phone: from, timeline: hdTimeline }),
-      });
-      // update-timeline saves the new HD URL to image_url; then proceed to publish
-      const { data: updated } = await supabase
-        .from('pending_posts')
-        .select('image_url, caption')
-        .eq('id', postId)
-        .maybeSingle();
-      if (updated) {
-        await supabase.from('pending_posts').update({ state: 'pending_approval' }).eq('id', postId);
-        await sendVideoMessage(from, updated.image_url);
-        await sendPostPreview(from, updated.image_url, updated.caption, postId, true, 'reels');
+  if (post.timeline_json) {
+    // Timeline path: image_url is already hd-fast (1080p ultrafast) from the rerender step.
+    // Publish directly without re-rendering so we don't send a spurious "Reel Draft" loop.
+    await sendText(from, '⏳ Publishing your Reel to Instagram...');
+    if (!post.image_url) {
+      await sendText(from, '⚠️ Preview not ready yet — wait a moment and try again.');
+      return;
+    }
+    try {
+      const result = await publishToInstagram(from, post.caption ?? '', post.image_url, true, 'reels');
+      await supabase.from('pending_posts')
+        .update({ state: 'published', ig_post_id: result.postId, ig_post_url: result.postUrl ?? null, published_at: new Date().toISOString() })
+        .eq('id', postId);
+      if (post.sibling_id) {
+        await supabase.from('pending_posts').update({ state: 'discarded' }).eq('id', post.sibling_id);
       }
-    } else {
-      const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
-      await fetch(`${appUrl}${renderEndpoint}`, {
+      await sendPostPublishedActions(from, result.postUrl ?? undefined, 'Reel');
+      await sendRepurposeOffer(from, postId, 'reels', undefined).catch(() => {});
+    } catch (err: any) {
+      if (err.message?.startsWith('INSTAGRAM_TOKEN_EXPIRED')) {
+        const reconnectUrl = `${APP_URL}/api/auth/instagram?phone=${encodeURIComponent(from)}`;
+        await sendText(from, `🔑 Your Instagram access expired.\n\nReconnect here:\n${reconnectUrl}\n\nThen tap *Approve* again to post.`);
+        return;
+      }
+      await sendPublishFailureActions(from, postId, 'post');
+    }
+  } else {
+    // Non-timeline path: dispatch to render endpoint for HD render + "Reel Draft" confirmation
+    await sendText(from, '✅ Preparing HD version…');
+    const renderEndpoint = process.env.MODAL_KEN_BURNS_URL ? '/api/video/render-ken-burns' : '/api/video/render-reel';
+    try {
+      await fetch(`${APP_URL}${renderEndpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` },
         body: JSON.stringify({
-          phone: from,
-          postId,
+          phone: from, postId,
           imageUrl: post.user_image_url,
           caption: post.caption,
           duration: post.animation_duration,
@@ -2264,9 +2259,9 @@ async function handlePreviewApproval(from: string, postId: string) {
           isPreview: false,
         }),
       });
+    } catch (err: any) {
+      console.error('[finalize-reel] dispatch failed:', err.message);
     }
-  } catch (err: any) {
-    console.error('[finalize-reel] dispatch failed:', err.message);
   }
 }
 

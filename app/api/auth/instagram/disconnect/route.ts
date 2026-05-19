@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (!target) return NextResponse.json({ error: 'account not found' }, { status: 404 });
 
-  await supabase.from('social_audit_log').insert({
+  supabase.from('social_audit_log').insert({
     action: 'disconnect_instagram',
     status: 'success',
     details: { account_name: target.account_name, instagram_user_id, whatsapp_phone: phone },
-  });
+  }).catch(() => {});
 
   const { error: deleteErr } = await supabase
     .from('instagram_accounts')

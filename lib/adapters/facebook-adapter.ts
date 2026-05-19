@@ -156,19 +156,19 @@ export class FacebookAdapter implements SocialAdapter {
 
       const postUrl = `https://www.facebook.com/video/${postId}`;
 
-      await getSupabase().from('social_audit_log').insert({
+      getSupabase().from('social_audit_log').insert({
         action:  'publish_facebook',
         status:  'success',
         details: { post_id: postId, surface, whatsapp_phone: whatsappPhone },
-      });
+      }).catch(() => {});
 
       return { platform: 'facebook', postId, postUrl, status: 'published' };
     } catch (err: any) {
-      await getSupabase().from('social_audit_log').insert({
+      getSupabase().from('social_audit_log').insert({
         action:  'publish_facebook',
         status:  'failed',
         details: { error: err.message, whatsapp_phone: whatsappPhone },
-      });
+      }).catch(() => {});
       return { platform: 'facebook', postId: '', status: 'failed', error: err.message };
     }
   }

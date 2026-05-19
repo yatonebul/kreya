@@ -147,19 +147,19 @@ export class TikTokAdapter implements SocialAdapter {
 
       await pollPublishStatus(publishId, token);
 
-      await getSupabase().from('social_audit_log').insert({
+      getSupabase().from('social_audit_log').insert({
         action: 'publish_tiktok',
         status: 'success',
         details: { publish_id: publishId, whatsapp_phone: whatsappPhone },
-      });
+      }).catch(() => {});
 
       return { platform: 'tiktok', postId: publishId, status: 'published' };
     } catch (err: any) {
-      await getSupabase().from('social_audit_log').insert({
+      getSupabase().from('social_audit_log').insert({
         action: 'publish_tiktok',
         status: 'failed',
         details: { error: err.message, whatsapp_phone: whatsappPhone },
-      });
+      }).catch(() => {});
       return { platform: 'tiktok', postId: '', status: 'failed', error: err.message };
     }
   }
